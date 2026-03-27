@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+playwright
+openai
+python-dotenv
+pyjwt
+pydantic
+sqlalchemy
+pymysql
+faker
+httpx

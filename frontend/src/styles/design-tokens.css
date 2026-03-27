@@ -1,0 +1,192 @@
+/* ════════════════════════════════════════════════════════════
+   AI 自动化平台 — Design Tokens
+   版本: 1.0.0
+   规范: 简约克制 · 科技感 · 生产力风格（参考 Linear / Vercel）
+
+   用法：在 main.ts 或 common.css 顶部 @import 此文件，
+   所有页面即可通过 var(--token-name) 引用。
+════════════════════════════════════════════════════════════ */
+
+:root {
+
+  /* ══════════════════════════════════════
+     1. COLOR — 色彩体系
+  ══════════════════════════════════════ */
+
+  /* — 品牌主色（紫·AI 科技感） — */
+  --color-primary-50:   #f5f0ff;   /* 极浅背景 hover */
+  --color-primary-100:  #ede5ff;   /* 浅背景 active */
+  --color-primary-200:  #d4bcff;   /* 浅边框 */
+  --color-primary-400:  #a855f7;   /* 辅助渐变 */
+  --color-primary-500:  #7d33ff;   /* 主色 ★ */
+  --color-primary-600:  #6a28e8;   /* Hover 加深 */
+  --color-primary-700:  #5521c2;   /* Pressed / Focus ring */
+  --color-primary-rgb:  125, 51, 255; /* 供 rgba() 调用 */
+
+  /* — 辅助强调色（青·数据/科技） — */
+  --color-accent-400:   #22d3ee;
+  --color-accent-500:   #06b6d4;
+  --color-accent-600:   #0891b2;
+
+  /* — 语义色 — */
+  --color-success-light: #f0fdf4;
+  --color-success:       #12b76a;
+  --color-success-dark:  #027a48;
+
+  --color-warning-light: #fffbeb;
+  --color-warning:       #f79009;
+  --color-warning-dark:  #b54708;
+
+  --color-error-light:   #fff1f3;
+  --color-error:         #f04438;
+  --color-error-dark:    #b42318;
+
+  --color-info-light:    #eff8ff;
+  --color-info:          #2e90fa;
+  --color-info-dark:     #1849a9;
+
+  /* — 中性色（灰阶） — */
+  --color-gray-0:   #ffffff;
+  --color-gray-50:  #f8f9fc;   /* 页面背景 */
+  --color-gray-100: #f0f2f7;   /* 分割线、斑马纹 */
+  --color-gray-200: #e4e8f0;   /* 边框 */
+  --color-gray-300: #c8d0de;   /* 禁用边框 */
+  --color-gray-400: #a0aab8;   /* 占位文字 */
+  --color-gray-500: #8792a2;   /* 次要文字 */
+  --color-gray-600: #697386;   /* 辅助文字 */
+  --color-gray-700: #4f5b76;   /* 次要标题 */
+  --color-gray-900: #1a1f36;   /* 主文字 */
+
+  /* — 功能色别名（语义化引用） — */
+  --color-text-primary:   var(--color-gray-900);
+  --color-text-secondary: var(--color-gray-700);
+  --color-text-tertiary:  var(--color-gray-500);
+  --color-text-disabled:  var(--color-gray-400);
+  --color-text-inverse:   var(--color-gray-0);
+
+  --color-bg-page:    var(--color-gray-50);   /* 整体页面底色 */
+  --color-bg-surface: var(--color-gray-0);    /* 卡片/面板白底 */
+  --color-bg-subtle:  var(--color-gray-100);  /* 斑马纹/区块底色 */
+
+  --color-border:        var(--color-gray-200); /* 标准边框 */
+  --color-border-subtle: var(--color-gray-100); /* 分割线 */
+
+  /* ══════════════════════════════════════
+     2. TYPOGRAPHY — 字体层级
+  ══════════════════════════════════════ */
+
+  --font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                      "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
+  --font-family-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+
+  /* 字号规模（Major Third × 1.25）*/
+  --text-xs:   11px;   /* Label / 角标 */
+  --text-sm:   12px;   /* Caption / 辅助说明 */
+  --text-base: 13px;   /* 正文 small（树节点、表格内容）*/
+  --text-md:   14px;   /* 正文 / 表单 */
+  --text-lg:   16px;   /* H4 / 模块标题 */
+  --text-xl:   18px;   /* H3 / 区块标题 */
+  --text-2xl:  22px;   /* H2 / 页面副标题 */
+  --text-3xl:  28px;   /* H1 / 页面主标题 */
+
+  /* 字重 */
+  --font-regular:   400;
+  --font-medium:    500;
+  --font-semibold:  600;
+  --font-bold:      700;
+
+  /* 行高 */
+  --leading-tight:   1.3;
+  --leading-snug:    1.4;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.6;
+
+  /* ══════════════════════════════════════
+     3. SPACING — 间距体系（4px 基准）
+  ══════════════════════════════════════ */
+
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* — 组件内部常用间距别名 — */
+  --padding-xs: var(--space-1) var(--space-2);  /* 4 8 */
+  --padding-sm: var(--space-2) var(--space-3);  /* 8 12 */
+  --padding-md: var(--space-3) var(--space-4);  /* 12 16 */
+  --padding-lg: var(--space-4) var(--space-6);  /* 16 24 */
+
+  /* ══════════════════════════════════════
+     4. BORDER RADIUS — 圆角规范
+  ══════════════════════════════════════ */
+
+  --radius-sm:   4px;    /* 小型标签、角标、code badge */
+  --radius-md:   8px;    /* 按钮、输入框、下拉项 */
+  --radius-lg:   12px;   /* 卡片、面板、侧边栏 */
+  --radius-xl:   16px;   /* 大型弹窗、欢迎卡片 */
+  --radius-full: 9999px; /* 胶囊形 pill / avatar */
+
+  /* ══════════════════════════════════════
+     5. SHADOW — 阴影层级（4级）
+  ══════════════════════════════════════ */
+
+  /* Level 1：浮于页面（分割线作用） */
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.05);
+
+  /* Level 2：卡片、面板 */
+  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.06);
+
+  /* Level 3：Popover、Tooltip、下拉菜单 */
+  --shadow-md:  0 6px 16px rgba(0, 0, 0, 0.08);
+
+  /* Level 4：Modal、全屏浮层 */
+  --shadow-lg:  0 12px 32px rgba(0, 0, 0, 0.10);
+
+  /* 品牌色光晕（主操作按钮） */
+  --shadow-primary-sm: 0 2px 8px  rgba(var(--color-primary-rgb), 0.30);
+  --shadow-primary-md: 0 4px 14px rgba(var(--color-primary-rgb), 0.35);
+
+  /* ══════════════════════════════════════
+     6. LAYOUT — 布局规范
+  ══════════════════════════════════════ */
+
+  /* 侧边栏（统一单一值，消灭 300px vs 220px 冲突） */
+  --sidebar-width:           220px;
+  --sidebar-width-collapsed:  64px;
+
+  /* 顶部 Header */
+  --header-height: 56px;
+
+  /* 页面内容区水平边距 */
+  --page-padding-x: var(--space-6);
+
+  /* 全局内容最大宽度 */
+  --content-max-width: 1440px;
+
+  /* ══════════════════════════════════════
+     7. TRANSITION — 动画时间
+  ══════════════════════════════════════ */
+
+  --duration-fast:   100ms;
+  --duration-normal: 200ms;
+  --duration-slow:   300ms;
+  --ease-standard:   cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ══════════════════════════════════════
+     8. Z-INDEX — 层叠规范
+  ══════════════════════════════════════ */
+
+  --z-base:     0;
+  --z-raised:   10;
+  --z-sticky:   100;
+  --z-drawer:   200;
+  --z-dropdown: 300;
+  --z-modal:    400;
+  --z-toast:    500;
+}

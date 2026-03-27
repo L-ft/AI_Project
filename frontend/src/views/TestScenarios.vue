@@ -1,0 +1,6515 @@
+<template>
+  <div class="page-layout">
+
+    <!-- ── 左侧边栏 ── -->
+    <SidebarNavigation
+      sider-variant="light"
+      v-model:search="sidebarSearch"
+      v-model:activeView="activeView"
+      :treeCount="scenarios.length"
+      searchPlaceholder="搜索场景..."
+      :showNavItems="false"
+      :showAddBtn="false"
+    >
+      <template #tree>
+        <n-tree
+          block-line
+          expand-on-click
+          :data="sidebarTreeData"
+          :pattern="sidebarSearch"
+          :render-prefix="renderSidebarPrefix"
+          :render-suffix="renderSidebarSuffix"
+          :on-update:selected-keys="handleSidebarSelect"
+          :selected-keys="selectedSidebarKeys"
+          :expanded-keys="expandedFolderKeys"
+          :on-update:expanded-keys="(keys) => expandedFolderKeys = keys"
+          class="scenario-tree"
+        />
+      </template>
+    </SidebarNavigation>
+
+
+    <!-- ── 主内容区 ── -->
+    <div class="page-main">
+      <!-- 渐变顶栏 -->
+      <div class="ts-topbar">
+        <div class="ts-topbar-deco"></div>
+        <div class="ts-topbar-inner">
+          <div class="ts-topbar-left">
+            <div class="ts-topbar-breadcrumb">
+              <span>自动化测试</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              <span>测试场景</span>
+            </div>
+            <div class="ts-topbar-title-row">
+              <div class="ts-topbar-title-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </div>
+              <h1 class="ts-topbar-title">自动化测试</h1>
+            </div>
+          </div>
+          <div class="ts-topbar-right">
+            <span class="ts-topbar-pill ts-topbar-pill--green">
+              <i class="ts-pill-dot"></i>服务在线
+            </span>
+            <span class="ts-topbar-pill">{{ scenarios.length }} 个场景</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ 欢迎页（首次进入） ══ -->
+      <div v-if="activeView === 'welcome'" class="welcome-container">
+          <div class="welcome-content-wrapper">
+            <div class="welcome-main-card">
+              <div class="welcome-logo-box">TS</div>
+              <h1 class="welcome-title">欢迎使用自动化测试</h1>
+              <p class="welcome-desc">从左侧选择场景，或新建一个测试场景开始自动化测试之旅</p>
+              <div class="welcome-actions">
+                <n-button type="primary" size="medium" class="welcome-btn-primary" @click="enterScenarioList(); openCreateModal()">
+                  <template #icon><n-icon :component="PlusOutlined" /></template>
+                  新建测试场景
+                </n-button>
+                <n-button size="medium" class="welcome-btn-secondary" @click="activeView = 'scheduled'">
+                  <template #icon>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+                  </template>
+                  新建定时任务
+                </n-button>
+              </div>
+            </div>
+            <div class="welcome-quick-guide">
+              <div class="welcome-guide-item">
+                <div class="welcome-guide-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7d33ff" stroke-width="2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </div>
+                <div class="welcome-guide-text">
+                  <h3>批量执行</h3>
+                  <p>一键运行全部场景，自动生成测试报告</p>
+                </div>
+              </div>
+              <div class="welcome-guide-item">
+                <div class="welcome-guide-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+                </div>
+                <div class="welcome-guide-text">
+                  <h3>定时调度</h3>
+                  <p>设置 Cron 表达式，定时自动触发测试</p>
+                </div>
+              </div>
+              <div class="welcome-guide-item">
+                <div class="welcome-guide-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/></svg>
+                </div>
+                <div class="welcome-guide-text">
+                  <h3>测试报告</h3>
+                  <p>详细的成功/失败统计，支持分享导出</p>
+                </div>
+              </div>
+            </div>
+          </div>
+      </div><!-- end welcome-container -->
+
+      <!-- ══ 定时任务视图 ══ -->
+      <template v-else-if="activeView === 'scheduled'">
+        <div class="content-panel">
+          <header class="main-header">
+            <div class="header-tabs">
+              <button :class="['htab', { active: scheduledTab === 'tasks' }]" @click="scheduledTab = 'tasks'">
+                定时任务
+                <span v-if="scheduledTab === 'tasks'" class="htab-underline" />
+              </button>
+              <button :class="['htab', { active: scheduledTab === 'history' }]" @click="scheduledTab = 'history'">
+                运行历史
+                <span v-if="scheduledTab === 'history'" class="htab-underline" />
+              </button>
+            </div>
+          </header>
+
+          <!-- 无 Runner 提示横幅 -->
+          <div class="runner-banner">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#fa8c16" style="flex-shrink:0"><path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19h-17L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>
+            <span>没有部署 Runner。请 <a href="#" class="runner-link">在此处</a> 部署通用 Runner 后，再使用定时任务功能。</span>
+          </div>
+
+          <!-- 搜索 + 新建 -->
+          <div class="scheduled-toolbar">
+            <n-input v-model:value="scheduledSearch" placeholder="输入关键字进行搜索" size="small" clearable style="width:280px">
+              <template #suffix><n-icon :component="SearchOutlined" style="color:#a0aab8" /></template>
+            </n-input>
+            <n-button type="primary" size="small" class="new-btn-scheduled">
+              <template #icon><n-icon :component="PlusOutlined" /></template>
+              新建
+            </n-button>
+          </div>
+
+          <!-- 表头 -->
+          <div class="scheduled-table">
+            <div class="st-head">
+              <div class="st-col-name">任务信息</div>
+              <div class="st-col-enable">启用</div>
+              <div class="st-col-next">下次运行时间</div>
+            </div>
+            <div class="st-empty">
+              <div class="st-empty-icon">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c0c8d8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>
+                </svg>
+              </div>
+              <div class="st-empty-text">暂无数据</div>
+              <a href="#" class="st-empty-link">了解定时任务 ↗</a>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ══ 测试场景 / 测试报告视图 ══ -->
+      <template v-else>
+
+      <!-- 测试报告视图 -->
+      <template v-if="activeView === 'reports'">
+        <div class="content-panel">
+          <header class="main-header">
+            <div class="rpt-filter-bar">
+              <div class="rpt-scope-tabs">
+                <button :class="['rpt-scope-btn', { active: rptScope === 'personal' }]" @click="rptScope = 'personal'">个人</button>
+                <button :class="['rpt-scope-btn', { active: rptScope === 'shared' }]" @click="rptScope = 'shared'">共享</button>
+              </div>
+              <n-select v-model:value="rptType" :options="[{ label: '全部类型', value: 'all' }, { label: '手动', value: 'manual' }, { label: '批量运行', value: 'batch' }, { label: '定时', value: 'scheduled' }]" size="small" style="width:120px" />
+            </div>
+            <div class="header-actions">
+              <n-input v-model:value="rptSearch" placeholder="搜索场景名、创建者、标题…" size="small" clearable style="width:240px">
+                <template #suffix><n-icon :component="SearchOutlined" style="color:#a0aab8" /></template>
+              </n-input>
+              <n-button size="small" quaternary @click="fetchReportsFromApi">
+                <template #icon><n-icon :component="SyncOutlined" /></template>
+                刷新
+              </n-button>
+            </div>
+          </header>
+          <n-spin :show="reportsLoading" class="rpt-spin-wrap">
+          <div class="rpt-table-wrap">
+            <div class="rpt-head">
+              <div class="rpt-col-info">报告信息</div>
+              <div class="rpt-col-status">状态</div>
+              <div class="rpt-col-result">结果</div>
+              <div class="rpt-col-op">操作</div>
+            </div>
+            <div v-if="!reportsLoading && filteredReports.length === 0" class="rpt-empty">
+              <div class="rpt-empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c0c8d8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></div>
+              <div class="rpt-empty-text">暂无测试报告（在场景详情中执行步骤后将自动落库）</div>
+            </div>
+            <div v-for="r in filteredReports" :key="r.id" class="rpt-row">
+              <div class="rpt-col-info">
+                <div class="rpt-name-wrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d33ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span class="rpt-name">{{ r.name }}</span></div>
+                <div class="rpt-meta"><span>{{ r.env }}</span><span>{{ r.time }}</span><span>{{ r.creator }}</span><span>{{ r.runMode }}</span><span>{{ r.triggerMode }}</span></div>
+              </div>
+              <div class="rpt-col-status">
+                <span :class="['rpt-status-badge', r.status]">
+                  <svg v-if="r.status==='done'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
+                  {{ r.status === 'done' ? '已完成' : r.status === 'running' ? '运行中' : '失败' }}
+                </span>
+              </div>
+              <div class="rpt-col-result">
+                <div class="rpt-result-line">总请求数：{{ r.total }} &nbsp; 成功：<span class="rpt-success">{{ r.success }}</span></div>
+                <div class="rpt-result-line">失败：<span class="rpt-fail">{{ r.fail }}</span> &nbsp; 未测：<span class="rpt-skip">{{ r.skip }}</span></div>
+              </div>
+              <div class="rpt-col-op">
+                <n-button size="tiny" quaternary @click="openReportArchiveDetail(r)">查看</n-button>
+              </div>
+            </div>
+          </div>
+          </n-spin>
+        </div>
+      </template>
+
+      <!-- 测试场景视图 -->
+      <template v-else>
+        <div class="content-panel">
+          <!-- ── 列表总览（点击左侧「测试场景」根节点）── -->
+          <template v-if="scenarioPanelMode === 'list'">
+          <header class="main-header">
+        <div class="header-tabs">
+          <button :class="['htab', { active: mainTab === 'scenarios' }]" @click="mainTab = 'scenarios'">
+            全部场景
+            <span v-if="mainTab === 'scenarios'" class="htab-underline" />
+          </button>
+          <button :class="['htab', { active: mainTab === 'reports' }]" @click="mainTab = 'reports'">
+            测试报告
+            <span v-if="mainTab === 'reports'" class="htab-underline" />
+          </button>
+        </div>
+        <div class="header-actions">
+          <n-input v-model:value="tableSearch" placeholder="搜索场景名称..." size="small" clearable style="width:200px">
+            <template #prefix><n-icon :component="SearchOutlined" style="color:#a0aab8" /></template>
+          </n-input>
+          <n-button size="small" class="run-all-btn" :loading="batchRunning" :disabled="batchRunning" @click="runAll">
+            <template #icon><n-icon :component="CaretRightOutlined" /></template>
+            批量运行
+          </n-button>
+        </div>
+      </header>
+
+      <!-- 统计卡片行 -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value">{{ scenarios.length }}</div>
+          <div class="stat-label">全部场景</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-value">{{ scenarios.filter(s => s.last_result?.status === 'passed').length }}</div>
+          <div class="stat-label">最近通过</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-value">{{ scenarios.filter(s => s.last_result?.status === 'failed').length }}</div>
+          <div class="stat-label">最近失败</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-value">{{ scenarios.filter(s => s.last_result?.status === 'running').length }}</div>
+          <div class="stat-label">运行中</div>
+        </div>
+      </div>
+
+      <!-- 表格区域 -->
+      <div class="table-wrap">
+        <div class="table-title-bar">
+          <div class="table-title-row">
+            <span class="table-title">测试场景列表</span>
+            <span class="table-count">共 <b>{{ filteredScenarios.length }}</b> 个</span>
+          </div>
+          <div v-if="checkedIds.size > 0" class="batch-select-line">
+            <span class="batch-select-text">已选 <b>{{ checkedIds.size }}</b> / {{ filteredScenarios.length }} 项</span>
+            <n-button text type="primary" size="small" @click="clearSelection">取消选择</n-button>
+          </div>
+          <div v-if="checkedIds.size > 0" class="batch-toolbar">
+            <n-button quaternary size="small" class="batch-tool-btn" @click="openBatchPriorityModal">
+              <template #icon><n-icon :component="MenuOutlined" /></template>
+              优先级
+            </n-button>
+            <n-button quaternary size="small" class="batch-tool-btn" @click="openBatchAddTagModal">
+              <template #icon><n-icon :component="TagsOutlined" /></template>
+              增加标签
+            </n-button>
+            <n-button quaternary size="small" class="batch-tool-btn" @click="openBatchRemoveTagModal">
+              <template #icon><n-icon :component="TagsOutlined" /></template>
+              删除标签
+            </n-button>
+            <n-button quaternary size="small" class="batch-tool-btn" @click="openBatchMoveModal">
+              <template #icon><n-icon :component="FolderOutlined" /></template>
+              移动
+            </n-button>
+            <n-button quaternary size="small" class="batch-tool-btn batch-tool-danger" @click="confirmBatchDelete">
+              <template #icon><n-icon :component="DeleteOutlined" /></template>
+              删除
+            </n-button>
+            <n-button quaternary size="tiny" circle class="batch-toolbar-close" @click="clearSelection">
+              <template #icon><n-icon :component="CloseOutlined" /></template>
+            </n-button>
+          </div>
+        </div>
+
+        <!-- 表头 -->
+        <div class="t-head">
+          <div class="tc-check">
+            <n-checkbox :checked="allFilteredChecked" :indeterminate="someFilteredChecked" @update:checked="toggleAll" />
+          </div>
+          <div class="tc-name">场景名称</div>
+          <div class="tc-priority">优先级</div>
+          <div class="tc-tags">标签</div>
+          <div class="tc-env">运行环境</div>
+          <div class="tc-result">最近结果</div>
+          <div class="tc-time">创建时间</div>
+          <div class="tc-creator">创建人</div>
+        </div>
+
+        <!-- 加载 -->
+        <div v-if="loading" class="t-state">
+          <n-spin size="large" />
+          <span style="margin-top:12px;color:#a0aab8;font-size:13px">加载中...</span>
+        </div>
+
+        <!-- 空状态 -->
+        <div v-else-if="filteredScenarios.length === 0" class="t-state">
+          <div class="empty-illustration">
+            <n-icon :component="AppstoreOutlined" style="font-size:48px;color:#e0e4ef" />
+          </div>
+          <div class="empty-title">暂无测试场景</div>
+          <div class="empty-desc">点击左侧「新建测试场景」开始创建</div>
+          <n-button type="primary" size="small" class="new-btn-inline" @click="openCreateModal">
+            <template #icon><n-icon :component="PlusOutlined" /></template>
+            立即新建
+          </n-button>
+        </div>
+
+        <!-- 数据行 -->
+        <div
+          v-for="row in filteredScenarios"
+          :key="row.id"
+          :class="['t-row', { selected: checkedIds.has(row.id) }]"
+        >
+          <div class="tc-check" @click.stop>
+            <n-checkbox :checked="checkedIds.has(row.id)" @update:checked="toggleCheck(row.id)" />
+          </div>
+          <div class="tc-name" @click.stop="openScenarioDetail(row)">
+            <div class="row-name-wrap">
+              <span class="row-name">{{ row.name }}</span>
+              <span v-if="row.description" class="row-desc">{{ row.description }}</span>
+            </div>
+          </div>
+          <div class="tc-priority">
+            <span :class="['p-badge', (row.priority || 'P0').toLowerCase()]">
+              {{ row.priority || 'P0' }}
+            </span>
+          </div>
+          <div class="tc-tags">
+            <span v-if="row.tags" class="tag-chip">{{ row.tags }}</span>
+            <span v-else class="dash">—</span>
+          </div>
+          <div class="tc-env">
+            <span v-if="row.env_name" class="env-chip">
+              <n-icon :component="GlobalOutlined" style="font-size:11px" />
+              {{ row.env_name }}
+            </span>
+            <span v-else class="dash">—</span>
+          </div>
+          <div class="tc-result">
+            <span v-if="row.last_result?.status === 'passed'" class="r-badge passed">
+              <n-icon :component="CheckCircleOutlined" />通过
+            </span>
+            <span v-else-if="row.last_result?.status === 'failed'" class="r-badge failed">
+              <n-icon :component="CloseCircleOutlined" />失败
+            </span>
+            <span v-else-if="row.last_result?.status === 'running'" class="r-badge running">
+              <n-icon :component="SyncOutlined" />运行中
+            </span>
+            <span v-else class="dash">—</span>
+          </div>
+          <div class="tc-time">{{ row.created_at ? row.created_at.slice(0, 10) : '—' }}</div>
+          <div class="tc-creator">
+            <div v-if="row.creator" class="creator-wrap">
+              <div class="creator-avatar">{{ row.creator.slice(0, 1).toUpperCase() }}</div>
+              <span>{{ row.creator }}</span>
+            </div>
+            <span v-else class="dash">—</span>
+          </div>
+        </div>
+      </div>
+          </template>
+
+          <!-- ── 单场景详情（点击树中具体场景节点）── -->
+          <template v-else-if="detailScenario">
+            <div class="scenario-detail-root">
+              <header class="detail-page-header">
+                <div class="detail-page-tabs">
+                  <button
+                    v-for="t in detailMainTabs"
+                    :key="t.key"
+                    :class="['dpt-btn', { active: detailMainTab === t.key }]"
+                    type="button"
+                    @click="detailMainTab = t.key"
+                  >
+                    {{ t.label }}
+                    <span v-if="detailMainTab === t.key" class="dpt-underline" />
+                  </button>
+                </div>
+                <div class="detail-page-header-right">
+                  <n-button quaternary circle size="small"><template #icon><n-icon :component="ClockCircleOutlined" /></template></n-button>
+                  <n-button quaternary circle size="small"><template #icon><n-icon :component="SettingOutlined" /></template></n-button>
+                </div>
+              </header>
+
+              <div class="scenario-detail-body">
+                <div class="scenario-detail-main detail-main-flex">
+                  <template v-if="detailMainTab === 'steps'">
+                    <div class="detail-meta-bar">
+                      <n-select
+                        size="small"
+                        style="width: 72px"
+                        :value="detailScenario.priority || 'P0'"
+                        :options="priorityOptions"
+                        @update:value="onDetailPriorityChange"
+                      />
+                      <span class="detail-scenario-title">{{ detailScenario.name }}</span>
+                      <n-button quaternary circle size="tiny" @click="openEdit(detailScenario)">
+                        <template #icon><n-icon :component="EditOutlined" /></template>
+                      </n-button>
+                      <span class="detail-id-chip">
+                        <n-icon :component="LinkOutlined" style="font-size:12px" />
+                        {{ detailScenario.id }}
+                      </span>
+                    </div>
+                    <div class="detail-desc-line">
+                      {{ detailScenario.description || '添加描述' }}
+                    </div>
+                    <div class="detail-creator-line">
+                      {{ detailScenario.creator || '—' }}
+                      <span class="detail-time-muted">
+                        更新于 {{ formatDetailTime(detailScenario.updated_at || detailScenario.created_at) }}
+                        · 创建于 {{ formatDetailTime(detailScenario.created_at) }}
+                      </span>
+                    </div>
+                  </template>
+
+                  <template v-if="detailMainTab === 'steps'">
+                    <div :class="['detail-steps-workspace', { 'workspace-empty': detailStepCount === 0 }]">
+                      <aside class="step-list-sidebar">
+                        <div class="step-list-toolbar">
+                          <span v-if="stepBulkSelectedCount > 0" class="step-toolbar-count">已选 {{ stepBulkSelectedCount }} 项</span>
+                          <span v-else class="step-toolbar-count muted">{{ detailStepCount }} 个步骤</span>
+                          <n-button quaternary size="tiny" :disabled="stepBulkSelectedCount === 0" @click="removeCheckedScenarioSteps">
+                            移除
+                          </n-button>
+                          <n-button quaternary size="tiny" @click="message.info('同步功能开发中')">立即同步</n-button>
+                          <n-button quaternary circle size="tiny">
+                            <template #icon><n-icon :component="SearchOutlined" /></template>
+                          </n-button>
+                          <n-button quaternary circle size="tiny">
+                            <template #icon><n-icon :component="MenuOutlined" /></template>
+                          </n-button>
+                        </div>
+                        <n-scrollbar class="step-list-scrollbar">
+                          <div v-if="detailStepCount === 0" class="step-list-zero">暂无步骤，点击下方添加</div>
+                          <div
+                            v-for="(step, idx) in detailStepsOrdered"
+                            v-else
+                            :key="'stp-' + idx + '-' + String(step.case_id ?? '') + '-' + String(step.order ?? '')"
+                            :class="['step-list-item', { active: selectedStepIndex === idx }]"
+                            @click="selectScenarioStep(idx)"
+                          >
+                            <n-checkbox
+                              :checked="stepBulkCheckedIndices.includes(idx)"
+                              @click.stop
+                              @update:checked="(v: boolean) => toggleStepBulkCheck(idx, v)"
+                            />
+                            <span class="step-li-method" :style="methodBadgeStyle(stepSidebarMethod(idx))">{{ stepSidebarMethod(idx) }}</span>
+                            <div class="step-li-main">
+                              <div class="step-li-name">{{ step.name || '未命名步骤' }}</div>
+                              <div v-if="step.case_id" class="step-li-meta">{{ stepCaseMetaLabel(step) }}</div>
+                            </div>
+                          </div>
+                        </n-scrollbar>
+                        <div class="step-list-footer">
+                          <n-popover
+                            v-model:show="addStepPopoverShow"
+                            trigger="click"
+                            placement="top-start"
+                            :flip="false"
+                            :show-arrow="false"
+                            to="body"
+                            :z-index="4000"
+                            raw
+                            class="add-step-popover-trigger"
+                          >
+                            <template #trigger>
+                              <n-button type="primary" dashed block class="step-add-footer-btn">
+                                <template #icon><n-icon :component="PlusOutlined" /></template>
+                                添加步骤
+                              </n-button>
+                            </template>
+                            <div class="add-step-menu" @click.stop>
+                              <div class="add-step-section">
+                                <div class="add-step-section-title">请求接口</div>
+                                <div
+                                  v-for="item in addStepRequestItems"
+                                  :key="item.key"
+                                  class="add-step-item add-step-item-full"
+                                  @click="handleAddStepItem(item)"
+                                >
+                                  <span :class="['add-step-icon', item.iconBg]">
+                                    <n-icon :component="item.icon" :size="16" />
+                                  </span>
+                                  <span class="add-step-label">{{ item.label }}</span>
+                                </div>
+                              </div>
+                              <div class="add-step-section">
+                                <div class="add-step-section-title">其他</div>
+                                <div class="add-step-grid">
+                                  <div
+                                    v-for="item in addStepOtherItems"
+                                    :key="item.key"
+                                    class="add-step-item"
+                                    @click="handleAddStepItem(item)"
+                                  >
+                                    <span :class="['add-step-icon', item.iconBg]">
+                                      <n-icon :component="item.icon" :size="16" />
+                                    </span>
+                                    <span class="add-step-label">{{ item.label }}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div class="add-step-section">
+                                <div class="add-step-section-title">场景用例</div>
+                                <div
+                                  v-for="item in addStepScenarioItems"
+                                  :key="item.key"
+                                  class="add-step-item add-step-item-full"
+                                  @click="handleAddStepItem(item)"
+                                >
+                                  <span :class="['add-step-icon', item.iconBg]">
+                                    <n-icon :component="item.icon" :size="16" />
+                                  </span>
+                                  <span class="add-step-label">{{ item.label }}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </n-popover>
+                        </div>
+                      </aside>
+                      <div class="step-editor-panel">
+                        <n-spin :show="stepEditorLoading">
+                          <div v-if="detailStepCount === 0" class="step-editor-placeholder">
+                            <p>当前场景还没有步骤</p>
+                            <p class="step-ph-sub">在左侧使用「添加步骤」导入接口用例或新建请求</p>
+                          </div>
+                          <div v-else-if="selectedStepIndex === null" class="step-editor-placeholder">
+                            点击左侧步骤查看与编辑请求
+                          </div>
+                          <div v-else class="step-editor-inner">
+                            <div class="step-req-toolbar">
+                              <span class="step-req-method-tag" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
+                              <n-input v-model:value="stepEditorFullUrl" size="small" placeholder="https://api.example.com/path" class="step-req-url-input" />
+                              <n-button-group>
+                                <n-button
+                                  type="primary"
+                                  class="step-purple-btn"
+                                  size="small"
+                                  :loading="stepEditorSending"
+                                  @click="sendScenarioStepRequest"
+                                >发送</n-button>
+                                <n-button type="primary" class="step-purple-btn" size="small" style="padding: 0 8px">
+                                  <template #icon><n-icon :component="DownOutlined" /></template>
+                                </n-button>
+                              </n-button-group>
+                            </div>
+                            <n-tabs v-model:value="stepEditorTab" type="line" class="step-config-tabs" size="small">
+                              <n-tab-pane name="params" :tab="stepParamsTabLabel">
+                                <div class="step-tab-pane-inner">
+                                  <n-empty v-if="stepEditorQueryParams.length === 0" description="暂无 Query 参数" size="small" />
+                                  <n-table v-else :single-line="false" size="small" class="step-mini-table">
+                                    <thead>
+                                      <tr>
+                                        <th>参数名</th>
+                                        <th>示例值</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <tr v-for="(row, ri) in stepEditorQueryParams" :key="'q-' + ri">
+                                        <td><n-input v-model:value="row.name" size="small" placeholder="name" /></td>
+                                        <td><n-input v-model:value="row.example" size="small" placeholder="value" /></td>
+                                      </tr>
+                                    </tbody>
+                                  </n-table>
+                                </div>
+                              </n-tab-pane>
+                              <n-tab-pane name="body" :tab="stepBodyTabLabel">
+                                <div class="step-tab-pane-inner">
+                                  <n-radio-group v-model:value="stepEditorBodyType" size="small" class="step-body-type-group">
+                                    <n-radio v-for="opt in stepBodyTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</n-radio>
+                                  </n-radio-group>
+                                  <div class="step-body-editor-bar">
+                                    <n-button size="tiny" quaternary @click="message.info('动态值开发中')">动态值</n-button>
+                                    <n-button size="tiny" quaternary @click="formatStepEditorJson">格式化</n-button>
+                                  </div>
+                                  <n-input
+                                    v-model:value="stepEditorBodyContent"
+                                    type="textarea"
+                                    :rows="12"
+                                    placeholder="请求 Body（JSON 等）"
+                                    class="step-body-textarea"
+                                    :disabled="stepEditorBodyType === 'none'"
+                                  />
+                                </div>
+                              </n-tab-pane>
+                              <n-tab-pane name="headers" :tab="stepHeadersTabLabel">
+                                <div class="step-tab-pane-inner">
+                                  <n-empty v-if="stepEditorHeaderParams.length === 0" description="暂无 Header" size="small" />
+                                  <n-table v-else :single-line="false" size="small" class="step-mini-table">
+                                    <thead>
+                                      <tr>
+                                        <th>名称</th>
+                                        <th>值</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <tr v-for="(row, hi) in stepEditorHeaderParams" :key="'h-' + hi">
+                                        <td><n-input v-model:value="row.name" size="small" /></td>
+                                        <td><n-input v-model:value="row.example" size="small" /></td>
+                                      </tr>
+                                    </tbody>
+                                  </n-table>
+                                </div>
+                              </n-tab-pane>
+                              <n-tab-pane name="cookies" tab="Cookies">
+                                <div class="step-tab-pane-inner"><n-empty description="暂无 Cookies" size="small" /></div>
+                              </n-tab-pane>
+                              <n-tab-pane name="auth" tab="Auth">
+                                <div class="step-tab-pane-inner"><n-empty description="暂无认证配置" size="small" /></div>
+                              </n-tab-pane>
+                              <n-tab-pane name="pre" tab="前置操作">
+                                <div class="step-tab-pane-inner"><n-empty description="暂无前置操作" size="small" /></div>
+                              </n-tab-pane>
+                              <n-tab-pane name="post" :tab="stepPostTabLabel">
+                                <div class="step-tab-pane-inner step-post-pane">
+                                  <template v-if="!stepEditorCaseId">
+                                    <n-empty description="导入接口用例后可配置后置操作" size="small" />
+                                  </template>
+                                  <template v-else>
+                                    <div class="step-validate-response-bar">
+                                      <div class="step-vr-left">
+                                        <span class="step-vr-title">校验响应（契约测试）</span>
+                                        <n-tooltip trigger="hover">
+                                          <template #trigger>
+                                            <span class="step-vr-help-wrap">
+                                              <n-icon :component="QuestionCircleOutlined" class="step-vr-help" />
+                                            </span>
+                                          </template>
+                                          开启后：实际状态码须与所选期望值完全一致。关闭后：仍按 2xx 判断为通过。
+                                        </n-tooltip>
+                                      </div>
+                                      <div class="step-vr-right">
+                                        <n-select
+                                          :value="stepValidateEnabledUi"
+                                          :options="validateEnableSelectOptions"
+                                          size="small"
+                                          class="step-vr-select-enable"
+                                          :consistent-menu-width="false"
+                                          @update:value="onStepValidateEnabledChange"
+                                        />
+                                        <n-select
+                                          :value="stepValidateExpectStatusUi"
+                                          :options="validateStatusCodeOptions"
+                                          size="small"
+                                          class="step-vr-select-status"
+                                          :disabled="stepValidateEnabledUi !== 'on'"
+                                          :consistent-menu-width="false"
+                                          @update:value="onStepValidateExpectStatusChange"
+                                        />
+                                      </div>
+                                    </div>
+                                    <n-empty
+                                      v-if="stepEditorPostOpsOther.length === 0"
+                                      description="暂无其他后置操作"
+                                      size="small"
+                                      class="step-post-other-empty"
+                                    />
+                                    <n-table
+                                      v-else
+                                      :single-line="false"
+                                      size="small"
+                                      class="step-mini-table step-post-other-table"
+                                    >
+                                      <thead>
+                                        <tr><th>类型</th><th>说明</th></tr>
+                                      </thead>
+                                      <tbody>
+                                        <tr v-for="(row, pi) in stepEditorPostOpsOther" :key="'p-' + pi">
+                                          <td><n-input v-model:value="row.type" size="small" readonly /></td>
+                                          <td><span class="step-cell-muted">{{ JSON.stringify(row) }}</span></td>
+                                        </tr>
+                                      </tbody>
+                                    </n-table>
+                                  </template>
+                                </div>
+                              </n-tab-pane>
+                              <n-tab-pane name="settings" tab="设置">
+                                <div class="step-tab-pane-inner"><n-empty description="暂无额外设置" size="small" /></div>
+                              </n-tab-pane>
+                            </n-tabs>
+
+                            <div v-if="stepEditorLastResponse" class="step-response-panel">
+                              <div class="step-response-head">
+                                <span class="step-response-title">响应结果</span>
+                                <template v-if="stepEditorLastResponse.error">
+                                  <n-tag type="error" size="small">失败</n-tag>
+                                  <span class="step-response-err">{{ stepEditorLastResponse.error }}</span>
+                                </template>
+                                <template v-else>
+                                  <n-tag
+                                    size="small"
+                                    :type="(stepEditorLastResponse.status_code ?? 0) < 400 ? 'success' : 'error'"
+                                  >
+                                    HTTP {{ stepEditorLastResponse.status_code }}
+                                  </n-tag>
+                                  <span
+                                    v-if="stepEditorLastResponse.elapsed != null"
+                                    class="step-response-meta"
+                                  >{{ Math.round(Number(stepEditorLastResponse.elapsed)) }} ms</span>
+                                </template>
+                              </div>
+                              <pre class="step-response-pre">{{ stepResponseBodyText }}</pre>
+                            </div>
+                          </div>
+                        </n-spin>
+                      </div>
+                    </div>
+                  </template>
+                  <template v-else-if="detailMainTab === 'report'">
+                    <div class="detail-report-root">
+                      <div class="detail-report-summary-card">
+                        <div class="drr-chart-wrap">
+                          <div v-if="reportSummary.total === 0" class="drr-chart-empty">
+                            <span class="drr-empty-ring" />
+                            <div class="drr-empty-text">
+                              <span>已完成</span>
+                              <strong>0</strong>
+                            </div>
+                          </div>
+                          <div v-show="reportSummary.total > 0" ref="reportDonutRef" class="drr-chart" />
+                        </div>
+                        <div class="drr-status-col">
+                          <div class="drr-status-line">
+                            <span class="drr-dot pass" />
+                            <span class="drr-status-label">通过</span>
+                            <span class="drr-status-val">{{ reportSummary.pass }}</span>
+                            <span class="drr-status-pct">({{ reportPassPct }}%)</span>
+                          </div>
+                          <div class="drr-status-line">
+                            <span class="drr-dot fail" />
+                            <span class="drr-status-label">失败</span>
+                            <span class="drr-status-val drr-em-fail">{{ reportSummary.fail }}</span>
+                            <span class="drr-status-pct">({{ reportFailPct }}%)</span>
+                          </div>
+                          <div class="drr-status-line">
+                            <span class="drr-dot idle" />
+                            <span class="drr-status-label">未测</span>
+                            <span class="drr-status-val">{{ reportSummary.untested }}</span>
+                            <span class="drr-status-pct">({{ reportUntestedPct }}%)</span>
+                          </div>
+                        </div>
+                        <div class="drr-vdivider" />
+                        <div class="drr-metrics-wrap">
+                          <div class="drr-metric-col">
+                            <div class="drr-metric-row">
+                              <span class="drr-metric-label">总耗时</span>
+                              <span class="drr-metric-val green">{{ formatReportMs(reportTotalDurationMs) }}</span>
+                            </div>
+                            <div class="drr-metric-row">
+                              <span class="drr-metric-label">接口请求耗时</span>
+                              <span class="drr-metric-val green">{{ formatReportMs(reportSummary.sumMs) }}</span>
+                            </div>
+                            <div class="drr-metric-row">
+                              <span class="drr-metric-label">平均接口请求耗时</span>
+                              <span class="drr-metric-val green">{{ formatReportMs(reportSummary.avgMs) }}</span>
+                            </div>
+                          </div>
+                          <div class="drr-metric-col drr-metric-col-right">
+                            <div class="drr-metric-row drr-metric-block">
+                              <span class="drr-metric-label">循环数</span>
+                              <div class="drr-metric-sub">
+                                执行：<b>{{ reportSummary.total }}</b>
+                                ，失败：<b class="drr-loop-fail">{{ reportSummary.fail }}</b>
+                              </div>
+                            </div>
+                            <div class="drr-metric-row drr-metric-block">
+                              <span class="drr-metric-label">断言数</span>
+                              <div class="drr-metric-sub">
+                                执行：<b>0</b>
+                                ，失败：<b>0</b>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="detail-report-toolbar">
+                        <div class="detail-report-tabs">
+                          <button
+                            type="button"
+                            :class="['drt-pill', { active: detailReportFilter === 'all' }]"
+                            @click="detailReportFilter = 'all'"
+                          >全部 ({{ reportSummary.total }})</button>
+                          <button
+                            type="button"
+                            :class="['drt-pill', { active: detailReportFilter === 'pass' }]"
+                            @click="detailReportFilter = 'pass'"
+                          >通过 ({{ reportSummary.pass }})</button>
+                          <button
+                            type="button"
+                            :class="['drt-pill', { active: detailReportFilter === 'fail' }]"
+                            @click="detailReportFilter = 'fail'"
+                          >失败 ({{ reportSummary.fail }})</button>
+                        </div>
+                        <div class="detail-report-toolbar-icons">
+                          <n-input
+                            v-model:value="detailReportSearch"
+                            size="small"
+                            clearable
+                            placeholder="搜索步骤 / URL"
+                            class="detail-report-search"
+                          >
+                            <template #prefix>
+                              <n-icon :component="SearchOutlined" />
+                            </template>
+                          </n-input>
+                          <n-button quaternary circle size="small"><template #icon><n-icon :component="MenuOutlined" /></template></n-button>
+                          <n-button quaternary circle size="small"><template #icon><n-icon :component="SortDescendingOutlined" /></template></n-button>
+                        </div>
+                      </div>
+
+                      <div
+                        class="detail-report-body-split"
+                        :class="{ 'with-detail': !!selectedReportLog }"
+                      >
+                        <div class="detail-report-list-col">
+                          <n-scrollbar class="detail-report-list-scroll">
+                            <div v-if="filteredDetailReportLogs.length === 0" class="detail-report-list-empty">
+                              <template v-if="reportSummary.total === 0">
+                                暂无记录。请在「测试步骤」中点击「发送」后回到此处查看；记录保存在本浏览器。
+                              </template>
+                              <template v-else>当前筛选下暂无记录</template>
+                            </div>
+                            <div
+                              v-for="row in filteredDetailReportLogs"
+                              :key="row.id"
+                              role="button"
+                              tabindex="0"
+                              :class="[
+                                'detail-report-row',
+                                row.pass ? 'pass' : 'fail',
+                                { active: selectedReportLogId === row.id }
+                              ]"
+                              @click="selectReportLogRow(row)"
+                              @keyup.enter="selectReportLogRow(row)"
+                            >
+                              <span :class="['detail-report-status', row.pass ? 'ok' : 'bad']">{{ row.pass ? '通过' : '失败' }}</span>
+                              <span class="detail-report-step-name">{{ row.name }}</span>
+                              <span class="detail-report-method" :style="methodBadgeStyle(row.method)">{{ row.method }}</span>
+                              <span class="detail-report-url" :title="row.url">{{ row.url }}</span>
+                              <span class="detail-report-meta">
+                                <span v-if="row.statusCode != null" :class="['detail-report-code', row.pass ? 'ok' : 'bad']">{{ row.statusCode }}</span>
+                                <span v-else class="detail-report-code bad">—</span>
+                                <span v-if="row.elapsedMs != null" class="detail-report-time">{{ row.elapsedMs.toFixed(2) }}ms</span>
+                                <span v-else class="detail-report-time">—</span>
+                              </span>
+                            </div>
+                          </n-scrollbar>
+                        </div>
+
+                        <aside v-if="selectedReportLog" class="detail-report-detail-pane">
+                          <div class="drp-topbar">
+                            <div class="drp-summary-line">
+                              <span class="drp-sum-label">HTTP 状态码</span>
+                              <span
+                                :class="['drp-sum-code', reportDetailStatusClass]"
+                              >{{ selectedReportLog.statusCode ?? '—' }}</span>
+                              <span class="drp-sum-sep">耗时</span>
+                              <span class="drp-sum-val">{{
+                                selectedReportLog.elapsedMs != null
+                                  ? `${Math.round(Number(selectedReportLog.elapsedMs))}ms`
+                                  : '—'
+                              }}</span>
+                              <span class="drp-sum-sep">大小</span>
+                              <span class="drp-sum-val">{{ reportDetailBodySizeLabel }}</span>
+                            </div>
+                            <n-button
+                              quaternary
+                              circle
+                              size="small"
+                              class="drp-close"
+                              @click="clearReportLogSelection"
+                            >
+                              <template #icon><n-icon :component="CloseOutlined" /></template>
+                            </n-button>
+                          </div>
+
+                          <div class="drp-validate-block">
+                            <div class="drp-validate-title">校验响应</div>
+                            <div
+                              :class="[
+                                'drp-validate-msg',
+                                reportDetailAssertionFailed ? 'is-fail' : 'is-ok'
+                              ]"
+                            >
+                              <n-icon
+                                :component="reportDetailAssertionFailed ? CloseCircleOutlined : CheckCircleOutlined"
+                                class="drp-validate-icon"
+                              />
+                              <span>{{ reportDetailAssertionMessage }}</span>
+                            </div>
+                          </div>
+
+                          <div class="drp-pane-tabs">
+                            <div class="drp-pane-tab-btns">
+                              <button
+                                type="button"
+                                :class="['drp-pt', { active: detailReportPaneTab === 'body' }]"
+                                @click="detailReportPaneTab = 'body'"
+                              >Body</button>
+                              <button
+                                type="button"
+                                :class="['drp-pt', { active: detailReportPaneTab === 'cookie' }]"
+                                @click="detailReportPaneTab = 'cookie'"
+                              >Cookie</button>
+                              <button
+                                type="button"
+                                :class="['drp-pt', { active: detailReportPaneTab === 'header' }]"
+                                @click="detailReportPaneTab = 'header'"
+                              >Header<n-tag v-if="reportDetailHeaderCount" size="small" round class="drp-pt-badge">{{ reportDetailHeaderCount }}</n-tag></button>
+                              <button
+                                type="button"
+                                :class="['drp-pt', { active: detailReportPaneTab === 'console' }]"
+                                @click="detailReportPaneTab = 'console'"
+                              >控制台</button>
+                              <button
+                                type="button"
+                                :class="['drp-pt', { active: detailReportPaneTab === 'request' }]"
+                                @click="detailReportPaneTab = 'request'"
+                              >实际请求</button>
+                            </div>
+                            <n-button size="small" class="drp-debug-btn" @click="debugThisReportStep">
+                              <template #icon><n-icon :component="ThunderboltOutlined" /></template>
+                              调试此步骤
+                            </n-button>
+                          </div>
+
+                          <n-scrollbar class="drp-pane-scroll">
+                            <div v-show="detailReportPaneTab === 'body'" class="drp-tab-panel">
+                              <div v-if="reportDetailMissingBodySnapshot" class="drp-legacy-hint">
+                                该条为历史记录，当时未保存响应体。请到「测试步骤」中对该步骤重新点击「发送」，即可在报告中查看完整 Body。
+                              </div>
+                              <div class="drp-body-subbar">
+                                <div class="drp-body-modes">
+                                  <button
+                                    type="button"
+                                    :class="['drp-bm', { active: detailReportBodyView === 'pretty' }]"
+                                    @click="detailReportBodyView = 'pretty'"
+                                  >Pretty</button>
+                                  <button
+                                    type="button"
+                                    :class="['drp-bm', { active: detailReportBodyView === 'raw' }]"
+                                    @click="detailReportBodyView = 'raw'"
+                                  >Raw</button>
+                                </div>
+                                <span class="drp-body-tag">JSON</span>
+                                <span class="drp-body-tag muted">utf8</span>
+                                <div class="drp-body-actions">
+                                  <n-button quaternary circle size="tiny" @click="copyReportDetailBody">
+                                    <template #icon><n-icon :component="CopyOutlined" /></template>
+                                  </n-button>
+                                  <n-button quaternary circle size="tiny" @click="downloadReportDetailBody">
+                                    <template #icon><n-icon :component="DownloadOutlined" /></template>
+                                  </n-button>
+                                </div>
+                              </div>
+                              <div class="drp-code-frame">
+                                <div class="drp-code-gutter">
+                                  <span
+                                    v-for="(_, i) in reportDetailBodyLines"
+                                    :key="'ln-' + i"
+                                    class="drp-gutter-line"
+                                  >{{ i + 1 }}</span>
+                                </div>
+                                <pre class="drp-code-pre">{{ reportDetailBodyForView }}</pre>
+                              </div>
+                            </div>
+
+                            <div v-show="detailReportPaneTab === 'cookie'" class="drp-tab-panel">
+                              <div v-if="reportDetailCookieEntries.length === 0" class="drp-empty-hint">无 Set-Cookie 响应头</div>
+                              <div v-else class="drp-kv-list">
+                                <div
+                                  v-for="([k, v], idx) in reportDetailCookieEntries"
+                                  :key="'ck-' + idx"
+                                  class="drp-kv-row"
+                                >
+                                  <span class="drp-k">{{ k }}</span>
+                                  <span class="drp-v" :title="v">{{ v }}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div v-show="detailReportPaneTab === 'header'" class="drp-tab-panel">
+                              <div
+                                v-if="!selectedReportLog.responseHeaders || reportDetailHeaderCount === 0"
+                                class="drp-empty-hint"
+                              >无响应头记录（旧数据或未经过代理返回）</div>
+                              <div v-else class="drp-kv-list">
+                                <div
+                                  v-for="([k, v]) in Object.entries(selectedReportLog.responseHeaders)"
+                                  :key="'h-' + k"
+                                  class="drp-kv-row"
+                                >
+                                  <span class="drp-k">{{ k }}</span>
+                                  <span class="drp-v" :title="v">{{ v }}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div v-show="detailReportPaneTab === 'console'" class="drp-tab-panel">
+                              <pre v-if="selectedReportLog.error" class="drp-console-pre">{{ selectedReportLog.error }}</pre>
+                              <div v-else class="drp-empty-hint">暂无控制台输出</div>
+                            </div>
+
+                            <div v-show="detailReportPaneTab === 'request'" class="drp-tab-panel">
+                              <div class="drp-req-line">
+                                <span class="detail-report-method" :style="methodBadgeStyle(selectedReportLog.method)">{{ selectedReportLog.method }}</span>
+                                <span class="drp-req-url" :title="selectedReportLog.url">{{ selectedReportLog.url }}</span>
+                              </div>
+                              <div class="drp-subtitle">请求头</div>
+                              <div
+                                v-if="!selectedReportLog.requestHeaders || Object.keys(selectedReportLog.requestHeaders).length === 0"
+                                class="drp-empty-hint"
+                              >无请求头快照</div>
+                              <div v-else class="drp-kv-list">
+                                <div
+                                  v-for="([k, v]) in Object.entries(selectedReportLog.requestHeaders)"
+                                  :key="'rqh-' + k"
+                                  class="drp-kv-row"
+                                >
+                                  <span class="drp-k">{{ k }}</span>
+                                  <span class="drp-v" :title="v">{{ v }}</span>
+                                </div>
+                              </div>
+                              <div class="drp-subtitle">请求体</div>
+                              <pre class="drp-req-body-pre">{{ selectedReportLog.requestBodySnippet || '（空）' }}</pre>
+                            </div>
+                          </n-scrollbar>
+                        </aside>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+      </div><!-- end content-panel -->
+
+      </template><!-- end 测试场景 v-else -->
+      </template><!-- end v-else (非scheduled) -->
+    </div><!-- end workspace-main -->
+
+    <!-- ── 新建/编辑场景弹窗 ── -->
+    <n-modal
+      v-model:show="showModal"
+      :mask-closable="false"
+      preset="card"
+      :style="{ width: '520px', borderRadius: '12px' }"
+      :bordered="false"
+    >
+      <template #header>
+        <div class="modal-header">
+          <div :class="['modal-icon', editingId ? 'edit' : 'create']">
+            <n-icon :component="editingId ? EditOutlined : PlusOutlined" />
+          </div>
+          <span>{{ editingId ? '编辑测试场景' : '新建场景用例' }}</span>
+        </div>
+      </template>
+      <n-form :model="form" label-placement="top" :show-feedback="false" style="display:flex;flex-direction:column;gap:14px">
+        <n-form-item label="场景名称" required>
+          <n-input v-model:value="form.name" placeholder="请输入场景名称" />
+        </n-form-item>
+        <n-form-item label="所属目录">
+          <n-select
+            v-model:value="form.folder_id"
+            :options="folderSelectOptions"
+            placeholder="不选则放到根目录"
+            clearable
+          />
+        </n-form-item>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <n-form-item label="优先级">
+            <n-select v-model:value="form.priority" :options="priorityOptions" placeholder="选择优先级" />
+          </n-form-item>
+          <n-form-item label="运行环境">
+            <n-select v-model:value="form.env_id" :options="envOptions" placeholder="选择环境" clearable />
+          </n-form-item>
+        </div>
+        <n-form-item label="标签">
+          <n-input v-model:value="form.tags" placeholder="输入标签（可选）" />
+        </n-form-item>
+        <n-form-item label="描述">
+          <n-input v-model:value="form.description" type="textarea" placeholder="场景描述（可选）" :autosize="{ minRows: 2, maxRows: 4 }" />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <div style="display:flex;justify-content:flex-end;gap:8px">
+          <n-button @click="showModal = false">取消</n-button>
+          <n-button type="primary" :loading="saving" @click="saveScenario" style="background:#7d33ff;border-color:#7d33ff">
+            {{ editingId ? '保存修改' : '创建场景' }}
+          </n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- ── 新建目录弹窗 ── -->
+    <n-modal
+      v-model:show="showFolderModal"
+      :mask-closable="false"
+      preset="card"
+      :style="{ width: '400px', borderRadius: '12px' }"
+      :bordered="false"
+    >
+      <template #header>
+        <div class="modal-header">
+          <div class="modal-icon create">
+            <n-icon :component="FolderOutlined" />
+          </div>
+          <span>新建目录</span>
+        </div>
+      </template>
+      <n-form label-placement="top" :show-feedback="false">
+        <n-form-item label="目录名称" required>
+          <n-input v-model:value="folderForm.name" placeholder="请输入目录名称" @keyup.enter="saveFolder" />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <div style="display:flex;justify-content:flex-end;gap:8px">
+          <n-button @click="showFolderModal = false">取消</n-button>
+          <n-button type="primary" @click="saveFolder" style="background:#7d33ff;border-color:#7d33ff">创建目录</n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- 批量：修改优先级 -->
+    <n-modal v-model:show="showBatchPriorityModal" preset="card" title="批量设置优先级" :style="{ width: '400px' }">
+      <n-select v-model:value="batchPriorityValue" :options="priorityOptions" style="width:100%" />
+      <template #footer>
+        <n-button @click="showBatchPriorityModal = false">取消</n-button>
+        <n-button type="primary" :loading="batchLoading" style="background:#7d33ff;border-color:#7d33ff" @click="applyBatchPriority">确定</n-button>
+      </template>
+    </n-modal>
+
+    <!-- 批量：增加标签 -->
+    <n-modal v-model:show="showBatchAddTagModal" preset="card" title="批量增加标签" :style="{ width: '400px' }">
+      <n-input v-model:value="batchTagInput" placeholder="输入要追加的标签（逗号分隔）" />
+      <template #footer>
+        <n-button @click="showBatchAddTagModal = false">取消</n-button>
+        <n-button type="primary" :loading="batchLoading" style="background:#7d33ff;border-color:#7d33ff" @click="applyBatchAddTag">确定</n-button>
+      </template>
+    </n-modal>
+
+    <!-- 批量：删除标签 -->
+    <n-modal v-model:show="showBatchRemoveTagModal" preset="card" title="批量删除标签" :style="{ width: '400px' }">
+      <n-input v-model:value="batchTagRemoveInput" placeholder="输入要移除的标签关键字" />
+      <template #footer>
+        <n-button @click="showBatchRemoveTagModal = false">取消</n-button>
+        <n-button type="primary" :loading="batchLoading" style="background:#7d33ff;border-color:#7d33ff" @click="applyBatchRemoveTag">确定</n-button>
+      </template>
+    </n-modal>
+
+    <!-- 批量：移动到目录 -->
+    <n-modal v-model:show="showBatchMoveModal" preset="card" title="移动到目录" :style="{ width: '400px' }">
+      <n-select
+        v-model:value="batchMoveFolderId"
+        :options="batchMoveFolderOptions"
+        placeholder="选择目标目录（选「根目录」可移出）"
+        clearable
+        style="width:100%"
+      />
+      <template #footer>
+        <n-button @click="showBatchMoveModal = false">取消</n-button>
+        <n-button type="primary" :loading="batchLoading" style="background:#7d33ff;border-color:#7d33ff" @click="applyBatchMove">确定</n-button>
+      </template>
+    </n-modal>
+
+    <!-- 从单接口用例 / 调试用例 导入：左树右表，对齐单接口测试 -->
+    <n-modal
+      v-model:show="showImportCaseModal"
+      preset="card"
+      :style="{ width: 'min(1000px, calc(100vw - 32px))', borderRadius: '12px' }"
+      :mask-closable="false"
+      @on-after-leave="onImportCaseModalLeave"
+    >
+      <template #header>
+        <div class="import-debug-modal-title">{{ importCaseModalTitle }}</div>
+        <div class="import-debug-modal-sub">{{ importCaseModalSub }}</div>
+      </template>
+      <n-spin :show="importTreeLoading" class="import-case-modal-spin">
+        <div class="import-case-modal-body">
+          <div class="import-case-tree-pane">
+            <div class="import-pane-head">接口目录</div>
+            <n-input
+              v-model:value="importTreePattern"
+              placeholder="搜索目录 / 接口"
+              clearable
+              size="small"
+              class="import-tree-search"
+            >
+              <template #prefix><n-icon :component="SearchOutlined" style="color:#a0aab8" /></template>
+            </n-input>
+            <n-scrollbar class="import-tree-scroll">
+              <n-tree
+                block-line
+                expand-on-click
+                :data="importModalTreeData"
+                :pattern="importTreePattern"
+                :selected-keys="importModalTreeSelectedKeys"
+                :render-label="renderImportModalTreeLabel"
+                @update:selected-keys="onImportModalTreeSelect"
+                class="import-modal-tree"
+              />
+            </n-scrollbar>
+          </div>
+          <div class="import-case-list-pane">
+            <template v-if="!importSelectedInterfaceId">
+              <div class="import-case-pane-placeholder">
+                请从左侧选择接口，右侧将展示该接口下的测试用例（与「单接口测试 → 测试用例」一致的数据来源）
+              </div>
+            </template>
+            <template v-else>
+              <div class="import-interface-bar">
+                <span class="idc-method import-if-method" :style="methodBadgeStyle(importInterfaceDetail?.method || '')">
+                  {{ importInterfaceDetail?.method || '—' }}
+                </span>
+                <span class="import-if-title">{{ importInterfaceDetail?.name }}</span>
+                <span class="import-if-path">{{ importInterfaceDetail?.path }}</span>
+              </div>
+              <n-tabs v-model:value="importModalCategory" type="line" size="small" class="import-cat-tabs">
+                <n-tab-pane name="all" :tab="`全部 (${importModalCounts.all})`" />
+                <n-tab-pane name="positive" :tab="`正向 (${importModalCounts.positive})`" />
+                <n-tab-pane name="negative" :tab="`负向 (${importModalCounts.negative})`" />
+                <n-tab-pane name="boundary" :tab="`边界值 (${importModalCounts.boundary})`" />
+                <n-tab-pane name="security" :tab="`安全性 (${importModalCounts.security})`" />
+                <n-tab-pane name="other" :tab="`其他 (${importModalCounts.other})`" />
+              </n-tabs>
+              <n-input
+                v-model:value="importCaseListSearch"
+                placeholder="搜索用例名称"
+                clearable
+                size="small"
+                class="import-case-list-search"
+              >
+                <template #prefix><n-icon :component="SearchOutlined" style="color:#a0aab8" /></template>
+              </n-input>
+              <n-spin :show="importCasesLoading" class="import-cases-inner-spin">
+                <div
+                  v-if="!importCasesLoading && importModalCasesList.length === 0"
+                  class="import-debug-empty import-case-list-empty"
+                >
+                  {{ importCaseEmptyHint }}
+                </div>
+                <div
+                  v-else-if="!importCasesLoading && importModalFilteredCases.length === 0"
+                  class="import-debug-empty import-case-list-empty"
+                >
+                  当前筛选下没有用例，请切换分组或清空搜索
+                </div>
+                <div v-else class="import-case-table-wrap">
+                  <n-table :single-line="false" size="small" class="import-case-n-table">
+                    <thead>
+                      <tr>
+                        <th class="ict-col-check"></th>
+                        <th class="ict-col-idx">#</th>
+                        <th class="ict-col-name">名称</th>
+                        <th class="ict-col-group">分组</th>
+                        <th class="ict-col-result">运行结果</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(row, idx) in importModalFilteredCases" :key="row.id" class="import-case-tr">
+                        <td class="ict-col-check" @click.stop>
+                          <n-checkbox
+                            :checked="!!importSelectedCaseRows[row.id]"
+                            @update:checked="(v: boolean) => toggleImportCaseRow(row, v)"
+                          />
+                        </td>
+                        <td class="ict-col-idx">{{ idx + 1 }}</td>
+                        <td class="ict-col-name" :title="row.name">{{ row.name }}</td>
+                        <td class="ict-col-group">{{ row.groupLabel }}</td>
+                        <td class="ict-col-result"><span class="ict-result-dash">—</span></td>
+                      </tr>
+                    </tbody>
+                  </n-table>
+                </div>
+              </n-spin>
+            </template>
+          </div>
+        </div>
+      </n-spin>
+      <template #footer>
+        <div class="import-debug-footer">
+          <span class="import-debug-hint" v-if="importSelectedCaseCount">已选 {{ importSelectedCaseCount }} 条</span>
+          <div class="import-debug-actions">
+            <n-button @click="showImportCaseModal = false">取消</n-button>
+            <n-button
+              type="primary"
+              :loading="importDebugSaving"
+              :disabled="importSelectedCaseCount === 0"
+              style="background:#7d33ff;border-color:#7d33ff"
+              @click="confirmImportCases"
+            >
+              导入选中
+            </n-button>
+          </div>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- 归档测试报告详情（数据库） -->
+    <n-modal
+      v-model:show="reportArchiveModalVisible"
+      preset="card"
+      :title="reportArchiveDetail?.scenario_name ? `报告 · ${reportArchiveDetail.scenario_name}` : '报告详情'"
+      style="width: min(920px, 96vw)"
+      :segmented="{ content: true }"
+      @after-leave="closeReportArchiveModal"
+    >
+      <n-spin :show="reportArchiveLoading">
+        <div v-if="reportArchiveDetail" class="arc-root">
+          <div class="arc-summary-bar">
+            <n-tag size="small" type="success" round>通过 {{ reportArchiveDetail.summary?.pass ?? 0 }}</n-tag>
+            <n-tag size="small" type="error" round>失败 {{ reportArchiveDetail.summary?.fail ?? 0 }}</n-tag>
+            <n-tag size="small" round>总计 {{ reportArchiveDetail.summary?.total ?? 0 }}</n-tag>
+            <span class="arc-meta">{{ reportArchiveDetail.created_at }} · {{ reportArchiveDetail.env_name || '—' }}</span>
+          </div>
+          <n-scrollbar style="max-height: min(520px, 70vh)">
+            <div
+              v-for="(e, idx) in (reportArchiveDetail.entries || [])"
+              :key="e.id || idx"
+              class="arc-entry"
+            >
+              <div class="arc-entry-head">
+                <span :class="['arc-pass', e.pass ? 'ok' : 'bad']">{{ e.pass ? '通过' : '失败' }}</span>
+                <span class="arc-name">{{ e.name }}</span>
+                <n-tag size="tiny" round>{{ e.method }}</n-tag>
+                <span class="arc-code" v-if="e.statusCode != null">{{ e.statusCode }}</span>
+                <span class="arc-ms" v-if="e.elapsedMs != null">{{ Math.round(e.elapsedMs) }}ms</span>
+              </div>
+              <div class="arc-url" :title="e.url">{{ e.url }}</div>
+              <pre v-if="e.responseBodyText" class="arc-body-snippet">{{ e.responseBodyText.length > 1200 ? e.responseBodyText.slice(0, 1200) + '…' : e.responseBodyText }}</pre>
+              <div v-else-if="e.error" class="arc-err">{{ e.error }}</div>
+            </div>
+          </n-scrollbar>
+        </div>
+      </n-spin>
+    </n-modal>
+
+    <!-- 批量运行进度 -->
+    <n-modal
+      v-model:show="batchRunModalVisible"
+      preset="card"
+      :mask-closable="!batchRunning"
+      :closable="!batchRunning"
+      class="batch-run-modal"
+      style="width: min(440px, 94vw); border-radius: 12px"
+      title="批量运行"
+      @after-leave="onBatchRunModalAfterLeave"
+    >
+      <div class="batch-run-body">
+        <p class="batch-run-hint">
+          将按步骤顺序真实请求接口，并为每个场景生成一条「批量运行」报告（可在<strong>执行报告</strong>菜单查看）。
+        </p>
+        <n-progress
+          type="line"
+          :percentage="batchRunProgress"
+          :processing="batchRunning"
+          indicator-placement="inside"
+          style="margin-bottom: 16px"
+        />
+        <div class="batch-run-phase">{{ batchRunPhase }}</div>
+        <div v-if="batchRunDetail" class="batch-run-detail">{{ batchRunDetail }}</div>
+        <div v-if="batchRunSummary && !batchRunning" class="batch-run-result">
+          <n-tag type="success" size="small" round>通过 {{ batchRunSummary.passSteps }} 步</n-tag>
+          <n-tag type="error" size="small" round>失败 {{ batchRunSummary.failSteps }} 步</n-tag>
+          <span class="batch-run-sc-count">涉及 {{ batchRunSummary.scenarios }} 个场景</span>
+        </div>
+      </div>
+      <template #footer>
+        <n-button :disabled="batchRunning" type="primary" class="step-purple-btn" @click="closeBatchRunModal">
+          {{ batchRunning ? '运行中…' : '关闭' }}
+        </n-button>
+      </template>
+    </n-modal>
+
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, h, watch, nextTick, type Component } from 'vue'
+import * as echarts from 'echarts'
+import SidebarNavigation from '@/components/SidebarNavigation.vue'
+import { useUserStore } from '@/store/user'
+import {
+  SearchOutlined, PlusOutlined, AppstoreOutlined, FolderOutlined,
+  ClockCircleOutlined, FileTextOutlined, CaretRightOutlined,
+  FilterOutlined, GlobalOutlined, EditOutlined, DeleteOutlined,
+  CheckCircleOutlined, CloseCircleOutlined, SyncOutlined,
+  FileOutlined, FolderOpenOutlined, MenuOutlined, TagsOutlined, CloseOutlined,
+  LinkOutlined, SettingOutlined, DownOutlined,
+  ApiOutlined, CloudUploadOutlined, ImportOutlined, CodeOutlined,
+  DatabaseOutlined, ApartmentOutlined, ThunderboltOutlined,
+  SortDescendingOutlined, CopyOutlined, DownloadOutlined, QuestionCircleOutlined
+} from '@vicons/antd'
+import {
+  useMessage,
+  useDialog,
+  NIcon,
+  NButton,
+  NTree,
+  NModal,
+  NForm,
+  NFormItem,
+  NInput,
+  NSelect,
+  NDropdown,
+  NCheckbox,
+  NSpin,
+  NPopover,
+  NTabs,
+  NTabPane,
+  NTable,
+  NScrollbar,
+  NSpace,
+  NButtonGroup,
+  NEmpty,
+  NRadio,
+  NRadioGroup,
+  NTag,
+  NTooltip,
+  NProgress
+} from 'naive-ui'
+import execRequest from '@/api/exec-request'
+import {
+  loadStepExecContext,
+  runStepExecContext,
+  computeSummaryForLogEntries,
+  type ScenarioSendLogEntry as ExecScenarioLogEntry
+} from '@/utils/scenario-step-exec'
+
+const message = useMessage()
+const dialog = useDialog()
+const userStore = useUserStore()
+
+// ── 基础状态 ──
+const activeView = ref('welcome')
+const mainTab = ref('scenarios')
+const scheduledTab = ref('tasks')
+const sidebarSearch = ref('')
+const sidebarSearch2 = ref('')
+const tableSearch = ref('')
+const scheduledSearch = ref('')
+const rptScope = ref('personal')
+const rptType = ref('all')
+const rptSearch = ref('')
+
+// ── 测试报告（服务端持久化）──
+type ReportListRowUi = {
+  id: number
+  name: string
+  env: string
+  time: string
+  creator: string
+  runMode: string
+  triggerMode: string
+  status: 'done' | 'running' | 'failed'
+  total: number
+  success: number
+  fail: number
+  skip: number
+  scenario_id: number
+}
+
+const reportsLoading = ref(false)
+const reportsFromApi = ref<any[]>([])
+
+const mapApiReportToRow = (d: any): ReportListRowUi => {
+  const sum = d.summary || {}
+  const tt = String(d.trigger_type || 'manual')
+  return {
+    id: d.id,
+    name: (d.title && String(d.title).trim()) || d.scenario_name || `场景 #${d.scenario_id}`,
+    env: d.env_name || '—',
+    time: d.created_at || '—',
+    creator: d.creator || '—',
+    runMode: '客户端运行',
+    triggerMode: tt === 'scheduled' ? '定时' : tt === 'batch' ? '批量运行' : '手动',
+    status: 'done',
+    total: Number(sum.total ?? 0),
+    success: Number(sum.pass ?? 0),
+    fail: Number(sum.fail ?? 0),
+    skip: Number(sum.untested ?? 0),
+    scenario_id: d.scenario_id
+  }
+}
+
+const fetchReportsFromApi = async () => {
+  reportsLoading.value = true
+  try {
+    const q = rptSearch.value.trim()
+    const data: any = await execRequest.get('/test-scenarios/reports', {
+      params: { q: q || undefined, limit: 100 }
+    })
+    reportsFromApi.value = Array.isArray(data) ? data : []
+  } catch {
+    reportsFromApi.value = []
+  } finally {
+    reportsLoading.value = false
+  }
+}
+
+let rptSearchDebounce: ReturnType<typeof setTimeout> | null = null
+watch(rptSearch, () => {
+  if (activeView.value !== 'reports') return
+  if (rptSearchDebounce) clearTimeout(rptSearchDebounce)
+  rptSearchDebounce = setTimeout(() => {
+    rptSearchDebounce = null
+    fetchReportsFromApi()
+  }, 400)
+})
+
+watch(
+  () => activeView.value,
+  (v) => {
+    if (v === 'reports') fetchReportsFromApi()
+  }
+)
+
+const filteredReports = computed((): ReportListRowUi[] => {
+  let list = reportsFromApi.value.map(mapApiReportToRow)
+  if (rptScope.value === 'personal') {
+    const me = (userStore.username || '').trim()
+    if (me) list = list.filter((r) => r.creator === me)
+  }
+  if (rptType.value === 'scheduled') list = list.filter((r) => r.triggerMode === '定时')
+  else if (rptType.value === 'manual') list = list.filter((r) => r.triggerMode === '手动')
+  else if (rptType.value === 'batch') list = list.filter((r) => r.triggerMode === '批量运行')
+  return list
+})
+
+/** 全局报告详情弹窗 */
+const reportArchiveModalVisible = ref(false)
+const reportArchiveLoading = ref(false)
+const reportArchiveDetail = ref<any | null>(null)
+
+const openReportArchiveDetail = async (row: ReportListRowUi) => {
+  reportArchiveModalVisible.value = true
+  reportArchiveLoading.value = true
+  reportArchiveDetail.value = null
+  try {
+    const data: any = await execRequest.get(`/test-scenarios/reports/${row.id}`)
+    reportArchiveDetail.value = data
+  } catch {
+    message.error('加载报告详情失败')
+    reportArchiveModalVisible.value = false
+  } finally {
+    reportArchiveLoading.value = false
+  }
+}
+
+const closeReportArchiveModal = () => {
+  reportArchiveModalVisible.value = false
+  reportArchiveDetail.value = null
+}
+
+// ── 场景数据 ──
+const loading = ref(false)
+const saving = ref(false)
+const scenarios = ref<any[]>([])
+const environments = ref<any[]>([])
+const checkedIds = ref<Set<number>>(new Set())
+
+/** 批量运行进度 */
+const batchRunning = ref(false)
+const batchRunModalVisible = ref(false)
+const batchRunProgress = ref(0)
+const batchRunPhase = ref('')
+const batchRunDetail = ref('')
+const batchRunSummary = ref<{ scenarios: number; passSteps: number; failSteps: number } | null>(null)
+
+const showBatchPriorityModal = ref(false)
+const batchPriorityValue = ref('P0')
+const showBatchAddTagModal = ref(false)
+const batchTagInput = ref('')
+const showBatchRemoveTagModal = ref(false)
+const batchTagRemoveInput = ref('')
+const showBatchMoveModal = ref(false)
+const batchMoveFolderId = ref<string | null>(null)
+const batchLoading = ref(false)
+
+// ── 目录数据（localStorage持久化）──
+const FOLDER_KEY = 'scenario_folders'
+const FOLDER_MAP_KEY = 'scenario_folder_map'
+
+const loadFolders = (): Array<{id: string, name: string}> => {
+  try { return JSON.parse(localStorage.getItem(FOLDER_KEY) || '[]') } catch { return [] }
+}
+const saveFolders = (list: Array<{id: string, name: string}>) => {
+  localStorage.setItem(FOLDER_KEY, JSON.stringify(list))
+}
+const loadFolderMap = (): Record<number, string> => {
+  try { return JSON.parse(localStorage.getItem(FOLDER_MAP_KEY) || '{}') } catch { return {} }
+}
+const saveFolderMap = (map: Record<number, string>) => {
+  localStorage.setItem(FOLDER_MAP_KEY, JSON.stringify(map))
+}
+
+const localFolders = ref(loadFolders())
+const scenarioFolderMap = ref(loadFolderMap())
+
+// ── 场景弹窗 ──
+const showModal = ref(false)
+const editingId = ref<number | null>(null)
+const form = ref({
+  name: '',
+  priority: 'P0',
+  tags: '',
+  env_id: null as number | null,
+  description: '',
+  folder_id: null as string | null,
+})
+
+// ── 目录弹窗 ──
+const showFolderModal = ref(false)
+const folderForm = ref({ name: '' })
+
+const priorityOptions = [
+  { label: 'P0', value: 'P0' },
+  { label: 'P1', value: 'P1' },
+  { label: 'P2', value: 'P2' },
+  { label: 'P3', value: 'P3' },
+]
+const envOptions = computed(() =>
+  environments.value.map(e => ({ label: e.name, value: e.id }))
+)
+const folderSelectOptions = computed(() =>
+  localFolders.value.map(f => ({ label: f.name, value: f.id }))
+)
+
+// ── 左侧树 / 列表与详情切换 ──
+const ROOT_KEY = 'root-scenarios'
+const scenarioPanelMode = ref<'list' | 'detail'>('list')
+const selectedScenarioForDetail = ref<any | null>(null)
+const selectedSidebarKeys = ref<string[]>([ROOT_KEY])
+const expandedFolderKeys = ref<string[]>([ROOT_KEY])
+
+const detailScenario = computed(() => {
+  const id = selectedScenarioForDetail.value?.id
+  if (id == null) return null
+  return scenarios.value.find(s => s.id === id) || selectedScenarioForDetail.value
+})
+
+const detailMainTab = ref('steps')
+const detailMainTabs = [
+  { key: 'steps', label: '测试步骤' },
+  { key: 'report', label: '测试报告' }
+]
+const detailEnvId = ref<number | null>(null)
+
+const detailStepCount = computed(() => {
+  const steps = detailScenario.value?.steps
+  return Array.isArray(steps) ? steps.length : 0
+})
+
+const detailStepsOrdered = computed(() => {
+  const steps = detailScenario.value?.steps
+  if (!Array.isArray(steps)) return []
+  return [...steps].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+})
+
+type ScenarioSendLogEntry = {
+  id: string
+  at: number
+  pass: boolean
+  name: string
+  method: string
+  url: string
+  statusCode: number | null
+  elapsedMs: number | null
+  error?: string
+  /** 代理返回的响应体文本（JSON 已格式化） */
+  responseBodyText?: string
+  responseSizeBytes?: number
+  responseHeaders?: Record<string, string>
+  requestHeaders?: Record<string, string>
+  requestBodySnippet?: string
+  /** 契约校验：期望状态码（开启校验时） */
+  expectedStatusCode?: number
+  /** 是否启用「校验响应」契约 */
+  validateResponseEnabled?: boolean
+  /** 响应体 JSON 顶层 code（存在时参与业务校验） */
+  jsonBusinessCode?: string | null
+  /** 业务层 code/success 校验是否通过；undefined 表示未检测或无 code 字段 */
+  jsonBusinessOk?: boolean
+}
+
+/** 后置操作 · 校验响应（与调试页 post_operations 约定一致） */
+const VALIDATE_RESPONSE_TYPE = 'validate_response'
+
+const defaultValidateResponseOp = () => ({
+  type: VALIDATE_RESPONSE_TYPE,
+  enabled: true,
+  expect_status: 200,
+  /** 为 false 时不根据 JSON 顶层 code / success 做二次校验 */
+  check_json_code: true
+})
+
+const mergePostOpsWithValidateResponse = (raw: any[]): any[] => {
+  const list = Array.isArray(raw) ? raw.map((x) => ({ ...x })) : []
+  const idx = list.findIndex((o) => o?.type === VALIDATE_RESPONSE_TYPE)
+  if (idx >= 0) {
+    const cur = list[idx]
+    const n = Number(cur.expect_status ?? cur.expected_status ?? 200)
+    list[idx] = {
+      type: VALIDATE_RESPONSE_TYPE,
+      enabled: cur.enabled !== false,
+      expect_status: Number.isFinite(n) ? n : 200,
+      check_json_code: cur.check_json_code !== false
+    }
+    return list
+  }
+  return [defaultValidateResponseOp(), ...list]
+}
+
+const getValidateResponseConfigFromPostOps = (ops: any[] | undefined) => {
+  const list = Array.isArray(ops) ? ops : []
+  const op = list.find((o) => o?.type === VALIDATE_RESPONSE_TYPE)
+  if (!op) {
+    return { enabled: true as boolean, expect_status: 200, check_json_code: true as boolean }
+  }
+  const n = Number(op.expect_status ?? 200)
+  return {
+    enabled: op.enabled !== false,
+    expect_status: Number.isFinite(n) ? n : 200,
+    check_json_code: op.check_json_code !== false
+  }
+}
+
+/**
+ * 许多接口 HTTP 恒为 200，业务错误放在 JSON：{ code: '401', msg } 或 success:false。
+ * 在存在顶层 code 或 success===false 时做二次判定；成功码视为 200 / 0（字符串或数字）。
+ */
+const checkJsonEnvelopeBusinessSuccess = (
+  data: unknown
+): { skipped: boolean; ok: boolean; displayCode: string | null } => {
+  if (data == null || typeof data !== 'object' || Array.isArray(data)) {
+    return { skipped: true, ok: true, displayCode: null }
+  }
+  const o = data as Record<string, unknown>
+  if (o.success === false) {
+    return { skipped: false, ok: false, displayCode: null }
+  }
+  if (!('code' in o)) {
+    return { skipped: true, ok: true, displayCode: null }
+  }
+  const raw = o.code
+  if (raw === undefined || raw === null) {
+    return { skipped: true, ok: true, displayCode: null }
+  }
+  const s = String(raw).trim()
+  const n = Number(s)
+  const ok = s === '200' || s === '0' || n === 200 || n === 0
+  return { skipped: false, ok, displayCode: s }
+}
+
+const evaluateValidateResponsePass = (
+  statusCode: number | null | undefined,
+  postOps: any[] | undefined,
+  responseData?: unknown
+): {
+  pass: boolean
+  expectedStatusCode: number
+  validateResponseEnabled: boolean
+  jsonBusinessCode?: string | null
+  jsonBusinessOk?: boolean
+} => {
+  const cfg = getValidateResponseConfigFromPostOps(postOps)
+  const c =
+    statusCode != null && Number.isFinite(Number(statusCode)) ? Number(statusCode) : null
+  if (!cfg.enabled) {
+    return {
+      pass: c != null && c >= 200 && c < 400,
+      expectedStatusCode: cfg.expect_status,
+      validateResponseEnabled: false
+    }
+  }
+  if (c == null) {
+    return { pass: false, expectedStatusCode: cfg.expect_status, validateResponseEnabled: true }
+  }
+  const httpPass = c === cfg.expect_status
+  let jsonBusinessCode: string | null | undefined
+  let jsonBusinessOk: boolean | undefined
+
+  if (cfg.check_json_code && httpPass && responseData !== undefined) {
+    const biz = checkJsonEnvelopeBusinessSuccess(responseData)
+    if (!biz.skipped) {
+      jsonBusinessCode = biz.displayCode
+      jsonBusinessOk = biz.ok
+    }
+  }
+
+  const pass = httpPass && (jsonBusinessOk === undefined || jsonBusinessOk === true)
+
+  return {
+    pass,
+    expectedStatusCode: cfg.expect_status,
+    validateResponseEnabled: true,
+    jsonBusinessCode,
+    jsonBusinessOk
+  }
+}
+
+const validateEnableSelectOptions = [
+  { label: '开启', value: 'on' },
+  { label: '关闭', value: 'off' }
+]
+
+const validateStatusCodeOptions = [
+  { label: '成功 (200)', value: 200 },
+  { label: '创建成功 (201)', value: 201 },
+  { label: '无内容 (204)', value: 204 },
+  { label: '重定向 (301)', value: 301 },
+  { label: '重定向 (302)', value: 302 },
+  { label: '错误请求 (400)', value: 400 },
+  { label: '未授权 (401)', value: 401 },
+  { label: '禁止 (403)', value: 403 },
+  { label: '未找到 (404)', value: 404 },
+  { label: '服务器错误 (500)', value: 500 }
+]
+
+const LS_SCENARIO_SEND_LOGS = 'test-scenarios-send-logs-v1'
+
+/** 与 localStorage / 接口 id 对齐，避免 number / string 混用导致读不到桶 */
+const normalizeScenarioLogId = (id: unknown): number | null => {
+  if (id == null || id === '') return null
+  const n = Number(id)
+  return Number.isFinite(n) ? n : null
+}
+
+const normalizeProxyHeaderMap = (h: unknown): Record<string, string> => {
+  if (!h || typeof h !== 'object') return {}
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(h as Record<string, unknown>)) {
+    if (v == null) continue
+    out[String(k)] = Array.isArray(v) ? (v as unknown[]).map(String).join(', ') : String(v)
+  }
+  return out
+}
+
+/** 将 execRequest 返回结果规范为与 exec-engine /proxy 一致的形状（兼容多包一层 data、或拦截器已剥壳） */
+const normalizeExecProxyResponse = (raw: unknown) => {
+  const pick = (o: Record<string, unknown>) => ({
+    status_code: o.status_code != null ? Number(o.status_code) : null,
+    headers: o.headers,
+    data: o.data,
+    elapsed:
+      o.elapsed != null && !Number.isNaN(Number(o.elapsed)) ? Number(o.elapsed) : null,
+    error: o.error != null ? String(o.error) : undefined,
+    msg: o.msg != null ? String(o.msg) : undefined
+  })
+
+  if (raw == null || typeof raw !== 'object') {
+    return pick({ status_code: null, headers: undefined, data: undefined, elapsed: null })
+  }
+  const r = raw as Record<string, unknown>
+  if ('status_code' in r || r.error != null) {
+    return pick(r)
+  }
+  const inner = r.data
+  if (inner != null && typeof inner === 'object' && !Array.isArray(inner)) {
+    const d = inner as Record<string, unknown>
+    if ('status_code' in d || d.error != null || (d.headers != null && 'data' in d)) {
+      return pick(d)
+    }
+  }
+  return {
+    status_code: null as number | null,
+    headers: undefined as unknown,
+    data: raw,
+    elapsed: null as number | null,
+    error: undefined as string | undefined,
+    msg: undefined as string | undefined
+  }
+}
+
+const stringifyResponseForLog = (data: unknown): { text: string; bytes: number } => {
+  if (data === undefined || data === null) {
+    return { text: '(空响应体)', bytes: 0 }
+  }
+  if (data === '') {
+    return { text: '(空响应体)', bytes: 0 }
+  }
+  let text: string
+  if (typeof data === 'string') {
+    text = data
+  } else {
+    try {
+      const s = JSON.stringify(data, null, 2)
+      text = s === undefined ? String(data) : s
+    } catch {
+      text = String(data)
+    }
+  }
+  const bytes = new TextEncoder().encode(text).byteLength
+  return { text, bytes }
+}
+
+const buildRequestBodySnippet = (b: unknown): string => {
+  if (b == null || b === '') return ''
+  if (typeof b === 'string') {
+    return b.length > 8000 ? `${b.slice(0, 8000)}…` : b
+  }
+  try {
+    const s = JSON.stringify(b)
+    return s.length > 8000 ? `${s.slice(0, 8000)}…` : s
+  } catch {
+    const s = String(b)
+    return s.length > 8000 ? `${s.slice(0, 8000)}…` : s
+  }
+}
+
+const scenarioSendLogs = ref<Record<number, ScenarioSendLogEntry[]>>({})
+
+/** 待写入数据库的报告条目（防抖合并为一条报告记录） */
+const pendingReportPersistEntries = ref<ScenarioSendLogEntry[]>([])
+let pendingReportPersistTimer: ReturnType<typeof setTimeout> | null = null
+
+const schedulePersistScenarioReportToServer = () => {
+  if (pendingReportPersistTimer != null) clearTimeout(pendingReportPersistTimer)
+  pendingReportPersistTimer = setTimeout(() => {
+    pendingReportPersistTimer = null
+    void flushPendingScenarioReportToServer()
+  }, 1800)
+}
+
+const flushPendingScenarioReportToServer = async () => {
+  const sid = normalizeScenarioLogId(detailScenario.value?.id)
+  const batch = [...pendingReportPersistEntries.value]
+  pendingReportPersistEntries.value = []
+  if (sid == null || batch.length === 0) return
+  const summary = computeSummaryForLogEntries(batch)
+  const title = `${String(detailScenario.value?.name || '场景').slice(0, 200)} · ${new Date().toLocaleString()}`
+  try {
+    await execRequest.post(`/test-scenarios/${sid}/reports`, {
+      entries: batch,
+      summary,
+      env_id: detailEnvId.value,
+      creator: userStore.username || 'anonymous',
+      trigger_type: 'manual',
+      title
+    })
+    if (activeView.value === 'reports') await fetchReportsFromApi()
+  } catch {
+    /* 静默失败，避免打断调试；可改为 message.warning */
+  }
+}
+
+const detailReportFilter = ref<'all' | 'pass' | 'fail'>('all')
+const detailReportSearch = ref('')
+const selectedReportLogId = ref<string | null>(null)
+const detailReportPaneTab = ref<'body' | 'cookie' | 'header' | 'console' | 'request'>('body')
+const detailReportBodyView = ref<'pretty' | 'raw'>('pretty')
+
+const selectedReportLog = computed(() => {
+  if (!selectedReportLogId.value) return null
+  return currentScenarioSendLogs.value.find((r) => r.id === selectedReportLogId.value) ?? null
+})
+
+const reportDetailHeaderCount = computed(() => {
+  const h = selectedReportLog.value?.responseHeaders
+  return h ? Object.keys(h).length : 0
+})
+
+const reportDetailBodyDisplay = computed(() => {
+  const log = selectedReportLog.value
+  if (!log) return ''
+  if (log.responseBodyText != null && log.responseBodyText !== '') return log.responseBodyText
+  if (log.error) return log.error
+  return '(无响应体)'
+})
+
+/** 有状态码但无快照：多为升级功能前的 localStorage 记录 */
+const reportDetailMissingBodySnapshot = computed(() => {
+  const log = selectedReportLog.value
+  if (!log) return false
+  const hasSnap = log.responseBodyText != null && log.responseBodyText !== ''
+  return !hasSnap && !log.error && log.statusCode != null
+})
+
+const reportDetailBodyForView = computed(() => {
+  const base = reportDetailBodyDisplay.value
+  if (detailReportBodyView.value !== 'raw') return base
+  try {
+    const j = JSON.parse(base)
+    return JSON.stringify(j)
+  } catch {
+    return base.replace(/\r\n/g, '\n').replace(/\n/g, '').trim()
+  }
+})
+
+const reportDetailBodyLines = computed(() => {
+  const raw = reportDetailBodyForView.value
+  return raw === '' ? [''] : raw.split('\n')
+})
+
+const reportDetailBodySizeLabel = computed(() => {
+  const log = selectedReportLog.value
+  if (log?.responseSizeBytes != null && !Number.isNaN(log.responseSizeBytes)) {
+    const b = log.responseSizeBytes
+    if (b < 1024) return `${b}B`
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)}KB`
+    return `${(b / 1024 / 1024).toFixed(2)}MB`
+  }
+  const enc = new TextEncoder().encode(reportDetailBodyForView.value)
+  const b = enc.byteLength
+  if (b < 1024) return `${b}B`
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)}KB`
+  return `${(b / 1024 / 1024).toFixed(2)}MB`
+})
+
+const reportDetailCookieEntries = computed(() => {
+  const h = selectedReportLog.value?.responseHeaders
+  if (!h) return [] as [string, string][]
+  return Object.entries(h).filter(([k]) => {
+    const lk = k.toLowerCase()
+    return lk === 'set-cookie' || lk.startsWith('set-cookie')
+  })
+})
+
+const reportDetailAssertionFailed = computed(() => {
+  const log = selectedReportLog.value
+  if (!log) return false
+  if (log.jsonBusinessOk === false) return true
+  const c = log.statusCode
+  if (log.validateResponseEnabled === false) {
+    return !(c != null && c >= 200 && c < 300)
+  }
+  if (log.expectedStatusCode != null) {
+    return c == null || c !== log.expectedStatusCode
+  }
+  return c == null || c < 200 || c >= 300
+})
+
+const reportDetailAssertionMessage = computed(() => {
+  const log = selectedReportLog.value
+  if (!log) return ''
+  if (log.validateResponseEnabled === false) {
+    if (!reportDetailAssertionFailed.value) return '校验响应已关闭，按 2xx 判定通过'
+    return '请求未成功（非 2xx）'
+  }
+  if (log.jsonBusinessOk === false) {
+    const codeHint =
+      log.jsonBusinessCode != null && log.jsonBusinessCode !== ''
+        ? `响应体 code 为「${log.jsonBusinessCode}」`
+        : '响应体 success 为 false'
+    const httpOk =
+      log.statusCode != null &&
+      log.expectedStatusCode != null &&
+      log.statusCode === log.expectedStatusCode
+    if (httpOk) {
+      return `HTTP ${log.statusCode} 已通过，但业务未通过：${codeHint}（成功时 code 应为 200 或 0）`
+    }
+    return `业务未通过：${codeHint}（成功时 code 应为 200 或 0）`
+  }
+  if (log.expectedStatusCode != null) {
+    if (!reportDetailAssertionFailed.value) {
+      return `HTTP 状态码校验通过（期望 ${log.expectedStatusCode}）`
+    }
+    return `HTTP 状态码应当是 ${log.expectedStatusCode}`
+  }
+  if (!reportDetailAssertionFailed.value) return 'HTTP 状态码校验通过'
+  return 'HTTP 状态码应当是 2xx'
+})
+
+const reportDetailStatusClass = computed(() => {
+  const c = selectedReportLog.value?.statusCode
+  if (c == null) return 'na'
+  if (c >= 200 && c < 300) return 'ok'
+  if (c >= 400 && c < 500) return 'warn'
+  if (c >= 500) return 'bad'
+  return 'na'
+})
+
+const selectReportLogRow = (row: ScenarioSendLogEntry) => {
+  selectedReportLogId.value = row.id
+  detailReportPaneTab.value = 'body'
+  detailReportBodyView.value = 'pretty'
+}
+
+const clearReportLogSelection = () => {
+  selectedReportLogId.value = null
+}
+
+const copyReportDetailBody = async () => {
+  try {
+    await navigator.clipboard.writeText(reportDetailBodyForView.value)
+    message.success('已复制')
+  } catch {
+    message.warning('复制失败')
+  }
+}
+
+const downloadReportDetailBody = () => {
+  const log = selectedReportLog.value
+  if (!log) return
+  const blob = new Blob([reportDetailBodyForView.value], { type: 'application/json;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `response-${log.id}.json`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+const debugThisReportStep = () => {
+  const log = selectedReportLog.value
+  if (!log) return
+  const name = String(log.name || '').trim()
+  detailMainTab.value = 'steps'
+  const idx = detailStepsOrdered.value.findIndex((s) => String(s?.name || '').trim() === name)
+  if (idx >= 0) {
+    selectScenarioStep(idx)
+    message.success('已切换到测试步骤')
+  } else {
+    message.warning('未找到同名步骤，请在左侧步骤列表中手动选择')
+  }
+}
+
+const currentScenarioSendLogs = computed(() => {
+  const id = normalizeScenarioLogId(detailScenario.value?.id)
+  if (id == null) return []
+  return scenarioSendLogs.value[id] ?? []
+})
+
+const reportSummary = computed(() => {
+  const logs = currentScenarioSendLogs.value
+  const total = logs.length
+  let pass = 0
+  let fail = 0
+  let sumMs = 0
+  let nMs = 0
+  for (const e of logs) {
+    if (e.pass) pass++
+    else fail++
+    if (e.elapsedMs != null && !Number.isNaN(e.elapsedMs)) {
+      sumMs += e.elapsedMs
+      nMs++
+    }
+  }
+  const untested = 0
+  return {
+    total,
+    pass,
+    fail,
+    untested,
+    sumMs,
+    avgMs: nMs > 0 ? sumMs / nMs : 0,
+    nMs
+  }
+})
+
+const reportPassPct = computed(() => {
+  const t = reportSummary.value.total
+  if (!t) return '0.00'
+  return ((reportSummary.value.pass / t) * 100).toFixed(2)
+})
+const reportFailPct = computed(() => {
+  const t = reportSummary.value.total
+  if (!t) return '0.00'
+  return ((reportSummary.value.fail / t) * 100).toFixed(2)
+})
+const reportUntestedPct = computed(() => {
+  const t = reportSummary.value.total
+  if (!t) return '0.00'
+  return ((reportSummary.value.untested / t) * 100).toFixed(2)
+})
+
+const formatReportMs = (n: number) => {
+  if (n == null || Number.isNaN(n)) return '0 ms'
+  return `${Math.round(n)} ms`
+}
+
+/** 总耗时：多笔记录时取时间跨度与接口耗时的较大值，更贴近「整段执行」观感 */
+const reportTotalDurationMs = computed(() => {
+  const logs = currentScenarioSendLogs.value
+  const sum = reportSummary.value.sumMs
+  if (logs.length <= 1) return sum
+  const ats = logs.map((l) => l.at).filter((x) => typeof x === 'number')
+  if (ats.length < 2) return sum
+  const span = Math.max(...ats) - Math.min(...ats)
+  return Math.max(sum, span)
+})
+
+const reportDonutRef = ref<HTMLElement | null>(null)
+let reportDonutChart: echarts.ECharts | null = null
+
+const disposeReportDonut = () => {
+  reportDonutChart?.dispose()
+  reportDonutChart = null
+}
+
+const syncReportDonutChart = () => {
+  if (detailMainTab.value !== 'report') return
+  const el = reportDonutRef.value
+  const { total, pass, fail, untested } = reportSummary.value
+  if (!el || total === 0) {
+    disposeReportDonut()
+    return
+  }
+  if (!reportDonutChart) reportDonutChart = echarts.init(el)
+  reportDonutChart.setOption({
+    animationDuration: 320,
+    tooltip: { trigger: 'item' },
+    color: ['#52c41a', '#ff6b9d', '#d9d9d9'],
+    series: [
+      {
+        type: 'pie',
+        radius: ['58%', '82%'],
+        center: ['50%', '50%'],
+        avoidLabelOverlap: false,
+        itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 3 },
+        label: { show: false },
+        emphasis: { scale: false },
+        data: [
+          { value: pass, name: '通过' },
+          { value: fail, name: '失败' },
+          { value: untested, name: '未测' }
+        ]
+      }
+    ],
+    graphic: [
+      {
+        type: 'text',
+        left: 'center',
+        top: '38%',
+        style: {
+          text: '已完成',
+          fill: '#8792a2',
+          fontSize: 12,
+          fontWeight: 500
+        }
+      },
+      {
+        type: 'text',
+        left: 'center',
+        top: '50%',
+        style: {
+          text: String(total),
+          fill: '#1a1f36',
+          fontSize: 28,
+          fontWeight: 700
+        }
+      }
+    ]
+  })
+  reportDonutChart.resize()
+}
+
+const filteredDetailReportLogs = computed(() => {
+  let list = [...currentScenarioSendLogs.value]
+  if (detailReportFilter.value === 'pass') list = list.filter((e) => e.pass)
+  else if (detailReportFilter.value === 'fail') list = list.filter((e) => !e.pass)
+  const q = detailReportSearch.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.url.toLowerCase().includes(q) ||
+        String(e.statusCode ?? '').includes(q)
+    )
+  }
+  return list
+})
+
+watch(
+  () => detailScenario.value?.id,
+  () => {
+    selectedReportLogId.value = null
+  }
+)
+
+watch(
+  () => [detailMainTab.value, filteredDetailReportLogs.value.map((r) => r.id).join('|')] as const,
+  () => {
+    if (detailMainTab.value !== 'report') {
+      selectedReportLogId.value = null
+      return
+    }
+    const id = selectedReportLogId.value
+    if (id && !filteredDetailReportLogs.value.some((r) => r.id === id)) {
+      selectedReportLogId.value = null
+    }
+  }
+)
+
+const persistScenarioSendLogs = () => {
+  try {
+    localStorage.setItem(LS_SCENARIO_SEND_LOGS, JSON.stringify(scenarioSendLogs.value))
+  } catch {
+    /* ignore */
+  }
+}
+
+const loadScenarioSendLogs = () => {
+  try {
+    const raw = localStorage.getItem(LS_SCENARIO_SEND_LOGS)
+    if (!raw) return
+    const obj = JSON.parse(raw) as Record<string, ScenarioSendLogEntry[]>
+    const next: Record<number, ScenarioSendLogEntry[]> = {}
+    for (const k of Object.keys(obj)) next[Number(k)] = obj[k]
+    scenarioSendLogs.value = next
+  } catch {
+    /* ignore */
+  }
+}
+
+const appendScenarioSendLog = (entry: Omit<ScenarioSendLogEntry, 'id' | 'at'>) => {
+  const sid = normalizeScenarioLogId(detailScenario.value?.id)
+  if (sid == null) return
+  const row: ScenarioSendLogEntry = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    at: Date.now(),
+    ...entry
+  }
+  const prev = scenarioSendLogs.value[sid] ?? []
+  scenarioSendLogs.value = { ...scenarioSendLogs.value, [sid]: [row, ...prev] }
+  persistScenarioSendLogs()
+  pendingReportPersistEntries.value = [...pendingReportPersistEntries.value, row]
+  schedulePersistScenarioReportToServer()
+}
+
+const onReportWindowResize = () => {
+  if (detailMainTab.value === 'report') reportDonutChart?.resize()
+}
+
+watch(
+  () => [
+    detailMainTab.value,
+    detailScenario.value?.id,
+    reportSummary.value.total,
+    reportSummary.value.pass,
+    reportSummary.value.fail,
+    reportSummary.value.untested
+  ],
+  async () => {
+    await nextTick()
+    if (detailMainTab.value !== 'report') {
+      disposeReportDonut()
+      return
+    }
+    syncReportDonutChart()
+  }
+)
+
+const selectedStepIndex = ref<number | null>(null)
+const stepBulkCheckedIndices = ref<number[]>([])
+const stepBulkSelectedCount = computed(() => stepBulkCheckedIndices.value.length)
+const stepSidebarMethods = ref<Record<number, string>>({})
+
+const stepEditorLoading = ref(false)
+const stepEditorSending = ref(false)
+const stepEditorTab = ref('params')
+const stepEditorCaseId = ref<number | null>(null)
+const stepEditorInterfaceId = ref<number | null>(null)
+const stepEditorLastResponse = ref<any | null>(null)
+const stepEditorMethod = ref('GET')
+const stepEditorPath = ref('')
+const stepEditorFullUrl = ref('')
+const stepEditorQueryParams = ref<any[]>([])
+const stepEditorHeaderParams = ref<any[]>([])
+const stepEditorPostOps = ref<any[]>([])
+const stepEditorBodyType = ref('none')
+const stepEditorBodyContent = ref('')
+
+const stepBodyTypeOptions = [
+  { label: 'none', value: 'none' },
+  { label: 'x-www-form-urlencoded', value: 'x-www-form-urlencoded' },
+  { label: 'form-data', value: 'form-data' },
+  { label: 'JSON', value: 'json' },
+  { label: 'Text', value: 'text' }
+]
+
+const stepResponseBodyText = computed(() => {
+  const r = stepEditorLastResponse.value
+  if (!r) return ''
+  if (r.error) {
+    return `${r.error}${r.msg ? '\n' + r.msg : ''}`
+  }
+  const d = r.data
+  if (d == null || d === '') return '(空响应体)'
+  if (typeof d === 'string') return d
+  try {
+    return JSON.stringify(d, null, 2)
+  } catch {
+    return String(d)
+  }
+})
+
+const buildUrlWithQueryString = (url: string, rows: any[]): string => {
+  const params = new URLSearchParams()
+  for (const row of rows) {
+    const k = String(row.name || '').trim()
+    if (!k) continue
+    params.append(k, String(row.example ?? row.value ?? ''))
+  }
+  const qs = params.toString()
+  if (!qs) return url
+  return url.includes('?') ? `${url}&${qs}` : `${url}?${qs}`
+}
+
+const buildFormBodyFromParamRows = (rows: any[]): string => {
+  const params = new URLSearchParams()
+  for (const row of rows) {
+    const k = String(row.name || '').trim()
+    if (!k) continue
+    params.append(k, String(row.example ?? row.value ?? ''))
+  }
+  return params.toString()
+}
+
+const stepParamsTabLabel = computed(() => {
+  const n = stepEditorQueryParams.value.length
+  return n ? `Params (${n})` : 'Params'
+})
+const stepBodyTabLabel = computed(() =>
+  stepEditorBodyType.value !== 'none' ? 'Body (1)' : 'Body'
+)
+const stepHeadersTabLabel = computed(() => {
+  const n = stepEditorHeaderParams.value.length
+  return n ? `Headers (${n})` : 'Headers'
+})
+const stepPostTabLabel = computed(() => {
+  const n = stepEditorPostOps.value.length
+  return n ? `后置操作 (${n})` : '后置操作'
+})
+
+const stepEditorPostOpsOther = computed(() =>
+  stepEditorPostOps.value.filter((o) => o?.type !== VALIDATE_RESPONSE_TYPE)
+)
+
+const stepValidateEnabledUi = computed(() => {
+  const op = stepEditorPostOps.value.find((o) => o?.type === VALIDATE_RESPONSE_TYPE)
+  const on = op ? op.enabled !== false : true
+  return on ? 'on' : 'off'
+})
+
+const stepValidateExpectStatusUi = computed(() => {
+  const op = stepEditorPostOps.value.find((o) => o?.type === VALIDATE_RESPONSE_TYPE)
+  const n = Number(op?.expect_status ?? 200)
+  return Number.isFinite(n) ? n : 200
+})
+
+const upsertValidateResponseOp = (patch: { enabled?: boolean; expect_status?: number }) => {
+  const list = [...stepEditorPostOps.value]
+  const idx = list.findIndex((o) => o?.type === VALIDATE_RESPONSE_TYPE)
+  const base = idx >= 0 ? { ...list[idx] } : defaultValidateResponseOp()
+  if (patch.enabled !== undefined) base.enabled = patch.enabled
+  if (patch.expect_status !== undefined) base.expect_status = patch.expect_status
+  base.type = VALIDATE_RESPONSE_TYPE
+  if (idx >= 0) list[idx] = base
+  else list.unshift(base)
+  stepEditorPostOps.value = list
+}
+
+const persistStepPostOperations = async () => {
+  const cid = stepEditorCaseId.value
+  if (!cid) return
+  try {
+    await execRequest.patch(`/test-cases/${cid}`, { post_operations: stepEditorPostOps.value })
+  } catch {
+    message.error('保存后置操作失败')
+  }
+}
+
+const onStepValidateEnabledChange = async (v: string) => {
+  upsertValidateResponseOp({ enabled: v === 'on' })
+  await persistStepPostOperations()
+}
+
+const onStepValidateExpectStatusChange = async (v: number) => {
+  upsertValidateResponseOp({ expect_status: v })
+  await persistStepPostOperations()
+}
+
+const cloneParamRows = (raw: any): any[] =>
+  Array.isArray(raw) ? raw.map((x: any) => ({ ...x })) : []
+
+const unwrapEntity = (res: any): any => {
+  if (!res || typeof res !== 'object') return null
+  if ('id' in res) return res
+  if (res.data && typeof res.data === 'object' && 'id' in res.data) return res.data
+  return null
+}
+
+const stepSidebarMethod = (idx: number) => stepSidebarMethods.value[idx] || 'GET'
+
+const selectScenarioStep = (idx: number) => {
+  selectedStepIndex.value = idx
+  loadScenarioStepEditor()
+}
+
+const toggleStepBulkCheck = (idx: number, checked: boolean) => {
+  const s = new Set(stepBulkCheckedIndices.value)
+  if (checked) s.add(idx)
+  else s.delete(idx)
+  stepBulkCheckedIndices.value = [...s].sort((a, b) => a - b)
+}
+
+const rebuildStepEditorUrl = async () => {
+  let base = ''
+  if (detailEnvId.value) {
+    try {
+      const envRaw: any = await execRequest.get(`/environments/${detailEnvId.value}`)
+      const env = unwrapEntity(envRaw) || envRaw
+      base = String(env?.base_url || '').replace(/\/$/, '')
+    } catch {
+      /* 忽略 */
+    }
+  }
+  const path = stepEditorPath.value || ''
+  const p = path.startsWith('/') ? path : path ? `/${path}` : ''
+  stepEditorFullUrl.value = base ? `${base}${p}` : p || ''
+}
+
+const loadScenarioStepEditor = async () => {
+  const idx = selectedStepIndex.value
+  if (idx == null) return
+  const step = detailStepsOrdered.value[idx]
+  if (!step) return
+  stepEditorLastResponse.value = null
+  stepEditorCaseId.value = step.case_id ?? null
+  stepEditorInterfaceId.value = step.interface_id ?? null
+  if (!step.case_id || !step.interface_id) {
+    stepEditorMethod.value = 'GET'
+    stepEditorPath.value = ''
+    stepEditorQueryParams.value = []
+    stepEditorHeaderParams.value = []
+    stepEditorBodyType.value = 'none'
+    stepEditorBodyContent.value = ''
+    stepEditorPostOps.value = []
+    stepEditorFullUrl.value = ''
+    stepSidebarMethods.value = { ...stepSidebarMethods.value, [idx]: 'GET' }
+    return
+  }
+  stepEditorLoading.value = true
+  try {
+    const [tcRaw, ifaceRaw] = await Promise.all([
+      execRequest.get(`/test-cases/${step.case_id}`),
+      execRequest.get(`/interfaces/${step.interface_id}`)
+    ])
+    const tc = unwrapEntity(tcRaw) ?? tcRaw
+    const iface = unwrapEntity(ifaceRaw) ?? ifaceRaw
+    if (!iface?.id) {
+      message.error('无法加载接口定义')
+      return
+    }
+    const m = String(iface.method ?? 'GET').toUpperCase()
+    stepEditorMethod.value = m
+    stepEditorPath.value = iface.path || ''
+    stepSidebarMethods.value = { ...stepSidebarMethods.value, [idx]: m }
+    const qpTc = cloneParamRows(tc?.query_params)
+    const qpIface = cloneParamRows(iface.query_params)
+    stepEditorQueryParams.value = qpTc.length ? qpTc : qpIface
+    const hpTc = cloneParamRows(tc?.header_params)
+    const hpIface = cloneParamRows(iface.header_params)
+    stepEditorHeaderParams.value = hpTc.length ? hpTc : hpIface
+    const bd = tc?.body_definition || iface.body_definition || { type: 'none', content: '' }
+    stepEditorBodyType.value = bd.type || 'none'
+    const c = bd.content
+    stepEditorBodyContent.value =
+      typeof c === 'string' ? c : c != null ? JSON.stringify(c, null, 2) : ''
+    const rawPost = Array.isArray(tc?.post_operations) ? cloneParamRows(tc.post_operations) : []
+    const mergedPost = mergePostOpsWithValidateResponse(rawPost)
+    stepEditorPostOps.value = mergedPost
+    const hadValidate = rawPost.some((o: any) => o?.type === VALIDATE_RESPONSE_TYPE)
+    if (!hadValidate && step.case_id) {
+      void persistStepPostOperations().catch(() => {})
+    }
+    await rebuildStepEditorUrl()
+  } catch (e) {
+    console.error(e)
+    message.error('加载步骤详情失败')
+  } finally {
+    stepEditorLoading.value = false
+  }
+}
+
+const removeCheckedScenarioSteps = async () => {
+  const scenario = detailScenario.value
+  if (!scenario?.id || stepBulkSelectedCount.value === 0) return
+  const del = new Set(stepBulkCheckedIndices.value)
+  const ordered = detailStepsOrdered.value.filter((_, idx) => !del.has(idx))
+  const newSteps = ordered.map((st: any, i: number) => ({ ...st, order: i + 1 }))
+  try {
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps: newSteps })
+    message.success('已移除所选步骤')
+    stepBulkCheckedIndices.value = []
+    await fetchScenarios()
+  } catch {
+    message.error('移除失败')
+  }
+}
+
+const formatStepEditorJson = () => {
+  if (stepEditorBodyType.value !== 'json') return
+  try {
+    const o = JSON.parse(stepEditorBodyContent.value || '{}')
+    stepEditorBodyContent.value = JSON.stringify(o, null, 2)
+    message.success('已格式化')
+  } catch {
+    message.error('JSON 格式无效')
+  }
+}
+
+const buildProxyHeaders = (): Record<string, string> => {
+  const h: Record<string, string> = {}
+  for (const row of stepEditorHeaderParams.value) {
+    const k = String(row.name || '').trim()
+    if (!k) continue
+    h[k] = String(row.example ?? row.value ?? '')
+  }
+  if (stepEditorBodyType.value === 'json') {
+    if (!h['Content-Type'] && !h['content-type']) h['Content-Type'] = 'application/json'
+  }
+  return h
+}
+
+const currentStepNameForReport = () => {
+  const idx = selectedStepIndex.value
+  const step = idx != null ? detailStepsOrdered.value[idx] : null
+  const n = String(step?.name || '').trim()
+  return n || '未命名步骤'
+}
+
+const sendScenarioStepRequest = async () => {
+  const rawUrl = stepEditorFullUrl.value.trim()
+  if (!rawUrl) {
+    message.warning('请填写请求 URL')
+    return
+  }
+  const upper = String(stepEditorMethod.value || 'GET').toUpperCase()
+  const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(upper)
+  const hasParamRows = stepEditorQueryParams.value.some((r) => String(r.name || '').trim())
+  const baseUrl = rawUrl.split('?')[0]
+
+  let finalUrl = rawUrl
+  let body: any = null
+  const headers: Record<string, string> = { ...buildProxyHeaders() }
+
+  if (upper === 'GET' || upper === 'HEAD') {
+    finalUrl = buildUrlWithQueryString(rawUrl, stepEditorQueryParams.value)
+  } else if (
+    isWrite &&
+    stepEditorBodyType.value === 'none' &&
+    hasParamRows
+  ) {
+    // POST/PUT 等仅有 Params、无 Body：按表单提交（OAuth 等常见场景）
+    finalUrl = baseUrl
+    body = buildFormBodyFromParamRows(stepEditorQueryParams.value)
+    if (!headers['Content-Type'] && !headers['content-type']) {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
+    }
+  } else if (isWrite && stepEditorBodyType.value === 'x-www-form-urlencoded') {
+    finalUrl = baseUrl
+    body = buildFormBodyFromParamRows(stepEditorQueryParams.value)
+    if (!headers['Content-Type'] && !headers['content-type']) {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
+    }
+  } else {
+    finalUrl = buildUrlWithQueryString(rawUrl, stepEditorQueryParams.value)
+    if (isWrite) {
+      if (stepEditorBodyType.value === 'json' && stepEditorBodyContent.value.trim()) {
+        try {
+          body = JSON.parse(stepEditorBodyContent.value)
+        } catch {
+          message.error('Body JSON 无法解析')
+          return
+        }
+      } else if (stepEditorBodyType.value === 'text') {
+        body = stepEditorBodyContent.value
+      } else if (stepEditorBodyType.value === 'form-data') {
+        message.warning('form-data 请暂用 JSON 或 x-www-form-urlencoded')
+        return
+      }
+    }
+  }
+
+  const requestHeadersSnapshot = { ...headers }
+  const requestBodySnippet = buildRequestBodySnippet(body)
+
+  stepEditorSending.value = true
+  stepEditorLastResponse.value = null
+  try {
+    const res: any = await execRequest.post(
+      '/proxy',
+      {
+        url: finalUrl,
+        method: upper,
+        headers,
+        body
+      },
+      { timeout: 35000 }
+    )
+    const env = normalizeExecProxyResponse(res)
+    stepEditorLastResponse.value = env.error
+      ? { error: env.error, msg: env.msg, status_code: env.status_code }
+      : {
+          status_code: env.status_code,
+          headers: env.headers,
+          data: env.data,
+          elapsed: env.elapsed
+        }
+    const name = currentStepNameForReport()
+    const elapsed = env.elapsed
+    if (env.error) {
+      const ev = evaluateValidateResponsePass(
+        env.status_code ?? null,
+        stepEditorPostOps.value,
+        env.data
+      )
+      appendScenarioSendLog({
+        pass: false,
+        name,
+        method: upper,
+        url: finalUrl,
+        statusCode: env.status_code != null ? Number(env.status_code) : null,
+        elapsedMs: elapsed,
+        error: String(env.error),
+        requestHeaders: requestHeadersSnapshot,
+        requestBodySnippet,
+        expectedStatusCode: ev.expectedStatusCode,
+        validateResponseEnabled: ev.validateResponseEnabled,
+        jsonBusinessCode: ev.jsonBusinessCode,
+        jsonBusinessOk: ev.jsonBusinessOk
+      })
+      message.error(String(env.error))
+    } else {
+      const code = Number(env.status_code ?? 0)
+      const ev = evaluateValidateResponsePass(code, stepEditorPostOps.value, env.data)
+      const rh = normalizeProxyHeaderMap(env.headers)
+      const { text, bytes } = stringifyResponseForLog(env.data)
+      appendScenarioSendLog({
+        pass: ev.pass,
+        name,
+        method: upper,
+        url: finalUrl,
+        statusCode: code,
+        elapsedMs: elapsed,
+        responseBodyText: text,
+        responseSizeBytes: bytes,
+        responseHeaders: rh,
+        requestHeaders: requestHeadersSnapshot,
+        requestBodySnippet,
+        expectedStatusCode: ev.expectedStatusCode,
+        validateResponseEnabled: ev.validateResponseEnabled,
+        jsonBusinessCode: ev.jsonBusinessCode,
+        jsonBusinessOk: ev.jsonBusinessOk
+      })
+      if (ev.pass) {
+        message.success('请求已完成')
+      } else if (ev.jsonBusinessOk === false) {
+        message.warning('HTTP 成功，但响应体业务状态未通过校验')
+      } else {
+        message.warning('请求已返回，但状态码未通过校验')
+      }
+    }
+  } catch (err: any) {
+    const status = err?.response?.status
+    const data = err?.response?.data
+    let text = '网络或执行引擎异常'
+    if (typeof data?.detail === 'string') {
+      text = data.detail
+    } else if (Array.isArray(data?.detail)) {
+      text = JSON.stringify(data.detail)
+    } else if (typeof data === 'string' && data) {
+      text = data.length > 800 ? data.slice(0, 800) + '…' : data
+    } else if (err?.code === 'ERR_NETWORK' || !err?.response) {
+      text =
+        '无法连接执行引擎：请确认本机已启动 exec-engine（默认 http://127.0.0.1:8010），并使用 npm run dev 启动前端（已配置 /engine 代理）。若用局域网 IP 打开页面，勿再依赖浏览器直连 localhost:8010。'
+    } else if (status != null) {
+      const body =
+        data && typeof data === 'object' ? JSON.stringify(data) : String(data ?? '')
+      text = `HTTP ${status}${body ? `：${body.slice(0, 400)}` : ''}`
+    }
+    stepEditorLastResponse.value = { error: text }
+    const evCatch = evaluateValidateResponsePass(status ?? null, stepEditorPostOps.value)
+    appendScenarioSendLog({
+      pass: false,
+      name: currentStepNameForReport(),
+      method: upper,
+      url: finalUrl,
+      statusCode: status != null ? Number(status) : null,
+      elapsedMs: null,
+      error: text,
+      requestHeaders: requestHeadersSnapshot,
+      requestBodySnippet,
+      expectedStatusCode: evCatch.expectedStatusCode,
+      validateResponseEnabled: evCatch.validateResponseEnabled
+    })
+    // 网络/HTTP 错误已由 execRequest 拦截器提示，此处只写入下方「响应结果」避免重复弹窗
+  } finally {
+    stepEditorSending.value = false
+  }
+}
+
+watch(
+  () => detailScenario.value,
+  () => {
+    const n = detailStepCount.value
+    if (n === 0) {
+      selectedStepIndex.value = null
+      stepBulkCheckedIndices.value = []
+      stepSidebarMethods.value = {}
+      return
+    }
+    if (selectedStepIndex.value == null || selectedStepIndex.value >= n) {
+      selectedStepIndex.value = 0
+    }
+    loadScenarioStepEditor()
+  },
+  { deep: true }
+)
+
+watch(detailEnvId, () => {
+  if (selectedStepIndex.value != null && detailStepCount.value > 0) {
+    rebuildStepEditorUrl()
+  }
+})
+
+type ImportDebugCaseRow = {
+  id: number
+  interface_id: number
+  name: string
+  case_type: string
+  interfaceName: string
+  method: string
+  path: string
+  group: string
+  groupLabel: string
+}
+
+type ImportModalTreeNode = {
+  label: string
+  key: string
+  type: 'folder' | 'api'
+  id?: number
+  method?: string
+  path?: string
+  children?: ImportModalTreeNode[]
+  count?: number
+}
+
+const showImportCaseModal = ref(false)
+/** debug：仅调试用例；formal：单接口用例（排除 debug，含 test / AI 等） */
+const importCaseModalKind = ref<'debug' | 'formal'>('debug')
+const importTreeLoading = ref(false)
+const importCasesLoading = ref(false)
+const importDebugSaving = ref(false)
+const importTreePattern = ref('')
+const importModalTreeData = ref<ImportModalTreeNode[]>([])
+const importModalTreeSelectedKeys = ref<string[]>([])
+const importSelectedInterfaceId = ref<number | null>(null)
+const importInterfaceDetail = ref<{ id: number; name: string; method: string; path: string } | null>(null)
+const importInterfacesIndex = ref<Map<number, { id: number; name: string; method: string; path: string }>>(new Map())
+const importModalCasesList = ref<ImportDebugCaseRow[]>([])
+const importModalCategory = ref<string>('all')
+const importCaseListSearch = ref('')
+/** 跨接口多选：caseId -> 行快照（用于写入场景步骤） */
+const importSelectedCaseRows = ref<Record<number, ImportDebugCaseRow>>({})
+
+const importCaseModalTitle = computed(() =>
+  importCaseModalKind.value === 'formal' ? '从单接口用例导入' : '从接口调试用例导入'
+)
+const importCaseModalSub = computed(() =>
+  importCaseModalKind.value === 'formal'
+    ? '选择「单接口测试」中已保存的用例（不含仅调试类型），导入为当前场景的步骤'
+    : '列出该接口下全部已保存用例（含「调试」与「测试用例」页中的用例）；导入时按用例实际类型区分来源'
+)
+const importCaseEmptyHint = computed(() =>
+  importCaseModalKind.value === 'formal'
+    ? '暂无可导入用例。请在「单接口测试」中保存类型为测试的用例，或确认未全部为调试用例。'
+    : '该接口下暂无用例。请在「单接口测试」中保存调试用例或在「测试用例」页添加用例。'
+)
+
+/** 添加步骤 下拉面板 */
+const addStepPopoverShow = ref(false)
+
+type AddStepMenuItem = { key: string; label: string; icon: Component; iconBg: string }
+
+const addStepRequestItems: AddStepMenuItem[] = [
+  { key: 'import-api', label: '从接口导入', icon: ApiOutlined, iconBg: 'step-icon-purple' },
+  { key: 'import-single-case', label: '从单接口用例导入', icon: FileTextOutlined, iconBg: 'step-icon-amber' },
+  { key: 'import-debug-case', label: '从接口调试用例导入', icon: CloudUploadOutlined, iconBg: 'step-icon-blue' },
+  { key: 'http', label: '添加 HTTP 请求', icon: ThunderboltOutlined, iconBg: 'step-icon-slate' },
+  { key: 'curl', label: '从 cURL 导入', icon: ImportOutlined, iconBg: 'step-icon-slate' }
+]
+
+const addStepOtherItems: AddStepMenuItem[] = [
+  { key: 'group', label: '分组', icon: FolderOutlined, iconBg: 'step-icon-green' },
+  { key: 'branch', label: '条件分支', icon: ApartmentOutlined, iconBg: 'step-icon-pink' },
+  { key: 'foreach', label: 'ForEach 循环', icon: SyncOutlined, iconBg: 'step-icon-orange' },
+  { key: 'for', label: 'For 循环', icon: SyncOutlined, iconBg: 'step-icon-orange' },
+  { key: 'script', label: '脚本', icon: CodeOutlined, iconBg: 'step-icon-cyan' },
+  { key: 'db', label: '数据库操作', icon: DatabaseOutlined, iconBg: 'step-icon-violet' },
+  { key: 'wait', label: '等待时间', icon: ClockCircleOutlined, iconBg: 'step-icon-sky' }
+]
+
+const addStepScenarioItems: AddStepMenuItem[] = [
+  { key: 'import-scenario', label: '从其它场景用例导入', icon: ImportOutlined, iconBg: 'step-icon-slate' },
+  { key: 'ref-scenario', label: '引用其它场景用例', icon: LinkOutlined, iconBg: 'step-icon-slate' }
+]
+
+const methodBadgeStyle = (method: string) => {
+  const map: Record<string, string> = {
+    GET: 'color:#389e0d;background:#f6ffed;border:1px solid #b7eb8f;',
+    POST: 'color:#d46b08;background:#fff7e6;border:1px solid #ffd591;',
+    PUT: 'color:#096dd9;background:#e6f7ff;border:1px solid #91d5ff;',
+    DELETE: 'color:#cf1322;background:#fff1f0;border:1px solid #ffa39e;',
+    PATCH: 'color:#531dab;background:#f9f0ff;border:1px solid #d3adf7;'
+  }
+  return map[method] || 'color:#595959;background:#f5f5f5;border:1px solid #d9d9d9;'
+}
+
+const normalizeCaseType = (raw: unknown) => String(raw ?? '').trim().toLowerCase()
+
+const inferCaseGroup = (caseType: string | undefined): { group: string; groupLabel: string } => {
+  const ct = normalizeCaseType(caseType)
+  if (ct === 'positive') return { group: 'positive', groupLabel: '正向' }
+  if (ct === 'negative') return { group: 'negative', groupLabel: '负向' }
+  if (ct === 'boundary') return { group: 'boundary', groupLabel: '边界值' }
+  if (ct === 'security') return { group: 'security', groupLabel: '安全性' }
+  if (ct === 'debug') return { group: 'other', groupLabel: '调试' }
+  if (ct === 'test') return { group: 'other', groupLabel: '测试' }
+  return { group: 'other', groupLabel: '其他' }
+}
+
+/** 解析 GET /test-cases 的多种响应形态（拦截器已解包时多为数组） */
+const unwrapTestCaseList = (res: any): any[] => {
+  if (res == null) return []
+  if (Array.isArray(res)) return res
+  if (Array.isArray(res?.data)) return res.data
+  if (Array.isArray(res?.records)) return res.records
+  return []
+}
+
+const importModalCounts = computed(() => {
+  const list = importModalCasesList.value
+  return {
+    all: list.length,
+    positive: list.filter((c) => c.group === 'positive').length,
+    negative: list.filter((c) => c.group === 'negative').length,
+    boundary: list.filter((c) => c.group === 'boundary').length,
+    security: list.filter((c) => c.group === 'security').length,
+    other: list.filter((c) => c.group === 'other').length
+  }
+})
+
+const importModalFilteredCases = computed(() => {
+  let list = importModalCasesList.value
+  if (importModalCategory.value !== 'all') {
+    list = list.filter((c) => c.group === importModalCategory.value)
+  }
+  const q = importCaseListSearch.value.trim().toLowerCase()
+  if (q) list = list.filter((c) => c.name.toLowerCase().includes(q))
+  return list
+})
+
+const importSelectedCaseCount = computed(() => Object.keys(importSelectedCaseRows.value).length)
+
+const buildImportModalTree = (folders: any[], interfaces: any[]): ImportModalTreeNode[] => {
+  const build = (parentId: number | null): ImportModalTreeNode[] => {
+    const levelFolders = folders.filter((f: any) => f.parent_id === parentId)
+    const nodes = levelFolders.map((f: any) => {
+      const node: ImportModalTreeNode = {
+        label: f.name,
+        key: `f-${f.id}`,
+        type: 'folder',
+        id: f.id,
+        children: [...build(f.id)]
+      }
+      const folderApis = interfaces
+        .filter((api: any) => api.folder_id === f.id)
+        .map((api: any) => ({
+          label: api.name,
+          key: `api-${api.id}`,
+          type: 'api' as const,
+          id: api.id,
+          method: api.method != null ? String(api.method) : 'GET',
+          path: api.path || ''
+        }))
+      const ch = node.children!
+      ch.push(...folderApis)
+      node.count = ch.length
+      return node
+    })
+    if (parentId === null) {
+      const rootApis = interfaces
+        .filter((api: any) => api.folder_id == null || api.folder_id === 0)
+        .map((api: any) => ({
+          label: api.name,
+          key: `api-${api.id}`,
+          type: 'api' as const,
+          id: api.id,
+          method: api.method != null ? String(api.method) : 'GET',
+          path: api.path || ''
+        }))
+      nodes.push(...rootApis)
+    }
+    return nodes
+  }
+  return build(null)
+}
+
+const loadImportModalTreeData = async () => {
+  importTreeLoading.value = true
+  try {
+    const [foldersRaw, interfacesRaw] = (await Promise.all([
+      execRequest.get('/folders'),
+      execRequest.get('/interfaces')
+    ])) as [any, any]
+    const folders: any[] = Array.isArray(foldersRaw) ? foldersRaw : (foldersRaw?.data ?? [])
+    const interfaces: any[] = Array.isArray(interfacesRaw) ? interfacesRaw : (interfacesRaw?.data ?? [])
+    const idx = new Map<number, { id: number; name: string; method: string; path: string }>()
+    for (const api of interfaces) {
+      if (api?.id == null) continue
+      idx.set(api.id, {
+        id: api.id,
+        name: api.name || `接口 #${api.id}`,
+        method: api.method != null ? String(api.method) : 'GET',
+        path: api.path || ''
+      })
+    }
+    importInterfacesIndex.value = idx
+    importModalTreeData.value = buildImportModalTree(folders, interfaces)
+  } catch {
+    importModalTreeData.value = []
+    importInterfacesIndex.value = new Map()
+    message.error('加载接口目录失败')
+  } finally {
+    importTreeLoading.value = false
+  }
+}
+
+const loadCasesForImportInterface = async (interfaceId: number) => {
+  importCasesLoading.value = true
+  importModalCategory.value = 'all'
+  importCaseListSearch.value = ''
+  try {
+    const res: any = await execRequest.get('/test-cases', {
+      params: { interface_id: interfaceId }
+    })
+    const list: any[] = unwrapTestCaseList(res)
+    const iface = importInterfacesIndex.value.get(interfaceId)
+    const name = iface?.name ?? `接口 #${interfaceId}`
+    const method = iface?.method ?? '—'
+    const path = iface?.path ?? '—'
+    // formal：与「从单接口用例导入」一致，排除调试用例；debug 入口：展示该接口全部用例（与「测试用例」页数据源一致，避免只有 test/AI 用例时列表为空）
+    const filtered = list.filter((tc) => {
+      if (importCaseModalKind.value === 'formal') {
+        return normalizeCaseType(tc.case_type) !== 'debug'
+      }
+      return true
+    })
+    importModalCasesList.value = filtered.map((tc) => {
+      const { group, groupLabel } = inferCaseGroup(tc.case_type)
+      return {
+        id: tc.id,
+        interface_id: tc.interface_id,
+        name: tc.name || `用例 #${tc.id}`,
+        case_type: tc.case_type || '',
+        interfaceName: name,
+        method,
+        path,
+        group,
+        groupLabel
+      } as ImportDebugCaseRow
+    })
+  } catch {
+    importModalCasesList.value = []
+    message.error('加载用例失败')
+  } finally {
+    importCasesLoading.value = false
+  }
+}
+
+const onImportModalTreeSelect = (keys: Array<string | number>) => {
+  const sk = keys.map(String)
+  importModalTreeSelectedKeys.value = sk
+  const key = sk[0]
+  if (!key || !key.startsWith('api-')) {
+    importSelectedInterfaceId.value = null
+    importInterfaceDetail.value = null
+    importModalCasesList.value = []
+    return
+  }
+  const id = Number(key.slice(4))
+  if (Number.isNaN(id)) return
+  importSelectedInterfaceId.value = id
+  importInterfaceDetail.value = importInterfacesIndex.value.get(id) ?? {
+    id,
+    name: `接口 #${id}`,
+    method: '—',
+    path: ''
+  }
+  loadCasesForImportInterface(id)
+}
+
+const renderImportModalTreeLabel = ({ option }: { option: any }) => {
+  const o = option as ImportModalTreeNode
+  if (o.type === 'api' && o.method) {
+    return h('div', { class: 'import-tree-label-row' }, [
+      h(
+        'span',
+        { class: 'import-tree-method', style: methodBadgeStyle(String(o.method)) },
+        String(o.method)
+      ),
+      h('span', { class: 'import-tree-name' }, o.label)
+    ])
+  }
+  return h('span', { class: 'import-tree-folder-row' }, [
+    o.label,
+    o.count != null
+      ? h('span', { class: 'import-tree-count' }, ` (${o.count})`)
+      : null
+  ])
+}
+
+const openImportCaseModal = (kind: 'debug' | 'formal') => {
+  importCaseModalKind.value = kind
+  importTreePattern.value = ''
+  importCaseListSearch.value = ''
+  importModalCategory.value = 'all'
+  importModalTreeSelectedKeys.value = []
+  importSelectedInterfaceId.value = null
+  importInterfaceDetail.value = null
+  importModalCasesList.value = []
+  importSelectedCaseRows.value = {}
+  showImportCaseModal.value = true
+  loadImportModalTreeData()
+}
+
+const toggleImportCaseRow = (row: ImportDebugCaseRow, checked: boolean) => {
+  const next = { ...importSelectedCaseRows.value }
+  if (checked) next[row.id] = row
+  else delete next[row.id]
+  importSelectedCaseRows.value = next
+}
+
+const onImportCaseModalLeave = () => {
+  importModalTreeData.value = []
+  importModalTreeSelectedKeys.value = []
+  importTreePattern.value = ''
+  importSelectedInterfaceId.value = null
+  importInterfaceDetail.value = null
+  importModalCasesList.value = []
+  importInterfacesIndex.value = new Map()
+  importSelectedCaseRows.value = {}
+  importCaseListSearch.value = ''
+  importModalCategory.value = 'all'
+}
+
+const stepCaseMetaLabel = (step: { case_id?: number; source?: string }) => {
+  if (step.source === 'interface_case') return `接口用例 #${step.case_id}`
+  return `调试用例 #${step.case_id}`
+}
+
+const confirmImportCases = async () => {
+  const scenario = detailScenario.value
+  if (!scenario?.id) {
+    message.warning('请先打开一个测试场景')
+    return
+  }
+  const picked = Object.values(importSelectedCaseRows.value)
+  if (!picked.length) return
+
+  const existingCaseIds = new Set(
+    (Array.isArray(scenario.steps) ? scenario.steps : [])
+      .map((s: any) => s.case_id)
+      .filter((cid: any) => cid != null)
+  )
+
+  const steps = [...(Array.isArray(scenario.steps) ? scenario.steps : [])]
+  let maxOrder = steps.reduce((m, s: any) => Math.max(m, typeof s.order === 'number' ? s.order : 0), 0)
+
+  let added = 0
+  for (const row of picked) {
+    if (existingCaseIds.has(row.id)) continue
+    maxOrder += 1
+    const stepSource =
+      normalizeCaseType(row.case_type) === 'debug' ? 'debug_case' : 'interface_case'
+    steps.push({
+      order: maxOrder,
+      interface_id: row.interface_id,
+      case_id: row.id,
+      name: row.name,
+      source: stepSource
+    })
+    existingCaseIds.add(row.id)
+    added++
+  }
+
+  if (!added) {
+    message.warning('所选用例已在当前场景中，未添加新步骤')
+    return
+  }
+
+  importDebugSaving.value = true
+  try {
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps })
+    message.success(`已导入 ${added} 个步骤`)
+    showImportCaseModal.value = false
+    await fetchScenarios()
+  } catch {
+    message.error('保存步骤失败')
+  } finally {
+    importDebugSaving.value = false
+  }
+}
+
+const handleAddStepItem = (item: AddStepMenuItem) => {
+  addStepPopoverShow.value = false
+  if (item.key === 'import-debug-case') {
+    openImportCaseModal('debug')
+    return
+  }
+  if (item.key === 'import-single-case') {
+    openImportCaseModal('formal')
+    return
+  }
+  message.info(`「${item.label}」功能开发中`)
+}
+
+const formatDetailTime = (t: string | undefined) => {
+  if (!t) return '—'
+  return t.length > 16 ? t.slice(0, 16).replace('T', ' ') : t
+}
+
+watch(detailScenario, (row) => {
+  if (row) {
+    detailEnvId.value = row.env_id ?? null
+  }
+}, { immediate: true })
+
+const enterScenarioList = () => {
+  activeView.value = 'all'
+  scenarioPanelMode.value = 'list'
+  selectedScenarioForDetail.value = null
+  selectedSidebarKeys.value = [ROOT_KEY]
+}
+
+const openScenarioDetail = (row: any) => {
+  activeView.value = 'all'
+  scenarioPanelMode.value = 'detail'
+  selectedScenarioForDetail.value = row
+  selectedSidebarKeys.value = [`scenario-${row.id}`]
+}
+
+const onDetailPriorityChange = async (v: string) => {
+  const row = detailScenario.value
+  if (!row) return
+  try {
+    await execRequest.patch(`/test-scenarios/${row.id}`, { priority: v })
+    message.success('优先级已更新')
+    await fetchScenarios()
+  } catch {
+    message.error('更新失败')
+  }
+}
+
+// ── + 下拉菜单选项 ──
+const addDropdownOptions = [
+  {
+    key: 'scenario',
+    label: '新建场景用例',
+    icon: () => h(NIcon, null, { default: () => h(FileOutlined) })
+  },
+  {
+    key: 'folder',
+    label: '新建目录',
+    icon: () => h(NIcon, null, { default: () => h(FolderOutlined) })
+  }
+]
+
+const handleAddOption = (key: string) => {
+  enterScenarioList()
+  if (key === 'scenario') openCreateModal()
+  else if (key === 'folder') openFolderModal()
+}
+
+// ── 左侧树数据 ──
+const sidebarTreeData = computed(() => {
+  const folderMap = scenarioFolderMap.value
+  const children: any[] = []
+
+  // 子目录节点
+  for (const folder of localFolders.value) {
+    const folderChildren = scenarios.value
+      .filter(s => String(folderMap[s.id]) === folder.id)
+      .map(s => ({
+        key: `scenario-${s.id}`,
+        label: s.name,
+        type: 'scenario',
+        scenarioData: s,
+        isLeaf: true,
+      }))
+    children.push({
+      key: `folder-${folder.id}`,
+      label: folder.name,
+      type: 'folder',
+      folderId: folder.id,
+      children: folderChildren,
+    })
+  }
+
+  // 未归入目录的场景（直接挂在根节点下）
+  const assignedIds = new Set(
+    Object.entries(folderMap)
+      .filter(([, fid]) => !!fid)
+      .map(([sid]) => Number(sid))
+  )
+  for (const s of scenarios.value) {
+    if (!assignedIds.has(s.id)) {
+      children.push({
+        key: `scenario-${s.id}`,
+        label: s.name,
+        type: 'scenario',
+        scenarioData: s,
+        isLeaf: true,
+      })
+    }
+  }
+
+  // 以"测试场景"为根节点
+  return [{
+    key: ROOT_KEY,
+    label: '测试场景',
+    type: 'root',
+    children,
+  }]
+})
+
+const renderSidebarPrefix = ({ option }: { option: any }) => {
+  if (option.type === 'root') {
+    const isExpanded = expandedFolderKeys.value.includes(option.key)
+    return h(NIcon, { style: 'color:#7d33ff;margin-right:2px' }, {
+      default: () => h(isExpanded ? FolderOpenOutlined : FolderOutlined)
+    })
+  }
+  if (option.type === 'folder') {
+    const isExpanded = expandedFolderKeys.value.includes(option.key)
+    return h(NIcon, { style: 'color:#f5a623;margin-right:2px' }, {
+      default: () => h(isExpanded ? FolderOpenOutlined : FolderOutlined)
+    })
+  }
+  return h(NIcon, { style: 'color:#7d33ff;margin-right:2px' }, { default: () => h(FileOutlined) })
+}
+
+const renderSidebarSuffix = ({ option }: { option: any }) => {
+  if (option.type === 'root') {
+    return h(NDropdown, {
+      options: addDropdownOptions,
+      trigger: 'click',
+      placement: 'bottom-start',
+      onSelect: (key: string) => handleAddOption(key)
+    }, {
+      default: () => h('span', {
+        class: 'tree-root-add-btn',
+        title: '新建',
+        onClick: (e: MouseEvent) => e.stopPropagation()
+      }, [
+        h('svg', { width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.8, 'stroke-linecap': 'round' }, [
+          h('line', { x1: 12, y1: 5, x2: 12, y2: 19 }),
+          h('line', { x1: 5, y1: 12, x2: 19, y2: 12 })
+        ])
+      ])
+    })
+  }
+  if (option.type === 'folder') {
+    return h(NButton, {
+      quaternary: true, circle: true, size: 'tiny',
+      style: 'color:#d9534f',
+      onClick: (e: MouseEvent) => { e.stopPropagation(); deleteFolder(option.folderId) }
+    }, { icon: () => h(NIcon, null, { default: () => h(DeleteOutlined) }) })
+  }
+  if (option.type === 'scenario') {
+    return h(NButton, {
+      quaternary: true, circle: true, size: 'tiny',
+      style: 'color:#d9534f',
+      onClick: (e: MouseEvent) => { e.stopPropagation(); deleteScenario(option.scenarioData.id) }
+    }, { icon: () => h(NIcon, null, { default: () => h(DeleteOutlined) }) })
+  }
+  return null
+}
+
+const handleSidebarSelect = (keys: string[], options: any[]) => {
+  selectedSidebarKeys.value = keys.length ? keys : [ROOT_KEY]
+  const node = options[0]
+  activeView.value = 'all'
+
+  if (!node || node.type === 'root') {
+    scenarioPanelMode.value = 'list'
+    selectedScenarioForDetail.value = null
+    return
+  }
+  if (node.type === 'folder') {
+    scenarioPanelMode.value = 'list'
+    selectedScenarioForDetail.value = null
+    return
+  }
+  if (node.type === 'scenario') {
+    const data = node.scenarioData
+    const fresh = scenarios.value.find(s => s.id === data?.id) || data
+    scenarioPanelMode.value = 'detail'
+    selectedScenarioForDetail.value = fresh
+  }
+}
+
+// ── 目录操作 ──
+const openFolderModal = () => {
+  folderForm.value = { name: '' }
+  showFolderModal.value = true
+}
+
+const saveFolder = () => {
+  const name = folderForm.value.name.trim()
+  if (!name) { message.warning('请输入目录名称'); return }
+  const id = `f-${Date.now()}`
+  const updated = [...localFolders.value, { id, name }]
+  localFolders.value = updated
+  saveFolders(updated)
+  expandedFolderKeys.value = [...new Set([ROOT_KEY, ...expandedFolderKeys.value, `folder-${id}`])]
+  message.success(`目录「${name}」已创建`)
+  showFolderModal.value = false
+}
+
+const deleteFolder = (folderId: string) => {
+  const updated = localFolders.value.filter(f => f.id !== folderId)
+  localFolders.value = updated
+  saveFolders(updated)
+  // 解除该目录下场景的归属
+  const map = { ...scenarioFolderMap.value }
+  for (const sid of Object.keys(map)) {
+    if (map[Number(sid)] === folderId) delete map[Number(sid)]
+  }
+  scenarioFolderMap.value = map
+  saveFolderMap(map)
+  message.success('目录已删除')
+}
+
+// ── 场景弹窗操作 ──
+const filteredScenarios = computed(() => {
+  if (!tableSearch.value) return scenarios.value
+  return scenarios.value.filter(s =>
+    s.name.toLowerCase().includes(tableSearch.value.toLowerCase())
+  )
+})
+
+const allFilteredChecked = computed(() => {
+  const ids = filteredScenarios.value.map(s => s.id)
+  if (!ids.length) return false
+  return ids.every(id => checkedIds.value.has(id))
+})
+const someFilteredChecked = computed(() => {
+  const ids = filteredScenarios.value.map(s => s.id)
+  const n = ids.filter(id => checkedIds.value.has(id)).length
+  return n > 0 && n < ids.length
+})
+
+const batchMoveFolderOptions = computed(() => [
+  { label: '根目录（不归属任何目录）', value: '__root__' },
+  ...localFolders.value.map(f => ({ label: f.name, value: f.id }))
+])
+
+const fetchScenarios = async () => {
+  loading.value = true
+  try {
+    const res: any = await execRequest.get('/test-scenarios')
+    scenarios.value = Array.isArray(res) ? res : (res?.data || [])
+  } catch {
+    message.error('加载测试场景失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const fetchEnvs = async () => {
+  try {
+    const res: any = await execRequest.get('/environments')
+    environments.value = Array.isArray(res) ? res : (res?.data || [])
+  } catch {}
+}
+
+const toggleAll = (checked: boolean) => {
+  const ids = filteredScenarios.value.map(s => s.id)
+  const s = new Set(checkedIds.value)
+  if (checked) {
+    ids.forEach(id => s.add(id))
+  } else {
+    ids.forEach(id => s.delete(id))
+  }
+  checkedIds.value = s
+}
+
+const toggleCheck = (id: number) => {
+  const s = new Set(checkedIds.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  checkedIds.value = s
+}
+
+const clearSelection = () => {
+  checkedIds.value = new Set()
+}
+
+const openBatchPriorityModal = () => {
+  batchPriorityValue.value = 'P0'
+  showBatchPriorityModal.value = true
+}
+
+const applyBatchPriority = async () => {
+  batchLoading.value = true
+  try {
+    for (const id of [...checkedIds.value]) {
+      await execRequest.patch(`/test-scenarios/${id}`, { priority: batchPriorityValue.value }).catch(() => {})
+    }
+    message.success('优先级已更新')
+    showBatchPriorityModal.value = false
+    await fetchScenarios()
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+const openBatchAddTagModal = () => {
+  batchTagInput.value = ''
+  showBatchAddTagModal.value = true
+}
+
+const applyBatchAddTag = async () => {
+  const add = batchTagInput.value.trim()
+  if (!add) {
+    message.warning('请输入标签')
+    return
+  }
+  batchLoading.value = true
+  try {
+    for (const id of [...checkedIds.value]) {
+      const row = scenarios.value.find(s => s.id === id)
+      if (!row) continue
+      const cur = (row.tags || '').trim()
+      const next = cur ? `${cur},${add}` : add
+      await execRequest.patch(`/test-scenarios/${id}`, { tags: next }).catch(() => {})
+    }
+    message.success('标签已追加')
+    showBatchAddTagModal.value = false
+    await fetchScenarios()
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+const openBatchRemoveTagModal = () => {
+  batchTagRemoveInput.value = ''
+  showBatchRemoveTagModal.value = true
+}
+
+const applyBatchRemoveTag = async () => {
+  const key = batchTagRemoveInput.value.trim()
+  if (!key) {
+    message.warning('请输入要移除的标签关键字')
+    return
+  }
+  batchLoading.value = true
+  try {
+    for (const id of [...checkedIds.value]) {
+      const row = scenarios.value.find(s => s.id === id)
+      if (!row) continue
+      const cur = (row.tags || '').trim()
+      if (!cur) continue
+      const parts = cur.split(/[,，]/).map((t: string) => t.trim()).filter(Boolean)
+      const next = parts.filter((t: string) => !t.includes(key)).join(',')
+      await execRequest.patch(`/test-scenarios/${id}`, { tags: next }).catch(() => {})
+    }
+    message.success('已处理标签')
+    showBatchRemoveTagModal.value = false
+    await fetchScenarios()
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+const openBatchMoveModal = () => {
+  batchMoveFolderId.value = null
+  showBatchMoveModal.value = true
+}
+
+const applyBatchMove = async () => {
+  if (batchMoveFolderId.value == null || batchMoveFolderId.value === '') {
+    message.warning('请选择目标目录或根目录')
+    return
+  }
+  const map = { ...scenarioFolderMap.value }
+  for (const id of [...checkedIds.value]) {
+    if (batchMoveFolderId.value === '__root__') {
+      delete map[id]
+    } else {
+      map[id] = batchMoveFolderId.value
+    }
+  }
+  scenarioFolderMap.value = map
+  saveFolderMap(map)
+  message.success('已移动')
+  showBatchMoveModal.value = false
+}
+
+const doBatchDelete = async () => {
+  const ids = [...checkedIds.value]
+  for (const id of ids) {
+    try {
+      await execRequest.delete(`/test-scenarios/${id}`)
+      const map = { ...scenarioFolderMap.value }
+      delete map[id]
+      scenarioFolderMap.value = map
+    } catch {
+      /* 单条失败继续 */
+    }
+  }
+  saveFolderMap(scenarioFolderMap.value)
+  message.success('已删除所选场景')
+  clearSelection()
+  await fetchScenarios()
+}
+
+const confirmBatchDelete = () => {
+  dialog.warning({
+    title: '批量删除',
+    content: `确定删除已选 ${checkedIds.value.size} 个场景？此操作不可恢复。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: () => doBatchDelete()
+  })
+}
+
+const openCreateModal = () => {
+  scenarioPanelMode.value = 'list'
+  editingId.value = null
+  form.value = { name: '', priority: 'P0', tags: '', env_id: null, description: '', folder_id: null }
+  showModal.value = true
+}
+
+const openEdit = (row: any) => {
+  editingId.value = row.id
+  const currentFolderId = scenarioFolderMap.value[row.id] || null
+  form.value = {
+    name: row.name,
+    priority: row.priority || 'P0',
+    tags: row.tags || '',
+    env_id: row.env_id || null,
+    description: row.description || '',
+    folder_id: currentFolderId as string | null,
+  }
+  showModal.value = true
+}
+
+const saveScenario = async () => {
+  if (!form.value.name.trim()) {
+    message.warning('请输入场景名称')
+    return
+  }
+  saving.value = true
+  try {
+    const { folder_id, ...payload } = form.value
+    if (editingId.value) {
+      await execRequest.patch(`/test-scenarios/${editingId.value}`, payload)
+      // 更新目录映射
+      const map = { ...scenarioFolderMap.value }
+      if (folder_id) map[editingId.value] = folder_id
+      else delete map[editingId.value]
+      scenarioFolderMap.value = map
+      saveFolderMap(map)
+      message.success('更新成功')
+    } else {
+      const res: any = await execRequest.post('/test-scenarios', { ...payload, creator: userStore.username || 'anonymous' })
+      // 新建后记录目录归属
+      const newId = res?.id || res?.data?.id
+      if (newId && folder_id) {
+        const map = { ...scenarioFolderMap.value, [newId]: folder_id }
+        scenarioFolderMap.value = map
+        saveFolderMap(map)
+      }
+      message.success('创建成功')
+    }
+    showModal.value = false
+    await fetchScenarios()
+    activeView.value = 'all'
+  } catch {
+    message.error('操作失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+const deleteScenario = async (id: number) => {
+  try {
+    await execRequest.delete(`/test-scenarios/${id}`)
+    const map = { ...scenarioFolderMap.value }
+    delete map[id]
+    scenarioFolderMap.value = map
+    saveFolderMap(map)
+    if (selectedScenarioForDetail.value?.id === id) {
+      scenarioPanelMode.value = 'list'
+      selectedScenarioForDetail.value = null
+      selectedSidebarKeys.value = [ROOT_KEY]
+    }
+    message.success('删除成功')
+    fetchScenarios()
+  } catch {
+    message.error('删除失败')
+  }
+}
+
+const runAll = async () => {
+  const ids =
+    checkedIds.value.size > 0 ? [...checkedIds.value] : scenarios.value.map((s) => s.id)
+  if (!ids.length) {
+    message.warning('暂无场景可运行')
+    return
+  }
+  batchRunning.value = true
+  batchRunModalVisible.value = true
+  batchRunProgress.value = 0
+  batchRunPhase.value = '准备中…'
+  batchRunDetail.value = ''
+  batchRunSummary.value = null
+  let aggPass = 0
+  let aggFail = 0
+  let done = 0
+  const total = ids.length
+  try {
+    for (const sid of ids) {
+      const sc = scenarios.value.find((s) => s.id === sid)
+      if (!sc) {
+        done++
+        batchRunProgress.value = Math.round((done / total) * 100)
+        continue
+      }
+      batchRunPhase.value = sc.name || `场景 #${sid}`
+      const envId = sc.env_id ?? null
+      const steps = [...(sc.steps || [])].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+      if (!steps.length) {
+        message.warning(`「${batchRunPhase.value}」暂无步骤，已跳过`)
+        done++
+        batchRunProgress.value = Math.round((done / total) * 100)
+        continue
+      }
+      const entries: ExecScenarioLogEntry[] = []
+      let si = 0
+      for (const step of steps) {
+        si++
+        batchRunDetail.value = `步骤 ${si} / ${steps.length}`
+        const ctx = await loadStepExecContext(step, envId)
+        if (!ctx) {
+          const nm = String(step?.name || '').trim() || '未命名步骤'
+          entries.push({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+            at: Date.now(),
+            pass: false,
+            name: nm,
+            method: '—',
+            url: '—',
+            statusCode: null,
+            elapsedMs: null,
+            error: '步骤未绑定用例或接口，无法执行'
+          })
+        } else {
+          entries.push(await runStepExecContext(ctx))
+        }
+      }
+      const summary = computeSummaryForLogEntries(entries)
+      aggPass += summary.pass
+      aggFail += summary.fail
+      const prev = scenarioSendLogs.value[sid] ?? []
+      scenarioSendLogs.value = { ...scenarioSendLogs.value, [sid]: [...entries, ...prev] }
+      persistScenarioSendLogs()
+      try {
+        await execRequest.post(`/test-scenarios/${sid}/reports`, {
+          entries,
+          summary,
+          env_id: envId,
+          creator: userStore.username || 'anonymous',
+          trigger_type: 'batch',
+          title: `${sc.name || '场景'} · 批量运行 · ${new Date().toLocaleString()}`
+        })
+      } catch {
+        /* 报告落库失败不阻断 */
+      }
+      try {
+        await execRequest.patch(`/test-scenarios/${sid}`, {
+          last_result: {
+            status: summary.fail > 0 ? 'failed' : 'passed',
+            passed: summary.pass,
+            failed: summary.fail,
+            duration: (summary.sumMs || 0) / 1000
+          }
+        })
+      } catch {
+        /* ignore */
+      }
+      done++
+      batchRunProgress.value = Math.round((done / total) * 100)
+    }
+    batchRunSummary.value = {
+      scenarios: total,
+      passSteps: aggPass,
+      failSteps: aggFail
+    }
+    batchRunPhase.value = '全部完成'
+    batchRunDetail.value = `共 ${aggPass} 步通过 · ${aggFail} 步失败`
+    message.success('批量运行已完成')
+    await fetchScenarios()
+  } catch (e) {
+    console.error(e)
+    message.error('批量运行异常中断')
+    batchRunPhase.value = '已中断'
+  } finally {
+    batchRunning.value = false
+  }
+}
+
+const closeBatchRunModal = () => {
+  if (batchRunning.value) return
+  batchRunModalVisible.value = false
+  batchRunSummary.value = null
+}
+
+const onBatchRunModalAfterLeave = () => {
+  batchRunSummary.value = null
+  batchRunProgress.value = 0
+  batchRunPhase.value = ''
+  batchRunDetail.value = ''
+}
+
+onMounted(() => {
+  loadScenarioSendLogs()
+  window.addEventListener('resize', onReportWindowResize)
+  fetchScenarios()
+  fetchEnvs()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', onReportWindowResize)
+  disposeReportDonut()
+})
+</script>
+
+<style scoped>
+/* ════════════════════════════════════════
+   整体布局
+   父容器 .view-content > * 已经 absolute 撑满
+   这里只需要 display:flex 横向排列即可
+════════════════════════════════════════ */
+.scenarios-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: #f5f7fa;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+}
+
+/* ════════════════════════════════════════
+   左侧边栏 — 覆盖旧白色背景，确保暗色主题
+   实际布局/背景已由 common.css .page-sidebar 控制
+════════════════════════════════════════ */
+.sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  background: #ffffff;
+  border-right: 1px solid #eef1f6;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-top {
+  padding: 14px 12px 10px;
+  border-bottom: 1px solid #f0f2f7;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.sidebar-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* 搜索框 */
+.sb-search-box {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 10px;
+  background: #f8f9fc;
+  border: 1px solid #e4e8f0;
+  border-radius: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.sb-search-box:focus-within {
+  background: #fff;
+  border-color: #818cf8;
+  box-shadow: 0 0 0 2px rgba(129,140,248,0.18);
+}
+
+.sb-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12px;
+  color: #374151;
+  caret-color: #6366f1;
+  line-height: 1;
+}
+.sb-search-input::placeholder {
+  color: #b0b7c3;
+}
+
+.sidebar-tool-btn {
+  width: 32px; height: 32px;
+  border: 1px solid #e4e7f0;
+  border-radius: 7px;
+  background: #f8f9fc;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: #8792a2;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.sidebar-tool-btn:hover {
+  border-color: #818cf8;
+  color: #6366f1;
+  background: rgba(99,102,241,0.06);
+}
+
+.sidebar-add-btn {
+  flex-shrink: 0;
+  width: 32px; height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.35);
+  transition: all 0.2s ease;
+}
+.sidebar-add-btn:hover {
+  box-shadow: 0 4px 14px rgba(99,102,241,0.5);
+  transform: rotate(90deg);
+}
+
+/* 导航区 */
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 8px 0;
+  background: transparent;
+}
+.sidebar-nav::-webkit-scrollbar { width: 4px; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: #e4e8f0; border-radius: 2px; }
+
+/* 导航项 */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+  margin-bottom: 2px;
+}
+.nav-item:hover { background: #f5f6fb; }
+.nav-item.active { background: rgba(99,102,241,0.08); }
+.nav-item.active .nav-label { color: #6366f1; font-weight: 600; }
+
+.nav-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.nav-label {
+  flex: 1;
+  font-size: 13px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-badge {
+  background: rgba(99,102,241,0.12);
+  color: #6366f1;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  min-width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.nav-count {
+  font-size: 11px;
+  color: #c0c8d8;
+  flex-shrink: 0;
+}
+
+/* 分组标题 */
+.nav-section-title {
+  font-size: 11px;
+  color: #a0aab8;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 10px 10px 4px;
+}
+
+/* 子项 */
+.nav-item.sub {
+  padding-left: 14px;
+}
+.sub-icon {
+  font-size: 13px;
+  color: #c0c8d8;
+  flex-shrink: 0;
+}
+
+.nav-divider {
+  height: 1px;
+  background: #f0f2f7;
+  margin: 8px 4px;
+}
+
+.beta-pill {
+  background: linear-gradient(135deg, #fff7e6, #ffe7ba);
+  color: #d46b08;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid #ffd591;
+  flex-shrink: 0;
+}
+
+/* 场景树 */
+.scenario-tree {
+  font-size: 13px;
+  padding: 0 4px;
+  background: transparent;
+  --n-node-border-radius: 8px;
+  --n-node-content-height: 34px;
+}
+:deep(.scenario-tree .n-tree-node-wrapper) {
+  padding: 2px 0;
+}
+:deep(.scenario-tree .n-tree-node-content) {
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+:deep(.scenario-tree .n-tree-node--selected) {
+  background: transparent !important;
+}
+:deep(.scenario-tree .n-tree-node--selected > .n-tree-node-content) {
+  background: rgba(99,102,241,0.1) !important;
+  color: #6366f1;
+  font-weight: 500;
+}
+:deep(.scenario-tree .n-tree-node:not(.n-tree-node--disabled):hover) {
+  background: transparent !important;
+}
+:deep(.scenario-tree .n-tree-node:not(.n-tree-node--disabled):hover .n-tree-node-content) {
+  background: #f5f6fb;
+}
+
+/* 树根部「新建」按钮 */
+.tree-root-add-btn {
+  color: #6366f1;
+  background: rgba(99,102,241,0.1);
+  transition: background 0.15s, transform 0.15s;
+}
+.tree-root-add-btn:hover {
+  background: rgba(99,102,241,0.2);
+  transform: scale(1.08);
+}
+
+.tree-root-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* 弹窗标题 */
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.modal-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  color: #fff;
+}
+.modal-icon.create { background: linear-gradient(135deg, #7d33ff, #a855f7); }
+.modal-icon.edit   { background: linear-gradient(135deg, #0ea5e9, #38bdf8); }
+
+/* 底部新建按钮 */
+.sidebar-footer {
+  padding: 12px 14px 16px;
+  border-top: 1px solid #f0f2f7;
+  background: transparent;
+}
+.new-btn {
+  background: linear-gradient(135deg, #6366f1, #818cf8) !important;
+  border: none !important;
+  border-radius: 9px !important;
+  font-size: 13px !important;
+  height: 36px !important;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.3) !important;
+}
+
+/* ═══ 渐变顶栏 ═══ */
+.ts-topbar {
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f7ff 60%, #f0f0ff 100%);
+  border-bottom: 1px solid #e4e4f0;
+}
+.ts-topbar-deco {
+  position: absolute;
+  top: -40px; right: -40px;
+  width: 140px; height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99,102,241,0.10) 0%, transparent 70%);
+  pointer-events: none;
+}
+.ts-topbar-inner {
+  position: relative;
+  z-index: 1;
+  height: 72px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ts-topbar-left { display: flex; flex-direction: column; gap: 5px; }
+.ts-topbar-breadcrumb {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; color: #9ca3af;
+}
+.ts-topbar-breadcrumb svg { flex-shrink: 0; color: #d1d5db; }
+.ts-topbar-title-row { display: flex; align-items: center; gap: 10px; }
+.ts-topbar-title-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 3px 10px rgba(99,102,241,0.3); flex-shrink: 0;
+}
+.ts-topbar-title {
+  margin: 0; font-size: 18px; font-weight: 700; color: #111827;
+  letter-spacing: -0.02em; line-height: 1;
+}
+.ts-topbar-right { display: flex; align-items: center; gap: 8px; }
+.ts-topbar-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 10px; border-radius: 13px;
+  font-size: 12px; font-weight: 500;
+  background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb;
+}
+.ts-topbar-pill--green {
+  background: rgba(34,197,94,0.08); color: #16a34a; border-color: rgba(34,197,94,0.2);
+}
+.ts-pill-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #22c55e; box-shadow: 0 0 5px rgba(34,197,94,0.6);
+  animation: ts-dot-blink 2s ease-in-out infinite;
+}
+@keyframes ts-dot-blink {
+  0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+}
+
+/* 白色内容面板（let common.css handle base, just override background） */
+.content-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+/* 顶部 header — 让 common.css 渐变样式生效，此处只做最小补充 */
+.main-header {
+  min-height: 52px;
+}
+
+.header-tabs {
+  display: flex;
+  height: 100%;
+  gap: 4px;
+}
+
+.htab {
+  position: relative;
+  padding: 0 16px;
+  height: 100%;
+  font-size: 14px;
+  color: #8792a2;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+  display: flex;
+  align-items: center;
+}
+.htab:hover { color: #3c4257; }
+.htab.active { color: #7d33ff; font-weight: 600; }
+.htab-underline {
+  position: absolute;
+  bottom: 0;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: #7d33ff;
+  border-radius: 2px 2px 0 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.batch-run-btn {
+  background: rgba(125,51,255,0.08) !important;
+  color: #7d33ff !important;
+  border-color: rgba(125,51,255,0.2) !important;
+  border-radius: 7px !important;
+  font-size: 13px !important;
+}
+
+.run-all-btn {
+  background: linear-gradient(135deg, #7d33ff, #5b21b6) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 7px !important;
+  font-size: 13px !important;
+  box-shadow: 0 3px 10px rgba(125,51,255,0.3) !important;
+}
+
+/* ── 统计卡片 ── */
+.stats-row {
+  display: flex;
+  gap: 14px;
+  padding: 16px 24px 0;
+  flex-shrink: 0;
+}
+
+.stat-card {
+  flex: 1;
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 18px;
+  border: 1px solid #eaecf4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: box-shadow 0.15s;
+}
+.stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1f36;
+  line-height: 1;
+}
+.stat-label {
+  font-size: 12px;
+  color: #a0aab8;
+}
+
+.stat-card.green .stat-value { color: #389e0d; }
+.stat-card.red   .stat-value { color: #cf1322; }
+.stat-card.blue  .stat-value { color: #096dd9; }
+
+/* ── 单场景详情页 ── */
+.scenario-detail-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: #fff;
+  overflow: hidden;
+}
+.detail-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 48px;
+  border-bottom: 1px solid #eaecf4;
+  flex-shrink: 0;
+}
+.detail-page-tabs {
+  display: flex;
+  gap: 4px;
+  height: 100%;
+}
+.dpt-btn {
+  position: relative;
+  padding: 0 14px;
+  height: 100%;
+  border: none;
+  background: none;
+  font-size: 14px;
+  color: #8792a2;
+  cursor: pointer;
+}
+.dpt-btn:hover { color: #3c4257; }
+.dpt-btn.active { color: #7d33ff; font-weight: 600; }
+.dpt-underline {
+  position: absolute;
+  bottom: 0;
+  left: 14px;
+  right: 14px;
+  height: 2px;
+  background: #7d33ff;
+  border-radius: 2px 2px 0 0;
+}
+.detail-page-header-right {
+  display: flex;
+  gap: 4px;
+}
+.scenario-detail-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+.scenario-detail-main {
+  flex: 1;
+  min-width: 0;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+.scenario-detail-main.detail-main-flex {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.scenario-detail-main.detail-main-flex > .detail-meta-bar,
+.scenario-detail-main.detail-main-flex > .detail-desc-line,
+.scenario-detail-main.detail-main-flex > .detail-creator-line {
+  flex-shrink: 0;
+}
+.detail-meta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.detail-scenario-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1f36;
+}
+.detail-id-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #8792a2;
+  margin-left: 4px;
+}
+.detail-desc-line {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #a0aab8;
+}
+.detail-creator-line {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #5c6676;
+}
+.detail-time-muted {
+  color: #a0aab8;
+  margin-left: 8px;
+}
+
+/* ── 单场景 · 测试报告（步骤「发送」记录） ── */
+.detail-report-root {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: min(480px, 52vh);
+  margin-top: 0;
+  overflow: hidden;
+}
+
+/* 测试报告 · 汇总（环形图 + 状态 + 耗时 + 循环/断言） */
+.detail-report-summary-card {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px 32px;
+  padding: 22px 26px;
+  margin-bottom: 12px;
+  background: #fff;
+  border: 1px solid #eaecf4;
+  border-radius: 12px;
+}
+.drr-chart-wrap {
+  width: 168px;
+  height: 168px;
+  flex-shrink: 0;
+  position: relative;
+}
+.drr-chart {
+  width: 168px;
+  height: 168px;
+}
+.drr-chart-empty {
+  width: 168px;
+  height: 168px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.drr-empty-ring {
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 14px solid #ffc2d4;
+  opacity: 0.85;
+}
+.drr-empty-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: #8792a2;
+}
+.drr-empty-text strong {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1f36;
+  line-height: 1.1;
+}
+.drr-status-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 160px;
+}
+.drr-status-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: 13px;
+  color: #3c4257;
+}
+.drr-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.drr-dot.pass {
+  background: #52c41a;
+}
+.drr-dot.fail {
+  background: #ff6b9d;
+}
+.drr-dot.idle {
+  background: #d9d9d9;
+}
+.drr-status-label {
+  min-width: 2em;
+}
+.drr-status-val {
+  font-weight: 600;
+  color: #1a1f36;
+}
+.drr-status-val.drr-em-fail {
+  color: #ff4d4f;
+}
+.drr-status-pct {
+  color: #8792a2;
+  font-size: 12px;
+}
+.drr-vdivider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 120px;
+  background: #e8eaed;
+  flex-shrink: 0;
+}
+.drr-metrics-wrap {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 28px 40px;
+  flex: 1;
+  min-width: 0;
+}
+.drr-metric-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 140px;
+}
+.drr-metric-col-right {
+  padding-left: 4px;
+}
+.drr-metric-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.drr-metric-label {
+  font-size: 12px;
+  color: #8792a2;
+}
+.drr-metric-val.green {
+  font-size: 15px;
+  font-weight: 600;
+  color: #52c41a;
+}
+.drr-metric-sub {
+  font-size: 13px;
+  color: #3c4257;
+  line-height: 1.5;
+}
+.drr-loop-fail {
+  color: #ff4d4f;
+  font-weight: 700;
+}
+@media (max-width: 900px) {
+  .drr-vdivider {
+    display: none;
+  }
+  .detail-report-summary-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.detail-report-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 0;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.detail-report-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.drt-pill {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #e0e4ef;
+  background: #fff;
+  font-size: 13px;
+  color: #5c6676;
+  cursor: pointer;
+}
+.drt-pill.active {
+  border-color: #7d33ff;
+  color: #7d33ff;
+  font-weight: 600;
+  background: rgba(125, 51, 255, 0.06);
+}
+.detail-report-toolbar-icons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-report-search {
+  width: 200px;
+}
+.detail-report-list-scroll {
+  flex: 1;
+  min-height: 200px;
+  border: 1px solid #eaecf4;
+  border-radius: 12px;
+  background: #fafbfc;
+  padding: 8px 0;
+}
+.detail-report-list-empty {
+  padding: 32px;
+  text-align: center;
+  color: #a0aab8;
+  font-size: 13px;
+}
+.detail-report-row {
+  display: grid;
+  grid-template-columns: 56px minmax(100px, 1.1fr) 52px minmax(140px, 1.8fr) auto;
+  gap: 10px 12px;
+  align-items: center;
+  padding: 12px 16px;
+  margin: 6px 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #f0f2f7;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+.detail-report-row:focus-visible {
+  box-shadow: 0 0 0 2px rgba(125, 51, 255, 0.45);
+}
+.detail-report-row.active {
+  box-shadow: 0 0 0 2px rgba(125, 51, 255, 0.35);
+}
+.detail-report-row.fail {
+  background: #fff5f5;
+  border-color: #ffccc7;
+}
+.detail-report-row.pass {
+  background: #f6ffed;
+  border-color: #b7eb8f;
+}
+.detail-report-status {
+  font-size: 12px;
+  font-weight: 600;
+}
+.detail-report-status.ok {
+  color: #52c41a;
+}
+.detail-report-status.bad {
+  color: #ff4d4f;
+}
+.detail-report-step-name {
+  color: #1a1f36;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-report-method {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  justify-self: start;
+}
+.detail-report-url {
+  font-size: 11px;
+  color: #8792a2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-report-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.detail-report-code {
+  font-weight: 600;
+  font-size: 13px;
+}
+.detail-report-code.ok {
+  color: #52c41a;
+}
+.detail-report-code.bad {
+  color: #ff4d4f;
+}
+.detail-report-time {
+  font-size: 12px;
+  color: #8792a2;
+  min-width: 72px;
+  text-align: right;
+}
+
+.detail-report-body-split {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 200px;
+  gap: 12px;
+  align-items: stretch;
+  overflow: hidden;
+}
+.detail-report-list-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.detail-report-body-split.with-detail .detail-report-list-col {
+  flex: 1 1 50%;
+  max-width: calc(100% - 320px);
+}
+
+.detail-report-detail-pane {
+  flex: 0 0 min(480px, 45%);
+  min-width: 280px;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #eaecf4;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+.drp-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid #f0f2f7;
+}
+.drp-summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13px;
+  color: #3c4257;
+}
+.drp-sum-label {
+  color: #8792a2;
+}
+.drp-sum-code {
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.drp-sum-code.ok {
+  color: #52c41a;
+  background: #f6ffed;
+}
+.drp-sum-code.warn {
+  color: #d48806;
+  background: #fffbe6;
+}
+.drp-sum-code.bad {
+  color: #ff4d4f;
+  background: #fff2f0;
+}
+.drp-sum-code.na {
+  color: #8792a2;
+  background: #f5f5f5;
+}
+.drp-sum-sep {
+  color: #c0c8d4;
+  font-size: 12px;
+}
+.drp-sum-val {
+  font-weight: 600;
+  color: #1a1f36;
+}
+.drp-validate-block {
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid #f0f2f7;
+}
+.drp-validate-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8792a2;
+  margin-bottom: 8px;
+}
+.drp-validate-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.drp-validate-msg.is-ok {
+  color: #389e0d;
+}
+.drp-validate-msg.is-fail {
+  color: #ff4d4f;
+}
+.drp-validate-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 16px;
+}
+.drp-pane-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f2f7;
+  background: #fafbfc;
+}
+.drp-pane-tab-btns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.drp-pt {
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #5c6676;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.drp-pt:hover {
+  color: #1a1f36;
+  background: rgba(0, 0, 0, 0.04);
+}
+.drp-pt.active {
+  color: #7d33ff;
+  font-weight: 600;
+  background: rgba(125, 51, 255, 0.08);
+}
+.drp-pt-badge {
+  margin-left: 2px;
+  transform: scale(0.85);
+}
+.drp-debug-btn {
+  flex-shrink: 0;
+  color: #7d33ff !important;
+  border-color: rgba(125, 51, 255, 0.35) !important;
+}
+.drp-pane-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: min(52vh, 560px);
+}
+.drp-tab-panel {
+  padding: 10px 12px 14px;
+}
+.drp-legacy-hint {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ad6800;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+}
+.drp-body-subbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+.drp-body-modes {
+  display: inline-flex;
+  border: 1px solid #e8eaed;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+.drp-bm {
+  border: none;
+  background: #fff;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #5c6676;
+  cursor: pointer;
+}
+.drp-bm + .drp-bm {
+  border-left: 1px solid #e8eaed;
+}
+.drp-bm.active {
+  background: rgba(125, 51, 255, 0.08);
+  color: #7d33ff;
+  font-weight: 600;
+}
+.drp-body-tag {
+  font-size: 12px;
+  color: #1a1f36;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f0f2f7;
+}
+.drp-body-tag.muted {
+  color: #8792a2;
+  background: #f5f6fa;
+}
+.drp-body-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+.drp-code-frame {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid #e8eaed;
+  border-radius: 8px;
+  background: #282c34;
+  overflow: hidden;
+  min-height: 120px;
+  max-height: min(40vh, 420px);
+}
+.drp-code-gutter {
+  flex-shrink: 0;
+  padding: 10px 0 10px 10px;
+  text-align: right;
+  user-select: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+.drp-gutter-line {
+  display: block;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #636d83;
+  min-height: 1.55em;
+}
+.drp-code-pre {
+  flex: 1;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #abb2bf;
+  white-space: pre;
+  word-break: break-all;
+}
+.drp-empty-hint {
+  padding: 24px 8px;
+  text-align: center;
+  color: #a0aab8;
+  font-size: 13px;
+}
+.drp-kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.drp-kv-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 28%) 1fr;
+  gap: 10px;
+  font-size: 12px;
+  padding: 8px 10px;
+  background: #fafbfc;
+  border-radius: 8px;
+  border: 1px solid #f0f2f7;
+}
+.drp-k {
+  color: #7d33ff;
+  font-weight: 600;
+  word-break: break-all;
+}
+.drp-v {
+  color: #3c4257;
+  word-break: break-all;
+}
+.drp-console-pre {
+  margin: 0;
+  padding: 12px;
+  background: #1e1e1e;
+  color: #f48771;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.drp-req-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.drp-req-url {
+  font-size: 12px;
+  color: #5c6676;
+  word-break: break-all;
+  line-height: 1.45;
+}
+.drp-subtitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8792a2;
+  margin: 12px 0 8px;
+}
+.drp-req-body-pre {
+  margin: 0;
+  padding: 12px;
+  background: #fafbfc;
+  border: 1px solid #eaecf4;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+}
+
+/* ── 测试步骤：左列表 + 右 Apifox 风格编辑 ── */
+.detail-steps-workspace {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  margin-top: 16px;
+  border: 1px solid #eaecf4;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+.detail-steps-workspace.workspace-empty .step-editor-panel {
+  background: #fafbfc;
+}
+.step-list-sidebar {
+  width: 286px;
+  flex-shrink: 0;
+  border-right: 1px solid #eaecf4;
+  display: flex;
+  flex-direction: column;
+  background: #fafbfc;
+  min-height: 520px;
+}
+.step-list-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid #eaecf4;
+  font-size: 12px;
+}
+.step-toolbar-count {
+  font-weight: 600;
+  color: #3c4257;
+  margin-right: 4px;
+}
+.step-toolbar-count.muted {
+  font-weight: 500;
+  color: #8792a2;
+}
+.step-list-scrollbar {
+  flex: 1;
+  min-height: 220px;
+}
+.step-list-zero {
+  padding: 24px 12px;
+  text-align: center;
+  color: #a0aab8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.step-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 4px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.step-list-item:hover {
+  background: #f3f0ff;
+}
+.step-list-item.active {
+  background: #f5f0ff;
+  border-color: rgba(125, 51, 255, 0.28);
+  box-shadow: inset 3px 0 0 #7d33ff;
+}
+.step-li-method {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+.step-li-main {
+  flex: 1;
+  min-width: 0;
+}
+.step-li-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1f36;
+  line-height: 1.35;
+  word-break: break-word;
+}
+.step-li-meta {
+  font-size: 11px;
+  color: #a0aab8;
+  margin-top: 4px;
+}
+.step-list-footer {
+  padding: 10px;
+  border-top: 1px solid #eaecf4;
+  flex-shrink: 0;
+}
+.step-add-footer-btn {
+  border-color: #7d33ff !important;
+  color: #7d33ff !important;
+}
+.step-editor-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 520px;
+  background: #fff;
+}
+.step-editor-panel :deep(.n-spin-content) {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.step-editor-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  color: #8792a2;
+  font-size: 14px;
+  text-align: center;
+}
+.step-ph-sub {
+  font-size: 12px;
+  margin-top: 10px;
+  color: #a0aab8;
+  line-height: 1.5;
+}
+.step-editor-inner {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px 20px;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+.step-response-panel {
+  margin-top: 16px;
+  border: 1px solid #eaecf4;
+  border-radius: 8px;
+  background: #fafbfc;
+  overflow: hidden;
+}
+.step-response-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #eaecf4;
+  background: #fff;
+}
+.step-response-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-right: 4px;
+}
+.step-response-meta {
+  font-size: 12px;
+  color: #64748b;
+}
+.step-response-err {
+  font-size: 12px;
+  color: #dc2626;
+}
+.step-response-pre {
+  margin: 0;
+  padding: 12px 14px;
+  max-height: min(360px, 40vh);
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #1e293b;
+  background: #f8fafc;
+}
+.step-purple-btn {
+  background: #7d33ff !important;
+  border-color: #7d33ff !important;
+}
+.step-req-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.step-req-method-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.step-req-url-input {
+  flex: 1;
+  min-width: 200px;
+}
+.step-config-tabs {
+  flex: 1;
+  min-height: 0;
+}
+.step-config-tabs :deep(.n-tabs-pane-wrapper) {
+  overflow: auto;
+  max-height: min(420px, calc(100vh - 360px));
+}
+.step-tab-pane-inner {
+  padding-top: 10px;
+}
+.step-post-pane .step-post-other-empty {
+  margin-top: 12px;
+}
+.step-post-pane .step-post-other-table {
+  margin-top: 12px;
+}
+.step-validate-response-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 12px 14px;
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+  border-radius: 10px;
+}
+.step-vr-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.step-vr-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1f36;
+}
+.step-vr-help-wrap {
+  display: inline-flex;
+  cursor: help;
+  color: #8c8c8c;
+  line-height: 1;
+}
+.step-vr-help {
+  font-size: 15px;
+}
+.step-vr-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.step-vr-select-enable {
+  width: 100px;
+}
+.step-vr-select-status {
+  width: 148px;
+}
+.step-body-type-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+}
+.step-body-editor-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.step-body-textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.step-mini-table {
+  font-size: 12px;
+}
+.step-cell-muted {
+  color: #8792a2;
+  font-size: 11px;
+  word-break: break-all;
+}
+.detail-steps-head {
+  margin-top: 28px;
+  margin-bottom: 12px;
+}
+.detail-steps-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3c4257;
+}
+.detail-steps-empty {
+  border: 2px dashed #e0e4ef;
+  border-radius: 12px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: #fafbfc;
+}
+.detail-steps-empty-inner {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+}
+.detail-steps-panel {
+  border: 1px solid #e8eaef;
+  border-radius: 12px;
+  background: #fafbfc;
+  padding: 12px 12px 14px;
+}
+.detail-steps-list {
+  margin-bottom: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.detail-step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #eaecf4;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.detail-step-row:last-child {
+  margin-bottom: 0;
+}
+.detail-step-order {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7d33ff;
+  min-width: 22px;
+  line-height: 1.4;
+}
+.detail-step-main {
+  flex: 1;
+  min-width: 0;
+}
+.detail-step-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1f36;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.detail-step-meta {
+  display: block;
+  font-size: 12px;
+  color: #a0aab8;
+  margin-top: 4px;
+}
+.detail-steps-add-wrap {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 4px;
+}
+
+.import-debug-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1f36;
+}
+.import-debug-modal-sub {
+  font-size: 12px;
+  color: #a0aab8;
+  margin-top: 4px;
+  font-weight: normal;
+}
+.import-debug-search {
+  margin-bottom: 12px;
+}
+.import-debug-spin {
+  min-height: 200px;
+}
+.import-case-modal-spin {
+  min-height: 400px;
+}
+.import-case-modal-body {
+  display: flex;
+  gap: 14px;
+  min-height: 420px;
+  align-items: stretch;
+}
+.import-case-tree-pane {
+  width: 268px;
+  flex-shrink: 0;
+  border: 1px solid #eaecf4;
+  border-radius: 10px;
+  padding: 10px 10px 8px;
+  background: #fafbfc;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.import-pane-head {
+  font-size: 13px;
+  font-weight: 600;
+  color: #3c4257;
+  margin-bottom: 8px;
+}
+.import-tree-search {
+  margin-bottom: 8px;
+}
+.import-tree-scroll {
+  flex: 1;
+  min-height: 280px;
+  max-height: 440px;
+}
+.import-modal-tree {
+  font-size: 13px;
+}
+.import-tree-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+.import-tree-method {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  line-height: 1.35;
+}
+.import-tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.import-tree-folder-row {
+  font-size: 13px;
+  font-weight: 500;
+}
+.import-tree-count {
+  color: #a0aab8;
+  font-weight: 400;
+}
+.import-case-list-pane {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #eaecf4;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+}
+.import-case-pane-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a0aab8;
+  font-size: 13px;
+  padding: 28px 20px;
+  text-align: center;
+  line-height: 1.65;
+}
+.import-interface-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f0f2f6;
+}
+.import-if-method {
+  flex-shrink: 0;
+}
+.import-if-title {
+  font-weight: 600;
+  color: #1a1f36;
+  font-size: 14px;
+}
+.import-if-path {
+  font-size: 12px;
+  color: #64748b;
+  word-break: break-all;
+}
+.import-cat-tabs {
+  margin-bottom: 8px;
+}
+.import-cat-tabs :deep(.n-tabs-nav) {
+  margin-bottom: 0;
+}
+.import-case-list-search {
+  margin-bottom: 10px;
+}
+.import-cases-inner-spin {
+  flex: 1;
+  min-height: 180px;
+}
+.import-case-list-empty {
+  padding: 36px 16px;
+}
+.import-case-table-wrap {
+  overflow: auto;
+  max-height: 340px;
+  border: 1px solid #eaecf4;
+  border-radius: 8px;
+}
+.import-case-n-table {
+  width: 100%;
+}
+.import-case-n-table .ict-col-check {
+  width: 44px;
+  text-align: center;
+}
+.import-case-n-table .ict-col-idx {
+  width: 40px;
+  color: #8792a2;
+  font-size: 12px;
+}
+.import-case-n-table .ict-col-name {
+  max-width: 280px;
+  word-break: break-word;
+}
+.import-case-n-table .ict-col-group {
+  width: 72px;
+  color: #64748b;
+  font-size: 12px;
+}
+.import-case-n-table .ict-col-result {
+  width: 88px;
+  color: #a0aab8;
+  font-size: 12px;
+}
+.import-case-tr:hover {
+  background: #faf8ff;
+}
+.ict-result-dash {
+  color: #c0c8d8;
+}
+.import-debug-empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: #a0aab8;
+  font-size: 13px;
+}
+.import-debug-table-wrap {
+  border: 1px solid #eaecf4;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.import-debug-thead {
+  display: grid;
+  grid-template-columns: 40px 72px 1fr 1.2fr 1.4fr;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #a0aab8;
+  background: #f6f7fa;
+  border-bottom: 1px solid #eaecf4;
+}
+.import-debug-tbody {
+  max-height: 360px;
+  overflow-y: auto;
+}
+.import-debug-tr {
+  display: grid;
+  grid-template-columns: 40px 72px 1fr 1.2fr 1.4fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #3c4257;
+  border-bottom: 1px solid #f0f2f6;
+  cursor: pointer;
+  margin: 0;
+}
+.import-debug-tr:last-child {
+  border-bottom: none;
+}
+.import-debug-tr:hover {
+  background: #faf8ff;
+}
+.idc-col-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.idc-col-method,
+.idc-col-api,
+.idc-col-path,
+.idc-col-case {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.idc-method {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.3;
+}
+.import-debug-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+.import-debug-hint {
+  font-size: 13px;
+  color: #64748b;
+}
+.import-debug-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.add-step-btn {
+  border-color: #7d33ff !important;
+  color: #7d33ff !important;
+}
+
+:deep(.add-step-popover-trigger) {
+  display: inline-flex;
+}
+
+.add-step-menu {
+  width: 400px;
+  max-width: calc(100vw - 48px);
+  max-height: min(72vh, 560px);
+  overflow-y: auto;
+  padding: 14px 14px 10px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12), 0 0 1px rgba(15, 23, 42, 0.08);
+}
+.add-step-section {
+  margin-bottom: 4px;
+}
+.add-step-section:last-child {
+  margin-bottom: 0;
+}
+.add-step-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #a0aab8;
+  letter-spacing: 0.3px;
+  margin: 0 0 10px 2px;
+}
+.add-step-section:first-child .add-step-section-title {
+  margin-top: 0;
+}
+.add-step-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e8eaef;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  margin-bottom: 8px;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+.add-step-item:hover {
+  border-color: rgba(125, 51, 255, 0.45);
+  background: #faf8ff;
+  box-shadow: 0 2px 8px rgba(125, 51, 255, 0.08);
+}
+.add-step-item-full {
+  width: 100%;
+}
+.add-step-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.add-step-grid .add-step-item {
+  margin-bottom: 0;
+}
+.add-step-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.add-step-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1f36;
+  line-height: 1.35;
+  text-align: left;
+}
+.step-icon-purple { background: linear-gradient(135deg, #7d33ff, #a855f7); }
+.step-icon-amber { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.step-icon-blue { background: linear-gradient(135deg, #0ea5e9, #38bdf8); }
+.step-icon-slate { background: linear-gradient(135deg, #64748b, #94a3b8); }
+.step-icon-green { background: linear-gradient(135deg, #22c55e, #4ade80); }
+.step-icon-pink { background: linear-gradient(135deg, #ec4899, #f472b6); }
+.step-icon-orange { background: linear-gradient(135deg, #f97316, #fb923c); }
+.step-icon-cyan { background: linear-gradient(135deg, #0891b2, #22d3ee); }
+.step-icon-violet { background: linear-gradient(135deg, #7c3aed, #a78bfa); }
+.step-icon-sky { background: linear-gradient(135deg, #0284c7, #38bdf8); }
+/* ── 表格区域 ── */
+.table-wrap {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 16px 24px 20px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #eaecf4;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.table-title-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid #f0f2f7;
+  flex-shrink: 0;
+}
+.table-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.table-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1f36;
+}
+.table-count {
+  font-size: 12px;
+  color: #a0aab8;
+}
+.table-count b { color: #7d33ff; }
+
+.batch-select-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #3c4257;
+}
+.batch-select-text b {
+  color: #7d33ff;
+  font-weight: 700;
+}
+
+.batch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 12px;
+  background: #faf8ff;
+  border: 1px solid #ede7fc;
+  border-radius: 8px;
+}
+.batch-tool-btn {
+  font-size: 13px !important;
+  color: #3c4257 !important;
+}
+.batch-tool-danger {
+  color: #cf1322 !important;
+}
+.batch-toolbar-close {
+  margin-left: auto;
+  color: #a0aab8 !important;
+}
+
+/* 表格列定义 */
+/* 表格列定义 */
+.t-head, .t-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 72px 90px 120px 100px 110px 100px;
+  align-items: center;
+  padding: 0 16px;
+  gap: 6px;
+}
+
+.tc-check {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 44px;
+  flex-shrink: 0;
+}
+
+.t-head {
+  background: #fafbfc;
+  border-bottom: 1px solid #f0f2f7;
+  font-size: 12px;
+  color: #8792a2;
+  font-weight: 600;
+  min-height: 42px;
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+}
+
+.t-row {
+  border-bottom: 1px solid #f5f7fa;
+  cursor: pointer;
+  transition: background 0.12s;
+  min-height: 56px;
+  font-size: 13px;
+  color: #3c4257;
+}
+.t-row:last-child { border-bottom: none; }
+.t-row:hover { background: #faf8ff; }
+.t-row.selected { background: rgba(125,51,255,0.04); }
+
+/* 场景名称列 */
+.row-name-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.row-name {
+  font-weight: 600;
+  color: #1a1f36;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  transition: color 0.15s;
+}
+.row-desc {
+  font-size: 11px;
+  color: #a0aab8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 优先级 badge */
+.p-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 6px;
+}
+.p-badge::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.p-badge.p0 { background: #fff1f0; color: #cf1322; }
+.p-badge.p0::before { background: #ff4d4f; box-shadow: 0 0 4px rgba(255,77,79,0.5); }
+.p-badge.p1 { background: #fff7e6; color: #d46b08; }
+.p-badge.p1::before { background: #fa8c16; box-shadow: 0 0 4px rgba(250,140,22,0.5); }
+.p-badge.p2 { background: #feffe6; color: #7c6e00; }
+.p-badge.p2::before { background: #fadb14; box-shadow: 0 0 4px rgba(250,219,20,0.5); }
+.p-badge.p3 { background: #f6ffed; color: #389e0d; }
+.p-badge.p3::before { background: #52c41a; box-shadow: 0 0 4px rgba(82,196,26,0.5); }
+
+/* 标签 */
+.tag-chip {
+  background: #f0f2f7;
+  color: #5c6676;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+/* 环境 */
+.env-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e6f7ff;
+  color: #096dd9;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  border: 1px solid #bae7ff;
+  white-space: nowrap;
+}
+
+/* 运行结果 */
+.r-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.r-badge.passed  { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+.r-badge.failed  { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
+.r-badge.running { background: #e6f7ff; color: #096dd9; border: 1px solid #91d5ff; }
+
+/* 创建人 */
+.creator-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #5c6676;
+}
+.creator-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7d33ff, #5b21b6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dash { color: #d0d5e0; font-size: 14px; }
+
+.tc-name {
+  cursor: pointer;
+}
+.tc-name:hover .row-name {
+  color: #7d33ff;
+}
+
+/* 空状态 */
+.t-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 0;
+  gap: 12px;
+}
+.empty-illustration { margin-bottom: 4px; }
+.empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #3c4257;
+}
+.empty-desc {
+  font-size: 13px;
+  color: #a0aab8;
+}
+.new-btn-inline {
+  margin-top: 4px;
+  background: linear-gradient(135deg, #7d33ff, #5b21b6) !important;
+  border: none !important;
+  border-radius: 7px !important;
+  box-shadow: 0 3px 10px rgba(125,51,255,0.3) !important;
+}
+
+/* ════════════════════════════════════════
+   欢迎页 — 对齐 InterfaceTest 风格
+════════════════════════════════════════ */
+.welcome-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f0f2f5;
+  overflow: auto;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.welcome-content-wrapper {
+  width: 100%;
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+.welcome-main-card {
+  width: 100%;
+  max-width: 520px;
+  padding: 48px 40px;
+  text-align: center;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  border: 1px solid #e8eaef;
+  position: relative;
+  overflow: hidden;
+}
+.welcome-main-card::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 180px; height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 70%);
+  pointer-events: none;
+}
+.welcome-logo-box {
+  width: 64px; height: 64px;
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  border-radius: 16px;
+  margin: 0 auto 20px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 20px; font-weight: 900;
+  box-shadow: 0 8px 24px rgba(99,102,241,0.35), 0 0 0 8px rgba(99,102,241,0.1);
+  letter-spacing: 1px;
+  position: relative;
+  z-index: 1;
+}
+.welcome-title {
+  font-size: 22px; font-weight: 700; color: #111827;
+  margin-bottom: 10px; letter-spacing: -0.02em; position: relative; z-index: 1;
+}
+.welcome-desc {
+  font-size: 14px; color: #6b7280;
+  margin-bottom: 24px; line-height: 1.6; position: relative; z-index: 1;
+}
+.welcome-actions {
+  display: flex; gap: 12px; justify-content: center; position: relative; z-index: 1;
+}
+.welcome-btn-primary {
+  background: linear-gradient(135deg, #6366f1, #818cf8) !important;
+  border: none !important; border-radius: 9px !important;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.35) !important;
+}
+.welcome-btn-secondary {
+  border-radius: 9px !important;
+}
+.welcome-quick-guide {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  width: 100%;
+}
+.welcome-guide-item {
+  background: #fff;
+  padding: 20px;
+  border-radius: 14px;
+  display: flex;
+  gap: 14px;
+  border: 1px solid #efeff5;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  transition: all 0.22s ease;
+  cursor: default;
+}
+.welcome-guide-item:hover {
+  box-shadow: 0 8px 24px rgba(99,102,241,0.08);
+  transform: translateY(-3px);
+  border-color: rgba(99,102,241,0.18);
+}
+.welcome-guide-icon {
+  width: 40px; height: 40px;
+  background: rgba(99,102,241,0.08);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.22s ease;
+}
+.welcome-guide-item:hover .welcome-guide-icon {
+  transform: scale(1.1) rotate(-5deg);
+}
+.welcome-guide-text h3 { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 4px; }
+.welcome-guide-text p  { font-size: 12px; color: #6b7280; line-height: 1.55; }
+
+/* ════════════════════════════════════════
+   测试报告视图
+════════════════════════════════════════ */
+.rpt-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rpt-scope-tabs {
+  display: flex;
+  background: #f0f2f7;
+  border-radius: 7px;
+  padding: 3px;
+  gap: 2px;
+}
+.rpt-scope-btn {
+  padding: 4px 14px;
+  border: none;
+  background: none;
+  border-radius: 5px;
+  font-size: 13px;
+  color: #8792a2;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+.rpt-scope-btn.active {
+  background: #fff;
+  color: #1a1f36;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.rpt-spin-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.arc-root { padding: 0 4px 8px; }
+.arc-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.arc-meta { font-size: 12px; color: #8792a2; margin-left: 4px; }
+.arc-entry {
+  border: 1px solid #eaecf4;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: #fafbff;
+}
+.arc-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.arc-pass { font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; }
+.arc-pass.ok { color: #16a34a; background: #f0fdf4; }
+.arc-pass.bad { color: #dc2626; background: #fef2f2; }
+.arc-name { font-weight: 600; color: #1a1f36; flex: 1; min-width: 0; }
+.arc-code { font-family: ui-monospace, monospace; font-size: 12px; color: #4f5b76; }
+.arc-ms { font-size: 12px; color: #8792a2; }
+.arc-url {
+  font-size: 12px;
+  color: #697386;
+  margin-top: 6px;
+  word-break: break-all;
+}
+.arc-body-snippet {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: #1a1f36;
+  color: #e8eaef;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.arc-err { margin-top: 8px; font-size: 12px; color: #dc2626; }
+
+.batch-run-body { padding: 4px 0 8px; }
+.batch-run-hint {
+  font-size: 13px;
+  color: #697386;
+  line-height: 1.55;
+  margin-bottom: 16px;
+}
+.batch-run-phase {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1f36;
+  margin-bottom: 4px;
+}
+.batch-run-detail {
+  font-size: 12px;
+  color: #8792a2;
+  margin-bottom: 12px;
+}
+.batch-run-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.batch-run-sc-count { font-size: 12px; color: #a0aab8; }
+
+.rpt-table-wrap {
+  flex: 1;
+  margin: 0 24px 20px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #eaecf4;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.rpt-head {
+  display: grid;
+  grid-template-columns: 1fr 140px 220px 80px;
+  padding: 0 20px;
+  min-height: 42px;
+  align-items: center;
+  background: #fafbfc;
+  border-bottom: 1px solid #f0f2f7;
+  font-size: 12px;
+  color: #8792a2;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.rpt-col-status { display: flex; align-items: center; }
+.rpt-row {
+  display: grid;
+  grid-template-columns: 1fr 140px 220px 80px;
+  padding: 12px 20px;
+  align-items: center;
+  border-bottom: 1px solid #f5f7fa;
+  transition: background 0.12s;
+  min-height: 60px;
+}
+.rpt-row:hover { background: #fafbff; }
+.rpt-row:last-child { border-bottom: none; }
+
+.rpt-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.rpt-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1f36;
+}
+.rpt-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: #a0aab8;
+  flex-wrap: wrap;
+}
+.rpt-meta span::after { content: ''; }
+
+.rpt-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.rpt-status-badge.done { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+.rpt-status-badge.running { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.rpt-status-badge.failed { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+.rpt-result-line {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.8;
+}
+.rpt-success { color: #16a34a; font-weight: 600; }
+.rpt-fail    { color: #dc2626; font-weight: 600; }
+.rpt-skip    { color: #a0aab8; font-weight: 600; }
+
+.rpt-col-op {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.rpt-row:hover .rpt-col-op { opacity: 1; }
+
+.rpt-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 0;
+}
+.rpt-empty-icon {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  background: #f5f6fb;
+  display: flex; align-items: center; justify-content: center;
+}
+.rpt-empty-text { font-size: 14px; color: #a0aab8; }
+
+/* ════════════════════════════════════════
+   定时任务视图
+════════════════════════════════════════ */
+.runner-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 24px;
+  padding: 10px 16px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #7c5800;
+  flex-shrink: 0;
+}
+.runner-link {
+  color: #7d33ff;
+  text-decoration: none;
+  font-weight: 500;
+}
+.runner-link:hover { text-decoration: underline; }
+
+.scheduled-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px 10px;
+  flex-shrink: 0;
+}
+.new-btn-scheduled {
+  background: #7d33ff !important;
+  border-color: #7d33ff !important;
+  border-radius: 7px !important;
+}
+
+.scheduled-table {
+  flex: 1;
+  margin: 0 24px 20px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #eaecf4;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.st-head {
+  display: grid;
+  grid-template-columns: 1fr 120px 200px;
+  padding: 0 20px;
+  min-height: 42px;
+  align-items: center;
+  background: #fafbfc;
+  border-bottom: 1px solid #f0f2f7;
+  font-size: 12px;
+  color: #8792a2;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.st-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 0;
+}
+.st-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #f5f6fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.st-empty-text {
+  font-size: 14px;
+  color: #a0aab8;
+}
+.st-empty-link {
+  font-size: 13px;
+  color: #7d33ff;
+  text-decoration: none;
+}
+.st-empty-link:hover { text-decoration: underline; }
+
+/* 弹窗 header */
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1f36;
+}
+.modal-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.modal-icon.create { background: rgba(125,51,255,0.1); color: #7d33ff; }
+.modal-icon.edit   { background: rgba(22,119,255,0.1); color: #1677ff; }
+</style>

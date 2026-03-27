@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  mysql_final:
+    image: mysql:8.0
+    container_name: ai_platform_mysql_v1
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: ai_automation_db
+    ports:
+      - "3308:3306"
+    volumes:
+      - ./docker/mysql/init_rbac_full.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+    networks:
+      - ai_platform_net
+
+  redis_final:
+    image: redis:6.2-alpine
+    container_name: ai_platform_redis_v1
+    ports:
+      - "6380:6379"
+    networks:
+      - ai_platform_net
+
+  mgmt_api_final:
+    build: ./mgmt-api
+    container_name: ai_platform_mgmt_v1
+    environment:
+      - DB_HOST=mysql_final
+      - DB_USER=root
+      - DB_PASS=root_password
+      - DB_NAME=ai_automation_db
+      - JWT_SECRET=ai_platform_secret
+      - REDIS_HOST=redis_final
+      - EXEC_ENGINE_URL=http://exec_engine_final:8000
+    ports:
+      - "3011:3000"
+    depends_on:
+      - mysql_final
+      - redis_final
+    networks:
+      - ai_platform_net
+
+  exec_engine_final:
+    build: ./exec-engine
+    container_name: ai_platform_exec_v1
+    environment:
+      - DEEPSEEK_API_KEY=sk-f81a4e86456c462a8186b1b3f6afe902
+      - DB_HOST=mysql_final
+      - DB_USER=root
+      - DB_PASS=root_password
+      - DB_NAME=ai_automation_db
+    ports:
+      - "8010:8000"
+    depends_on:
+      - mysql_final
+      - redis_final
+    networks:
+      - ai_platform_net
+
+  frontend_final:
+    build: ./frontend
+    container_name: ai_platform_fe_v1
+    ports:
+      - "3010:80"
+    depends_on:
+      - mgmt_api_final
+    networks:
+      - ai_platform_net
+
+networks:
+  ai_platform_net:
+    driver: bridge
