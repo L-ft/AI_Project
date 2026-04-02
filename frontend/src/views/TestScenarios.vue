@@ -529,6 +529,70 @@
                             class="step-filter-method"
                             :consistent-menu-width="false"
                           />
+                          <n-popover
+                            v-model:show="addStepPopoverShow"
+                            trigger="click"
+                            placement="bottom-end"
+                            :flip="true"
+                            :show-arrow="false"
+                            to="body"
+                            :z-index="4000"
+                            raw
+                            class="add-step-popover-trigger"
+                          >
+                            <template #trigger>
+                              <n-button type="primary" class="step-filter-add-btn">
+                                <template #icon><n-icon :component="PlusOutlined" /></template>
+                                添加步骤
+                              </n-button>
+                            </template>
+                            <div class="add-step-menu" @click.stop>
+                              <div class="add-step-section">
+                                <div class="add-step-section-title">HTTP 请求与导入</div>
+                                <div
+                                  v-for="item in addStepRequestItems"
+                                  :key="item.key"
+                                  class="add-step-item add-step-item-full"
+                                  @click="handleAddStepItem(item)"
+                                >
+                                  <span :class="['add-step-icon', item.iconBg]">
+                                    <n-icon :component="item.icon" :size="16" />
+                                  </span>
+                                  <span class="add-step-label">{{ item.label }}</span>
+                                </div>
+                              </div>
+                              <div class="add-step-section">
+                                <div class="add-step-section-title">流程与工具</div>
+                                <div class="add-step-grid">
+                                  <div
+                                    v-for="item in addStepOtherItems"
+                                    :key="item.key"
+                                    class="add-step-item"
+                                    @click="handleAddStepItem(item)"
+                                  >
+                                    <span :class="['add-step-icon', item.iconBg]">
+                                      <n-icon :component="item.icon" :size="16" />
+                                    </span>
+                                    <span class="add-step-label">{{ item.label }}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div class="add-step-section">
+                                <div class="add-step-section-title">场景引用</div>
+                                <div
+                                  v-for="item in addStepScenarioItems"
+                                  :key="item.key"
+                                  class="add-step-item add-step-item-full"
+                                  @click="handleAddStepItem(item)"
+                                >
+                                  <span :class="['add-step-icon', item.iconBg]">
+                                    <n-icon :component="item.icon" :size="16" />
+                                  </span>
+                                  <span class="add-step-label">{{ item.label }}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </n-popover>
                         </div>
                         <div class="step-stat-grid">
                           <div class="step-stat-card">
@@ -597,72 +661,6 @@
                             </div>
                           </div>
                         </n-scrollbar>
-                        <div class="step-list-footer">
-                          <n-popover
-                            v-model:show="addStepPopoverShow"
-                            trigger="click"
-                            placement="top-start"
-                            :flip="false"
-                            :show-arrow="false"
-                            to="body"
-                            :z-index="4000"
-                            raw
-                            class="add-step-popover-trigger"
-                          >
-                            <template #trigger>
-                              <n-button type="primary" dashed block class="step-add-footer-btn">
-                                <template #icon><n-icon :component="PlusOutlined" /></template>
-                                添加步骤
-                              </n-button>
-                            </template>
-                            <div class="add-step-menu" @click.stop>
-                              <div class="add-step-section">
-                                <div class="add-step-section-title">HTTP 请求与导入</div>
-                                <div
-                                  v-for="item in addStepRequestItems"
-                                  :key="item.key"
-                                  class="add-step-item add-step-item-full"
-                                  @click="handleAddStepItem(item)"
-                                >
-                                  <span :class="['add-step-icon', item.iconBg]">
-                                    <n-icon :component="item.icon" :size="16" />
-                                  </span>
-                                  <span class="add-step-label">{{ item.label }}</span>
-                                </div>
-                              </div>
-                              <div class="add-step-section">
-                                <div class="add-step-section-title">流程与工具</div>
-                                <div class="add-step-grid">
-                                  <div
-                                    v-for="item in addStepOtherItems"
-                                    :key="item.key"
-                                    class="add-step-item"
-                                    @click="handleAddStepItem(item)"
-                                  >
-                                    <span :class="['add-step-icon', item.iconBg]">
-                                      <n-icon :component="item.icon" :size="16" />
-                                    </span>
-                                    <span class="add-step-label">{{ item.label }}</span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div class="add-step-section">
-                                <div class="add-step-section-title">场景引用</div>
-                                <div
-                                  v-for="item in addStepScenarioItems"
-                                  :key="item.key"
-                                  class="add-step-item add-step-item-full"
-                                  @click="handleAddStepItem(item)"
-                                >
-                                  <span :class="['add-step-icon', item.iconBg]">
-                                    <n-icon :component="item.icon" :size="16" />
-                                  </span>
-                                  <span class="add-step-label">{{ item.label }}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </n-popover>
-                        </div>
                       </aside>
                       <div v-if="detailStepCount === 0" class="step-editor-panel">
                         <n-spin :show="stepEditorLoading">
@@ -7240,19 +7238,6 @@ onUnmounted(() => {
   background: #fff;
   min-height: 520px;
 }
-.step-list-sidebar::before {
-  content: '';
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  align-self: stretch;
-  margin: 8px 0 0 12px;
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(250, 251, 255, 0.96) 0%, rgba(245, 247, 255, 0.92) 100%);
-  border: 1px solid #edf1fb;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  pointer-events: none;
-}
 /* 空状态下 sidebar 固定 286px */
 .detail-steps-workspace.workspace-empty .step-list-sidebar {
   flex: 0 0 286px;
@@ -7290,45 +7275,60 @@ onUnmounted(() => {
 .step-toolbar-action-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 18px 14px 0 26px;
+  gap: 8px;
+  padding: 14px 14px 0 14px;
   grid-column: 1;
   position: relative;
   z-index: 1;
   align-self: start;
   align-content: flex-start;
+  margin: 8px 0 0 12px;
+  border-left: 1px solid #f3f5fb;
+  border-right: 1px solid #f3f5fb;
+  background: linear-gradient(180deg, rgba(252, 253, 255, 0.92) 0%, rgba(248, 250, 255, 0.88) 100%);
 }
 .step-toolbar-action-row:not(.secondary)::before {
   content: '快捷操作';
   flex-basis: 100%;
-  margin-bottom: 2px;
-  font-size: 11px;
+  margin-bottom: 0;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #7c89a8;
+  text-transform: uppercase;
 }
 .step-toolbar-action-row.secondary {
   padding-top: 0;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
   margin-top: 0;
   align-self: start;
+  border-top: none;
+  border-bottom: 1px solid #f3f5fb;
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.step-toolbar-action-row:not(.secondary) {
+  border-top: 1px solid #f3f5fb;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
 }
 .step-link-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid #d4dbf1;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #dde3f2;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 11px;
   font-weight: 600;
   line-height: 1;
   color: #5b5bd6;
   text-align: center;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
   backdrop-filter: blur(6px);
   transition:
     border-color 0.18s ease,
@@ -7340,7 +7340,7 @@ onUnmounted(() => {
 .step-link-btn:hover {
   border-color: rgba(125, 51, 255, 0.28);
   background: rgba(255, 255, 255, 1);
-  box-shadow: 0 8px 20px rgba(125, 51, 255, 0.08);
+  box-shadow: 0 6px 16px rgba(125, 51, 255, 0.06);
   transform: translateY(-1px);
 }
 .step-link-btn.primary {
@@ -7373,7 +7373,7 @@ onUnmounted(() => {
 .step-toolbar-action-row .step-link-btn.muted:not(:disabled):hover {
   border-color: rgba(245, 158, 11, 0.42);
   background: rgba(255, 247, 237, 1);
-  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.1);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.08);
 }
 .step-toolbar-action-row.secondary .step-link-btn:last-child:not(:disabled) {
   color: #b91c1c;
@@ -7383,7 +7383,7 @@ onUnmounted(() => {
 .step-toolbar-action-row.secondary .step-link-btn:last-child:not(:disabled):hover {
   border-color: rgba(239, 68, 68, 0.42);
   background: rgba(254, 242, 242, 1);
-  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.1);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.08);
 }
 .step-toolbar-spotlight {
   display: none;
@@ -7420,40 +7420,97 @@ onUnmounted(() => {
 }
 .step-filter-bar {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid #eaecf4;
   grid-column: 1 / -1;
   margin-top: 2px;
 }
 .step-filter-search {
-  flex: 1;
+  flex: 0 1 560px;
+  max-width: 560px;
+  margin-right: auto;
+}
+.step-filter-search :deep(.n-input) {
+  --n-height: 32px !important;
+}
+.step-filter-search :deep(.n-input-wrapper) {
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 255, 0.92) 100%) !important;
+}
+.step-filter-search :deep(.n-input__border),
+.step-filter-search :deep(.n-input__state-border) {
+  border-radius: 999px !important;
+}
+.step-filter-search :deep(.n-input__input-el) {
+  font-size: 11px;
 }
 .step-filter-method {
-  width: 112px;
+  width: 128px;
+  flex: 0 0 128px;
+}
+.step-filter-method :deep(.n-base-selection) {
+  min-height: 32px !important;
+  border-radius: 999px !important;
+  border-color: rgba(125, 51, 255, 0.12) !important;
+  box-shadow: none !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(246, 248, 255, 0.92) 100%) !important;
+}
+.step-filter-method :deep(.n-base-selection:hover) {
+  border-color: rgba(125, 51, 255, 0.22) !important;
+}
+.step-filter-method :deep(.n-base-selection-label) {
+  padding-left: 12px !important;
+  padding-right: 28px !important;
+  font-size: 11px !important;
+  color: #667085 !important;
+}
+.step-filter-method :deep(.n-base-selection-arrow) {
+  color: #98a2b3 !important;
+}
+.step-filter-add-btn {
+  height: 32px;
+  min-width: 112px;
+  padding: 0 16px;
+  border: 1px solid rgba(125, 51, 255, 0.16) !important;
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(125, 51, 255, 0.08) 100%) !important;
+  color: #6d28d9 !important;
+  box-shadow: 0 1px 2px rgba(125, 51, 255, 0.05) !important;
+  white-space: nowrap;
+}
+.step-filter-add-btn:hover {
+  border-color: rgba(125, 51, 255, 0.28) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(125, 51, 255, 0.12) 100%) !important;
+  box-shadow: 0 6px 16px rgba(125, 51, 255, 0.08) !important;
+}
+.step-filter-add-btn:active {
+  transform: translateY(0);
 }
 .step-stat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 12px 12px 0 0;
+  gap: 6px;
+  padding: 10px 12px 0 0;
   border-bottom: none;
   grid-column: 2;
   grid-row: 1 / span 2;
   align-self: center;
 }
 .step-stat-card {
-  border: 1px solid #edf1f7;
+  border: 1px solid #f1f4f9;
   border-radius: 12px;
-  padding: 10px 12px;
-  background: linear-gradient(180deg, rgba(251, 252, 255, 0.92) 0%, rgba(255, 255, 255, 0.96) 100%);
+  padding: 8px 10px;
+  background: linear-gradient(180deg, rgba(252, 253, 255, 0.84) 0%, rgba(255, 255, 255, 0.94) 100%);
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 54px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+  gap: 10px;
+  min-height: 48px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.015);
   position: relative;
   overflow: hidden;
 }
@@ -7465,7 +7522,7 @@ onUnmounted(() => {
   bottom: 10px;
   width: 3px;
   border-radius: 999px;
-  background: #d7deee;
+  background: #dde4f0;
 }
 .step-stat-card.ok {
   background: linear-gradient(180deg, rgba(248, 252, 249, 0.94) 0%, rgba(255, 255, 255, 0.98) 100%);
@@ -7486,13 +7543,13 @@ onUnmounted(() => {
   background: #c9d3e6;
 }
 .step-stat-label {
-  font-size: 11px;
+  font-size: 10px;
   color: #71829b;
   white-space: nowrap;
   padding-left: 2px;
 }
 .step-stat-value {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
   color: #0f172a;
   letter-spacing: -0.02em;
@@ -8506,13 +8563,12 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
     row-gap: 0;
   }
-  .step-list-sidebar::before {
-    display: none;
-  }
   .step-toolbar-action-row,
   .step-toolbar-action-row.secondary {
     grid-column: 1;
+    margin-left: 12px;
     padding-left: 12px;
+    padding-right: 12px;
   }
   .step-stat-grid {
     grid-column: 1;
