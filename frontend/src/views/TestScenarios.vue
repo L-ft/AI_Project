@@ -462,7 +462,8 @@
                     type="button"
                     @click="detailMainTab = t.key"
                   >
-                    {{ t.label }}
+                    <span>{{ t.label }}</span>
+                    <span v-if="t.key === 'steps'" class="dpt-tab-count">{{ detailStepCount }}</span>
                     <span v-if="detailMainTab === t.key" class="dpt-underline" />
                   </button>
                 </div>
@@ -481,6 +482,7 @@
                           <div class="step-toolbar-title-box">
                             <span class="step-toolbar-eyebrow">场景编排</span>
                             <span class="step-toolbar-title">测试步骤</span>
+                            <span class="step-toolbar-caption">{{ detailScenario?.name || '当前场景' }} · 共 {{ detailStepCount }} 步</span>
                           </div>
                           <n-select
                             v-model:value="detailEnvId"
@@ -492,15 +494,29 @@
                           />
                         </div>
                         <div class="step-toolbar-action-row">
-                          <button type="button" class="step-link-btn" @click="openStepWizard">步骤向导</button>
+                          <button type="button" class="step-link-btn primary" @click="openStepWizard">快速引导</button>
                           <button type="button" class="step-link-btn muted" :disabled="stepBulkSelectedCount === 0" @click="removeCheckedScenarioSteps">删除所选</button>
                           <button type="button" class="step-link-btn" @click="runScenarioSteps('current')">从当前执行</button>
-                          <button type="button" class="step-link-btn" @click="runScenarioSteps('all')">运行全部</button>
+                          <button type="button" class="step-link-btn" @click="runScenarioSteps('all')">全部执行</button>
                         </div>
                         <div class="step-toolbar-action-row secondary">
                           <button type="button" class="step-link-btn" @click="syncSelectedScenarioStep">同步配置</button>
-                          <button type="button" class="step-link-btn" @click="runScenarioSteps('failed')">仅失败重跑</button>
+                          <button type="button" class="step-link-btn" @click="runScenarioSteps('failed')">从失败处执行</button>
                           <button type="button" class="step-link-btn muted" :disabled="!stepScenarioRunning" @click="stopScenarioStepRun">停止运行</button>
+                        </div>
+                        <div class="step-toolbar-spotlight">
+                          <button type="button" class="step-spotlight-card" @click="openStepWizard">
+                            <span class="step-spotlight-title">快速引导</span>
+                            <span class="step-spotlight-desc">一键补齐认证、断言与变量提取</span>
+                          </button>
+                          <button type="button" class="step-spotlight-card" @click="runScenarioSteps('all')">
+                            <span class="step-spotlight-title">全部执行</span>
+                            <span class="step-spotlight-desc">按步骤顺序完整运行当前场景</span>
+                          </button>
+                          <button type="button" class="step-spotlight-card" @click="runScenarioSteps('failed')">
+                            <span class="step-spotlight-title">从失败处执行</span>
+                            <span class="step-spotlight-desc">只重跑最近失败的步骤</span>
+                          </button>
                         </div>
                         <div class="step-filter-bar">
                           <n-input v-model:value="stepListSearch" size="small" placeholder="搜索步骤名称、路径或方法" clearable class="step-filter-search">
@@ -648,9 +664,9 @@
                           </n-popover>
                         </div>
                       </aside>
-                      <div class="step-editor-panel">
+                      <div v-if="detailStepCount === 0" class="step-editor-panel">
                         <n-spin :show="stepEditorLoading">
-                          <div v-if="detailStepCount === 0" class="step-editor-placeholder">
+                          <div class="step-editor-placeholder">
                             <p>当前场景还没有测试步骤</p>
                             <p class="step-ph-sub">可在左侧添加 HTTP 请求，或通过导入接口、用例与 cURL 快速开始编排</p>
                             <div class="step-workspace-empty-actions">
@@ -659,12 +675,16 @@
                               <n-button quaternary @click="openImportCaseModal('debug')">从接口调试用例导入</n-button>
                             </div>
                           </div>
-                          <div v-else-if="selectedStepIndex === null" class="step-editor-placeholder">
-                            请从左侧列表选择一个步骤以查看与编辑
-                          </div>
-                          <div v-else class="step-editor-shell">
-                            <div class="step-editor-main">
-                              <div class="step-overview-card">
+                        </n-spin>
+                      </div>
+                      <Teleport to="body">
+                        <Transition name="step-detail-panel">
+                          <div v-if="detailStepCount > 0 && stepDetailDrawerVisible" class="step-detail-fixed-drawer">
+                            <div class="step-editor-panel is-drawer">
+                              <n-spin :show="stepEditorLoading">
+                                <div class="step-editor-shell">
+                                  <div class="step-editor-main">
+                                    <div class="step-overview-card">
                                 <div class="step-overview-head">
                                   <div class="step-overview-title-group">
                                     <span class="step-overview-eyebrow">步骤概览</span>
@@ -675,14 +695,19 @@
                                   </div>
                                   <div class="step-overview-env">
                                     <span class="step-overview-env-label">运行环境</span>
-                                    <n-select
-                                      v-model:value="detailEnvId"
-                                      :options="envOptions"
-                                      size="small"
-                                      placeholder="请选择环境"
-                                      style="width: 180px"
-                                      :consistent-menu-width="false"
-                                    />
+                                    <div class="step-overview-env-actions">
+                                      <n-select
+                                        v-model:value="detailEnvId"
+                                        :options="envOptions"
+                                        size="small"
+                                        placeholder="请选择环境"
+                                        style="width: 180px"
+                                        :consistent-menu-width="false"
+                                      />
+                                      <n-button quaternary circle size="small" @click="stepDetailDrawerVisible = false">
+                                        <template #icon><n-icon :component="CloseOutlined" /></template>
+                                      </n-button>
+                                    </div>
                                   </div>
                                 </div>
                                 <div class="step-overview-meta">
@@ -691,6 +716,12 @@
                                   <span class="step-overview-chip" v-if="stepEditorCaseId">用例 #{{ stepEditorCaseId }}</span>
                                   <span class="step-overview-chip" v-if="stepEditorInterfaceId">接口 #{{ stepEditorInterfaceId }}</span>
                                   <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
+                                </div>
+                                <div class="step-overview-actions">
+                                  <button type="button" class="step-overview-action" @click="openStepWizard">快速引导</button>
+                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('current')">从当前执行</button>
+                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('all')">全部执行</button>
+                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('failed')">从失败处执行</button>
                                 </div>
                               </div>
 
@@ -905,6 +936,13 @@
                               </n-tab-pane>
                               <n-tab-pane name="pre" tab="前置操作">
                                 <div class="step-tab-pane-inner step-pre-pane">
+                                  <div class="step-panel-section-head">
+                                    <div>
+                                      <div class="step-panel-section-title">请求前准备</div>
+                                      <div class="step-panel-section-desc">在请求发出前统一设置 Header、Query、变量、等待与脚本。</div>
+                                    </div>
+                                    <span class="step-panel-section-count">{{ stepEditorPreOps.length }} 项</span>
+                                  </div>
                                   <div class="step-pre-quick-add">
                                     <n-button size="tiny" quaternary @click="addStepPreOp('set_header')">新增 Header</n-button>
                                     <n-button size="tiny" quaternary @click="addStepPreOp('set_query')">新增 Query</n-button>
@@ -916,7 +954,10 @@
                                   <div v-else class="step-inline-op-list">
                                     <div v-for="(op, pi) in stepEditorPreOps" :key="op.id || `pre-${pi}`" class="step-inline-op-card">
                                       <div class="step-inline-op-head">
-                                        <strong>{{ stepPreOpTypeLabel(op.type) }}</strong>
+                                        <div class="step-inline-op-title-group">
+                                          <span class="step-inline-op-index">前置 {{ pi + 1 }}</span>
+                                          <strong>{{ stepPreOpTypeLabel(op.type) }}</strong>
+                                        </div>
                                         <n-button text type="error" size="tiny" @click="removeStepPreOp(pi)">删除</n-button>
                                       </div>
                                       <div v-if="op.type === 'wait'" class="step-inline-op-grid two-cols">
@@ -948,6 +989,17 @@
                               <n-tab-pane name="post" :tab="stepPostTabLabel">
                                 <div class="step-tab-pane-inner step-post-pane">
                                   <template v-if="stepEditorCaseId || isCurrentStepCustom || selectedStep?.source === 'interface'">
+                                    <div class="step-panel-section-head">
+                                      <div>
+                                        <div class="step-panel-section-title">响应校验与变量提取</div>
+                                        <div class="step-panel-section-desc">声明契约校验、断言与提取规则，让步骤执行结果更像真实测试面板。</div>
+                                      </div>
+                                      <div class="step-panel-section-tags">
+                                        <span class="step-panel-mini-tag">断言 {{ stepEditorAssertionOps.length }}</span>
+                                        <span class="step-panel-mini-tag">提取 {{ stepEditorExtractOps.length }}</span>
+                                        <span class="step-panel-mini-tag">其他 {{ stepEditorPostOpsOther.length }}</span>
+                                      </div>
+                                    </div>
                                     <div class="step-validate-response-bar">
                                       <div class="step-vr-left">
                                         <span class="step-vr-title">校验响应（契约测试）</span>
@@ -987,7 +1039,10 @@
                                     <div v-if="stepEditorAssertionOps.length > 0" class="step-inline-op-list">
                                       <div v-for="(op, pi) in stepEditorAssertionOps" :key="op.id || `assert-${pi}`" class="step-inline-op-card">
                                         <div class="step-inline-op-head">
-                                          <strong>响应断言</strong>
+                                          <div class="step-inline-op-title-group">
+                                            <span class="step-inline-op-index">断言 {{ pi + 1 }}</span>
+                                            <strong>响应断言</strong>
+                                          </div>
                                           <n-button text type="error" size="tiny" @click="removeStepAssertionOp(pi)">删除</n-button>
                                         </div>
                                         <div class="step-inline-op-grid three-cols">
@@ -1017,7 +1072,10 @@
                                     <div v-if="stepEditorExtractOps.length > 0" class="step-inline-op-list">
                                       <div v-for="(op, pi) in stepEditorExtractOps" :key="op.id || `post-${pi}`" class="step-inline-op-card">
                                         <div class="step-inline-op-head">
-                                          <strong>提取变量</strong>
+                                          <div class="step-inline-op-title-group">
+                                            <span class="step-inline-op-index">提取 {{ pi + 1 }}</span>
+                                            <strong>提取变量</strong>
+                                          </div>
                                           <n-button text type="error" size="tiny" @click="removeStepExtractOp(pi)">删除</n-button>
                                         </div>
                                         <div class="step-inline-op-grid three-cols">
@@ -1147,8 +1205,11 @@
                               </div>
                             </aside>
                           </div>
-                        </n-spin>
-                      </div>
+                              </n-spin>
+                            </div>
+                          </div>
+                        </Transition>
+                      </Teleport>
                     </div>
                   </template>
                   <template v-else-if="detailMainTab === 'report'">
@@ -4896,9 +4957,8 @@ watch(
     if (selectedStepIndex.value == null || selectedStepIndex.value >= n) {
       selectedStepIndex.value = 0
     }
-    if (scenarioPanelMode.value === 'detail' && detailMainTab.value === 'steps') {
-      stepDetailDrawerVisible.value = true
-    }
+    /* 切换场景后不自动弹出详情抽屉，避免整屏灰板挡操作；仅点击步骤时打开 */
+    stepDetailDrawerVisible.value = false
     loadScenarioStepEditor()
   },
   { deep: true }
@@ -4911,8 +4971,8 @@ watch(detailEnvId, () => {
 })
 
 watch(detailMainTab, (tab) => {
-  if (tab === 'steps' && scenarioPanelMode.value === 'detail' && detailStepCount.value > 0) {
-    stepDetailDrawerVisible.value = true
+  if (tab !== 'steps') {
+    stepDetailDrawerVisible.value = false
   }
 })
 
@@ -6474,6 +6534,20 @@ onUnmounted(() => {
   color: #8792a2;
   cursor: pointer;
 }
+.dpt-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(125, 51, 255, 0.1);
+  color: #7d33ff;
+  font-size: 11px;
+  font-weight: 700;
+}
 .dpt-btn:hover { color: #3c4257; }
 .dpt-btn.active { color: #7d33ff; font-weight: 600; }
 .dpt-underline {
@@ -7139,7 +7213,7 @@ onUnmounted(() => {
   overflow: auto;
 }
 
-/* ── 测试步骤：左列表 + 右 Apifox 风格编辑 ── */
+/* ── 测试步骤：左侧平铺 + 右侧抽屉详情 ── */
 .detail-steps-workspace {
   flex: 1;
   display: flex;
@@ -7149,18 +7223,28 @@ onUnmounted(() => {
   border-radius: 12px;
   background: #fff;
   overflow: hidden;
+  position: relative;
 }
+/* 空状态：sidebar 固定宽度 + 右侧展示引导 */
 .detail-steps-workspace.workspace-empty .step-editor-panel {
   background: #fafbfc;
 }
 .step-list-sidebar {
-  width: 286px;
-  flex-shrink: 0;
-  border-right: 1px solid #eaecf4;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #fafbfc;
+  background: #fff;
   min-height: 520px;
+}
+/* 空状态下 sidebar 固定 286px */
+.detail-steps-workspace.workspace-empty .step-list-sidebar {
+  flex: 0 0 286px;
+  width: 286px;
+  border-right: 1px solid #eaecf4;
+}
+.step-list-sidebar .step-list-scrollbar {
+  min-height: 360px;
 }
 .step-list-toolbar {
   display: flex;
@@ -7186,6 +7270,10 @@ onUnmounted(() => {
   font-weight: 700;
   color: #111827;
 }
+.step-toolbar-caption {
+  font-size: 11px;
+  color: #94a3b8;
+}
 .step-toolbar-env {
   width: 170px;
 }
@@ -7199,12 +7287,27 @@ onUnmounted(() => {
   padding-top: 8px;
 }
 .step-link-btn {
-  border: none;
-  background: transparent;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #e4e7f0;
+  border-radius: 999px;
+  background: #fff;
   font-size: 12px;
-  color: #6b4eff;
+  font-weight: 600;
+  color: #5b5bd6;
   cursor: pointer;
+  transition: all 0.18s ease;
+}
+.step-link-btn:hover {
+  border-color: rgba(125, 51, 255, 0.28);
+  background: rgba(125, 51, 255, 0.06);
+}
+.step-link-btn.primary {
+  border-color: #7d33ff;
+  background: linear-gradient(135deg, rgba(125, 51, 255, 0.14), rgba(125, 51, 255, 0.04));
 }
 .step-link-btn.muted {
   color: #94a3b8;
@@ -7212,6 +7315,39 @@ onUnmounted(() => {
 .step-link-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+.step-toolbar-spotlight {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 12px 4px;
+}
+.step-spotlight-card {
+  border: 1px solid #e6ebf5;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.step-spotlight-card:hover {
+  border-color: rgba(125, 51, 255, 0.28);
+  box-shadow: 0 10px 24px rgba(125, 51, 255, 0.1);
+  transform: translateY(-1px);
+}
+.step-spotlight-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1f2937;
+}
+.step-spotlight-desc {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #64748b;
 }
 .step-filter-bar {
   display: flex;
@@ -7428,25 +7564,76 @@ onUnmounted(() => {
   margin-top: 8px;
   justify-content: center;
 }
+/* 空状态右侧占位 */
 .step-editor-panel {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  min-height: 520px;
-  background: #fff;
+  background: #f5f7fb;
+  position: relative;
+  overflow: hidden;
 }
 .step-editor-panel :deep(.n-spin-content) {
   min-height: 100%;
   display: flex;
   flex-direction: column;
 }
-.step-editor-shell {
+.step-detail-panel-enter-active,
+.step-detail-panel-leave-active {
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.28s ease;
+}
+.step-detail-panel-enter-from,
+.step-detail-panel-leave-to {
+  transform: translateX(100%);
+  opacity: 1;
+}
+.step-detail-fixed-drawer {
+  position: fixed;
+  top: var(--header-height, 56px);
+  right: 0;
+  bottom: 0;
+  /* 只占视口右侧一条，不用 100vw，避免盖住中间步骤列表 */
+  width: min(920px, 55vw);
+  max-width: calc(100vw - 200px);
+  min-width: 360px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  box-sizing: border-box;
+  padding: 12px 12px 12px 0;
+  filter: drop-shadow(-8px 0 24px rgba(15, 23, 42, 0.12));
+}
+.step-detail-fixed-drawer > .step-editor-panel {
+  pointer-events: auto;
   flex: 1;
   min-height: 0;
+}
+.step-editor-panel.is-drawer {
+  height: 100%;
+  background: var(--color-bg-surface, #fff);
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle, #eaecf4);
+  border-radius: 12px 0 0 12px;
+}
+/* 步骤编辑内容卡片：填满右侧抽屉 */
+.step-editor-shell {
+  position: absolute;
+  inset: 12px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
-  height: 100%;
+  min-height: 0;
+  border: 1px solid #e2e8f2;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08), 0 1px 4px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+.step-editor-panel.is-drawer .step-editor-shell {
+  inset: 12px;
+  border-radius: 20px;
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 .step-editor-main {
   min-width: 0;
@@ -7526,6 +7713,11 @@ onUnmounted(() => {
   gap: 6px;
   align-items: flex-end;
 }
+.step-overview-env-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .step-overview-env-label {
   font-size: 12px;
   color: #64748b;
@@ -7548,6 +7740,29 @@ onUnmounted(() => {
   color: #0f766e;
   background: rgba(236, 253, 245, 0.9);
   border-color: #bbf7d0;
+}
+.step-overview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.step-overview-action {
+  border: 1px solid #d9e0ec;
+  background: rgba(255, 255, 255, 0.85);
+  color: #475569;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.step-overview-action:hover {
+  border-color: rgba(125, 51, 255, 0.3);
+  color: #7d33ff;
+  background: rgba(125, 51, 255, 0.06);
 }
 .step-link-summary {
   border: 1px solid #e6ebf5;
@@ -7904,6 +8119,48 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 12px;
 }
+.step-panel-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e6ebf5;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfcff 0%, #ffffff 100%);
+}
+.step-panel-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+}
+.step-panel-section-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #64748b;
+}
+.step-panel-section-count,
+.step-panel-mini-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(125, 51, 255, 0.08);
+  border: 1px solid rgba(125, 51, 255, 0.16);
+  color: #7d33ff;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.step-panel-section-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .step-pre-quick-add,
 .step-post-add-row {
   display: flex;
@@ -7927,6 +8184,25 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 10px;
+}
+.step-inline-op-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.step-inline-op-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.08);
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 700;
 }
 .step-inline-op-stack {
   display: flex;
@@ -8121,7 +8397,20 @@ onUnmounted(() => {
   }
 }
 @media (max-width: 1360px) {
+  .step-detail-fixed-drawer {
+    top: var(--header-height, 56px);
+    right: 0;
+    bottom: 0;
+    width: min(100%, 520px);
+    max-width: calc(100vw - 16px);
+    min-width: 0;
+    padding: 8px 8px 8px 0;
+  }
+  .step-toolbar-spotlight {
+    grid-template-columns: 1fr;
+  }
   .step-editor-shell {
+    inset: 8px;
     grid-template-columns: 1fr;
   }
   .step-response-side {
@@ -8135,6 +8424,18 @@ onUnmounted(() => {
   }
   .step-overview-env {
     align-items: stretch;
+  }
+  .step-overview-env-actions {
+    width: 100%;
+  }
+  .step-overview-env-actions :deep(.n-base-selection) {
+    flex: 1;
+  }
+  .step-panel-section-head {
+    flex-direction: column;
+  }
+  .step-panel-section-tags {
+    justify-content: flex-start;
   }
 }
 .detail-steps-head {
