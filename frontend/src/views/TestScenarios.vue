@@ -57,60 +57,115 @@
         </div>
       </div>
 
-      <!-- ══ 欢迎页（首次进入） ══ -->
-      <div v-if="activeView === 'welcome'" class="welcome-container">
-          <div class="welcome-content-wrapper">
-            <div class="welcome-main-card">
-              <div class="welcome-logo-box">TS</div>
-              <h1 class="welcome-title">欢迎使用自动化测试</h1>
-              <p class="welcome-desc">从左侧选择场景，或新建一个测试场景开始自动化测试之旅</p>
-              <div class="welcome-actions">
-                <n-button type="primary" size="medium" class="welcome-btn-primary" @click="enterScenarioList(); openCreateModal()">
-                  <template #icon><n-icon :component="PlusOutlined" /></template>
+      <!-- ══ 欢迎页（首次进入） — 布局与动画对齐 InterfaceTest 欢迎页 ══ -->
+      <transition name="it-fade" mode="out-in">
+        <div v-if="activeView === 'welcome'" key="ts-welcome" class="welcome-container">
+          <div class="it-welcome-wrap">
+            <div class="it-hero">
+              <div class="it-hero-glow-ring it-hero-ring-3"></div>
+              <div class="it-hero-glow-ring it-hero-ring-2"></div>
+              <div class="it-hero-glow-ring it-hero-ring-1"></div>
+              <div class="it-hero-icon-box">
+                <n-icon :component="ThunderboltOutlined" :size="32" class="it-hero-icon" />
+              </div>
+              <h2 class="it-hero-title">欢迎使用自动化测试</h2>
+              <p class="it-hero-sub">从左侧选择场景，或新建一个测试场景开始自动化测试之旅</p>
+              <div class="it-hero-actions">
+                <button type="button" class="it-hero-btn it-hero-btn--primary" @click="enterScenarioList(); openCreateModal()">
+                  <n-icon :component="PlusOutlined" :size="14" />
                   新建测试场景
-                </n-button>
-                <n-button size="medium" class="welcome-btn-secondary" @click="activeView = 'scheduled'">
-                  <template #icon>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-                  </template>
+                </button>
+                <button type="button" class="it-hero-btn it-hero-btn--ghost" @click="activeView = 'scheduled'">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
                   新建定时任务
-                </n-button>
+                </button>
               </div>
             </div>
-            <div class="welcome-quick-guide">
-              <div class="welcome-guide-item">
-                <div class="welcome-guide-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7d33ff" stroke-width="2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+
+            <div class="it-stats-row">
+              <div class="it-stat-card it-stat-card--blue">
+                <div class="it-stat-icon">
+                  <n-icon :component="ThunderboltOutlined" :size="22" />
                 </div>
-                <div class="welcome-guide-text">
-                  <h3>批量执行</h3>
-                  <p>一键运行全部场景，自动生成测试报告</p>
+                <div class="it-stat-body">
+                  <div class="it-stat-num">{{ scenarios.length }}</div>
+                  <div class="it-stat-label">全部场景</div>
+                </div>
+                <div class="it-stat-trend it-stat-trend--up">↑</div>
+              </div>
+              <div class="it-stat-card it-stat-card--green">
+                <div class="it-stat-icon">
+                  <n-icon :component="CheckCircleOutlined" :size="22" />
+                </div>
+                <div class="it-stat-body">
+                  <div class="it-stat-num">{{ scenarios.filter(s => s.last_result?.status === 'passed').length }}</div>
+                  <div class="it-stat-label">最近通过</div>
+                </div>
+                <div class="it-stat-trend it-stat-trend--up">↑</div>
+              </div>
+              <div class="it-stat-card it-stat-card--rose">
+                <div class="it-stat-icon">
+                  <n-icon :component="CloseCircleOutlined" :size="22" />
+                </div>
+                <div class="it-stat-body">
+                  <div class="it-stat-num">{{ scenarios.filter(s => s.last_result?.status === 'failed').length }}</div>
+                  <div class="it-stat-label">最近失败</div>
+                </div>
+                <div class="it-stat-trend it-stat-trend--down">↓</div>
+              </div>
+              <div class="it-stat-card it-stat-card--purple">
+                <div class="it-stat-icon">
+                  <n-icon :component="ClockCircleOutlined" :size="22" />
+                </div>
+                <div class="it-stat-body">
+                  <div class="it-stat-num">{{ scenarios.filter(s => s.last_result?.status === 'running').length }}</div>
+                  <div class="it-stat-label">运行中</div>
+                </div>
+                <div class="it-stat-trend it-stat-trend--up">↑</div>
+              </div>
+            </div>
+
+            <div class="it-feature-row">
+              <div class="it-feat-card it-feat-card--debug">
+                <div class="it-feat-card-bg"></div>
+                <div class="it-feat-icon-wrap">
+                  <n-icon :component="ThunderboltOutlined" :size="28" />
+                </div>
+                <h3 class="it-feat-title">批量执行</h3>
+                <p class="it-feat-desc">一键运行全部场景，自动生成测试报告</p>
+                <div class="it-feat-arrow">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </div>
               </div>
-              <div class="welcome-guide-item">
-                <div class="welcome-guide-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+              <div class="it-feat-card it-feat-card--mock">
+                <div class="it-feat-card-bg"></div>
+                <div class="it-feat-icon-wrap">
+                  <n-icon :component="ClockCircleOutlined" :size="28" />
                 </div>
-                <div class="welcome-guide-text">
-                  <h3>定时调度</h3>
-                  <p>设置 Cron 表达式，定时自动触发测试</p>
+                <h3 class="it-feat-title">定时调度</h3>
+                <p class="it-feat-desc">设置 Cron 表达式，定时自动触发测试</p>
+                <div class="it-feat-arrow">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </div>
               </div>
-              <div class="welcome-guide-item">
-                <div class="welcome-guide-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/></svg>
+              <div class="it-feat-card it-feat-card--env">
+                <div class="it-feat-card-bg"></div>
+                <div class="it-feat-icon-wrap">
+                  <n-icon :component="FileOutlined" :size="28" />
                 </div>
-                <div class="welcome-guide-text">
-                  <h3>测试报告</h3>
-                  <p>详细的成功/失败统计，支持分享导出</p>
+                <h3 class="it-feat-title">测试报告</h3>
+                <p class="it-feat-desc">详细的成功/失败统计，支持分享导出</p>
+                <div class="it-feat-arrow">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </div>
               </div>
             </div>
           </div>
-      </div><!-- end welcome-container -->
+        </div>
+      </transition>
 
       <!-- ══ 定时任务视图 ══ -->
-      <template v-else-if="activeView === 'scheduled'">
+      <template v-if="activeView === 'scheduled'">
         <div class="content-panel">
           <header class="main-header">
             <div class="header-tabs">
@@ -163,7 +218,7 @@
       </template>
 
       <!-- ══ 测试场景 / 测试报告视图 ══ -->
-      <template v-else>
+      <template v-if="activeView !== 'welcome' && activeView !== 'scheduled'">
 
       <!-- 测试报告视图 -->
       <template v-if="activeView === 'reports'">
@@ -8877,116 +8932,465 @@ onUnmounted(() => {
 }
 
 /* ════════════════════════════════════════
-   欢迎页 — 对齐 InterfaceTest 风格
+   欢迎页 — 与 InterfaceTest 欢迎页同构（布局 / 动效）
 ════════════════════════════════════════ */
+.it-fade-enter-active,
+.it-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.it-fade-enter-from,
+.it-fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
 .welcome-container {
   flex: 1;
   min-height: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
   background: #f0f2f5;
   overflow: auto;
-  padding: 24px;
+  padding: 20px;
   box-sizing: border-box;
 }
-.welcome-content-wrapper {
+
+.it-welcome-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 900px;
+  margin: 0 auto;
   width: 100%;
-  max-width: 860px;
+}
+
+/* Hero（同心环 + 浮动图标，与 InterfaceTest 一致） */
+.it-hero {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
-}
-.welcome-main-card {
-  width: 100%;
-  max-width: 520px;
-  padding: 48px 40px;
-  text-align: center;
+  padding: 48px 24px 40px;
   background: #fff;
   border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  border: 1px solid #e8eaef;
-  position: relative;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   overflow: hidden;
+  text-align: center;
 }
-.welcome-main-card::before {
-  content: '';
+
+.it-hero-glow-ring {
   position: absolute;
-  top: -60px; right: -60px;
-  width: 180px; height: 180px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(var(--color-primary-rgb),0.07) 0%, transparent 70%);
-  pointer-events: none;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.18);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: it-ring-pulse 3s ease-in-out infinite;
 }
-.welcome-logo-box {
-  width: 64px; height: 64px;
-  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400));
-  border-radius: 16px;
-  margin: 0 auto 20px;
-  display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 20px; font-weight: 900;
-  box-shadow: 0 8px 24px rgba(var(--color-primary-rgb),0.35), 0 0 0 8px rgba(var(--color-primary-rgb),0.1);
-  letter-spacing: 1px;
+
+.it-hero-ring-1 {
+  width: 120px;
+  height: 120px;
+  animation-delay: 0s;
+}
+
+.it-hero-ring-2 {
+  width: 180px;
+  height: 180px;
+  animation-delay: 0.5s;
+  border-color: rgba(var(--color-primary-rgb), 0.1);
+}
+
+.it-hero-ring-3 {
+  width: 240px;
+  height: 240px;
+  animation-delay: 1s;
+  border-color: rgba(var(--color-primary-rgb), 0.06);
+}
+
+@keyframes it-ring-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+}
+
+.it-hero-icon-box {
   position: relative;
   z-index: 1;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-400) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  margin-bottom: 20px;
+  box-shadow:
+    0 8px 24px rgba(var(--color-primary-rgb), 0.35),
+    0 0 0 8px rgba(var(--color-primary-rgb), 0.1);
+  animation: it-icon-float 3.5s ease-in-out infinite;
 }
-.welcome-title {
-  font-size: 22px; font-weight: 700; color: #111827;
-  margin-bottom: 10px; letter-spacing: -0.02em; position: relative; z-index: 1;
+
+@keyframes it-icon-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
 }
-.welcome-desc {
-  font-size: 14px; color: #6b7280;
-  margin-bottom: 24px; line-height: 1.6; position: relative; z-index: 1;
+
+.it-hero-icon {
+  animation: it-icon-spin 8s linear infinite;
 }
-.welcome-actions {
-  display: flex; gap: 12px; justify-content: center; position: relative; z-index: 1;
+
+@keyframes it-icon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
-.welcome-btn-primary {
-  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400)) !important;
-  border: none !important; border-radius: 9px !important;
-  box-shadow: 0 4px 14px rgba(var(--color-primary-rgb),0.35) !important;
+
+.it-hero-title {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.02em;
 }
-.welcome-btn-secondary {
-  border-radius: 9px !important;
+
+.it-hero-sub {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 24px;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.55;
 }
-.welcome-quick-guide {
+
+.it-hero-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.it-hero-btn {
+  height: 38px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.it-hero-btn :deep(.n-icon) {
+  display: inline-flex;
+  align-items: center;
+}
+
+.it-hero-btn--primary {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400));
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(var(--color-primary-rgb), 0.35);
+}
+
+.it-hero-btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(var(--color-primary-rgb), 0.45);
+}
+
+.it-hero-btn--ghost {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.it-hero-btn--ghost:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4f46e5;
+  transform: translateY(-2px);
+}
+
+/* 统计行 */
+.it-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.it-stat-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+  cursor: default;
+}
+
+.it-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
+}
+
+.it-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 12px 12px 0 0;
+}
+
+.it-stat-card--blue {
+  --accent: rgba(59, 130, 246, 0.12);
+  --ico: #2563eb;
+}
+.it-stat-card--green {
+  --accent: rgba(34, 197, 94, 0.12);
+  --ico: #16a34a;
+}
+.it-stat-card--amber {
+  --accent: rgba(251, 191, 36, 0.14);
+  --ico: #d97706;
+}
+.it-stat-card--purple {
+  --accent: rgba(139, 92, 246, 0.12);
+  --ico: #7c3aed;
+}
+.it-stat-card--rose {
+  --accent: rgba(244, 63, 94, 0.12);
+  --ico: #e11d48;
+}
+
+.it-stat-card--blue::before {
+  background: #3b82f6;
+}
+.it-stat-card--green::before {
+  background: #22c55e;
+}
+.it-stat-card--amber::before {
+  background: #f59e0b;
+}
+.it-stat-card--purple::before {
+  background: #8b5cf6;
+}
+.it-stat-card--rose::before {
+  background: #f43f5e;
+}
+
+.it-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--ico);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.it-stat-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.it-stat-num {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.it-stat-label {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.it-stat-trend {
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.it-stat-trend--up {
+  color: #16a34a;
+}
+.it-stat-trend--down {
+  color: #dc2626;
+}
+
+/* 功能卡片区 */
+.it-feature-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
-  width: 100%;
 }
-.welcome-guide-item {
-  background: #fff;
-  padding: 20px;
+
+.it-feat-card {
+  position: relative;
+  overflow: hidden;
   border-radius: 14px;
-  display: flex;
-  gap: 14px;
-  border: 1px solid #efeff5;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-  transition: all 0.22s ease;
+  padding: 24px;
   cursor: default;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+  border: 1px solid transparent;
 }
-.welcome-guide-item:hover {
-  box-shadow: 0 8px 24px rgba(var(--color-primary-rgb),0.08);
-  transform: translateY(-3px);
-  border-color: rgba(var(--color-primary-rgb),0.18);
+
+.it-feat-card-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: inherit;
 }
-.welcome-guide-icon {
-  width: 40px; height: 40px;
-  background: rgba(var(--color-primary-rgb),0.08);
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  transition: transform 0.22s ease;
+
+.it-feat-card:hover .it-feat-card-bg {
+  opacity: 1;
 }
-.welcome-guide-item:hover .welcome-guide-icon {
+
+.it-feat-card--debug .it-feat-card-bg {
+  background: linear-gradient(
+    135deg,
+    rgba(var(--color-primary-rgb), 0.07) 0%,
+    rgba(139, 92, 246, 0.04) 100%
+  );
+}
+
+.it-feat-card--mock .it-feat-card-bg {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.07) 0%, rgba(59, 130, 246, 0.04) 100%);
+}
+
+.it-feat-card--env .it-feat-card-bg {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.07) 0%, rgba(5, 150, 105, 0.04) 100%);
+}
+
+.it-feat-card--debug:hover {
+  border-color: rgba(var(--color-primary-rgb), 0.2);
+}
+.it-feat-card--mock:hover {
+  border-color: rgba(6, 182, 212, 0.2);
+}
+.it-feat-card--env:hover {
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.it-feat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+}
+
+.it-feat-icon-wrap {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  transition: transform 0.25s ease;
+}
+
+.it-feat-card:hover .it-feat-icon-wrap {
   transform: scale(1.1) rotate(-5deg);
 }
-.welcome-guide-text h3 { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 4px; }
-.welcome-guide-text p  { font-size: 12px; color: #6b7280; line-height: 1.55; }
+
+.it-feat-card--debug .it-feat-icon-wrap {
+  background: rgba(var(--color-primary-rgb), 0.1);
+  color: var(--color-primary-500);
+}
+.it-feat-card--mock .it-feat-icon-wrap {
+  background: rgba(6, 182, 212, 0.1);
+  color: #0891b2;
+}
+.it-feat-card--env .it-feat-icon-wrap {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.it-feat-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  position: relative;
+  z-index: 1;
+}
+
+.it-feat-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.6;
+  position: relative;
+  z-index: 1;
+}
+
+.it-feat-arrow {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  color: #d1d5db;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.it-feat-card:hover .it-feat-arrow {
+  color: #9ca3af;
+  transform: translateX(3px);
+}
+
+@media (max-width: 860px) {
+  .it-stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .it-feature-row {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ════════════════════════════════════════
    测试报告视图
