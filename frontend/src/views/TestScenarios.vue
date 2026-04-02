@@ -502,20 +502,6 @@
                           <button type="button" class="step-link-btn" @click="runScenarioSteps('failed')">仅失败重跑</button>
                           <button type="button" class="step-link-btn muted" :disabled="!stepScenarioRunning" @click="stopScenarioStepRun">停止运行</button>
                         </div>
-                        <div class="step-quick-actions">
-                          <n-button size="tiny" type="primary" ghost @click="openImportApiModal">
-                            从接口导入
-                          </n-button>
-                          <n-button size="tiny" quaternary @click="openImportCaseModal('formal')">
-                            从单接口用例导入
-                          </n-button>
-                          <n-button size="tiny" quaternary @click="openImportCaseModal('debug')">
-                            从接口调试用例导入
-                          </n-button>
-                          <n-button size="tiny" quaternary @click="showCurlModal = true">
-                            cURL
-                          </n-button>
-                        </div>
                         <div class="step-filter-bar">
                           <n-input v-model:value="stepListSearch" size="small" placeholder="搜索步骤名称、路径或方法" clearable class="step-filter-search">
                             <template #prefix><n-icon :component="SearchOutlined" style="color:#a0aab8" /></template>
@@ -7226,14 +7212,6 @@ onUnmounted(() => {
 .step-link-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-}
-.step-quick-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px;
-  border-bottom: 1px solid #eaecf4;
-  background: linear-gradient(180deg, #fcfcff 0%, #f7f8fc 100%);
 }
 .step-filter-bar {
   display: flex;
