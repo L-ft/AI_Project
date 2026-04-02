@@ -346,7 +346,7 @@
                 </div>
                 <div class="auth-type-label">{{ at.label }}</div>
                 <div v-if="authType === at.value" class="auth-type-check">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7d33ff" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
               </div>
             </div>
@@ -468,7 +468,7 @@
                 <div class="auth-form-label">Access Token</div>
                 <div class="oauth-token-row">
                   <n-input v-model:value="authOAuth2.accessToken" placeholder="获取到的 Token 将显示在这里" />
-                  <n-button type="primary" color="#6366f1" :loading="oauthLoading" @click="fetchOAuth2Token">获取 Token</n-button>
+                  <n-button type="primary" color="#7d33ff" :loading="oauthLoading" @click="fetchOAuth2Token">获取 Token</n-button>
                 </div>
                 <div v-if="authOAuth2.accessToken" class="auth-preview">
                   <span class="auth-preview-label">注入为：</span>
@@ -717,7 +717,7 @@
                               :value="getScriptApiSearch(op.id)"
                               type="text"
                               class="script-api-search"
-                               placeholder="鎼滅储 API / 鎻忚堪"
+                               placeholder="搜索 API / 描述"
                               @input="handleScriptApiSearchInput(op.id, $event)"
                             />
                           </div>
@@ -740,7 +740,7 @@
                                     class="script-api-action"
                                     @click="applyScriptSnippet(op, getScriptApiExample(op.config.language, item.key))"
                                   >
-                                    鎻掑叆绀轰緥
+                                    插入示例
                                   </button>
                                 </div>
                                 <div class="script-api-desc">{{ item.description }}</div>
@@ -1089,7 +1089,7 @@
                       </div>
                       <div class="pre-op-editor-grid two-cols">
                         <div class="pre-op-field">
-                          <div class="pre-op-label">鎻愬彇鏉ユ簮</div>
+                          <div class="pre-op-label">提取来源</div>
                           <n-select
                             v-model:value="op.config.source"
                             size="small"
@@ -1270,7 +1270,7 @@
                               :value="getScriptApiSearch(op.id)"
                               type="text"
                               class="script-api-search"
-                              placeholder="鎼滅储 API / 鎻忚堪"
+                              placeholder="搜索 API / 描述"
                               @input="handleScriptApiSearchInput(op.id, $event)"
                             />
                           </div>
@@ -1293,7 +1293,7 @@
                                     class="script-api-action"
                                     @click="applyScriptSnippet(op, getScriptApiExample(op.config.language, item.key))"
                                   >
-                                    鎻掑叆绀轰緥
+                                    插入示例
                                   </button>
                                 </div>
                                 <div class="script-api-desc">{{ item.description }}</div>
@@ -1366,7 +1366,7 @@
             <!-- 基本请求设置 -->
             <div class="settings-section">
               <div class="settings-section-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d33ff" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
                 基本请求设置
               </div>
 
@@ -1438,7 +1438,7 @@
             <!-- 代理设置 -->
             <div class="settings-section">
               <div class="settings-section-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d33ff" stroke-width="2" stroke-linecap="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
                 代理设置
               </div>
               <div class="settings-row">
@@ -1469,7 +1469,7 @@
             <!-- 响应处理 -->
             <div class="settings-section">
               <div class="settings-section-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d33ff" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 响应处理
               </div>
               <div class="settings-row">
@@ -3031,7 +3031,7 @@ const authTypeOptions = [
     svgInner: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
   },
   {
-    value: 'bearer', label: 'Bearer Token', color: 'linear-gradient(135deg,#6366f1,#818cf8)',
+    value: 'bearer', label: 'Bearer Token', color: 'linear-gradient(135deg,#7d33ff,#a855f7)',
     svgInner: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'
   },
   {
@@ -4707,7 +4707,7 @@ onMounted(() => {
   line-height: 1.5;
 }
 
-/* 3. 鎼存洟鍎撮崫宥呯安閸栧搫鐓?*/
+/* 3. 底部响应区布局与交互 */
 .debug-footer {
   border-top: 1px solid #f0f0f0;
   padding: 0 24px 12px;
@@ -6465,7 +6465,7 @@ onMounted(() => {
   padding: 1px 5px;
   font-family: 'JetBrains Mono', Consolas, monospace;
   font-size: 11px;
-  color: #6366f1;
+  color: var(--color-primary-500);
 }
 
 .cookie-table {
@@ -6573,8 +6573,8 @@ onMounted(() => {
   background: #fafbff;
 }
 .auth-type-card.active {
-  border-color: #6366f1;
-  background: rgba(99,102,241,0.04);
+  border-color: var(--color-primary-500);
+  background: rgba(var(--color-primary-rgb),0.04);
 }
 
 .auth-type-icon {
@@ -6647,7 +6647,7 @@ onMounted(() => {
   border-radius: 4px;
   padding: 1px 5px;
   font-family: 'JetBrains Mono', Consolas, monospace;
-  color: #6366f1;
+  color: var(--color-primary-500);
 }
 .auth-req { color: #ef4444; }
 
@@ -6660,7 +6660,7 @@ onMounted(() => {
   padding: 8px 12px;
   background: #f0f2ff;
   border-radius: 7px;
-  border: 1px solid rgba(99,102,241,0.15);
+  border: 1px solid rgba(var(--color-primary-rgb),0.15);
   margin-top: 4px;
 }
 .auth-preview-label {
@@ -6671,7 +6671,7 @@ onMounted(() => {
 .auth-preview-value {
   font-family: 'JetBrains Mono', Consolas, monospace;
   font-size: 11px;
-  color: #6366f1;
+  color: var(--color-primary-500);
   word-break: break-all;
 }
 

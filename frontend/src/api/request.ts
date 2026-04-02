@@ -6,7 +6,8 @@ function getMgmtApiBaseURL(): string {
   if (fromEnv != null && String(fromEnv).trim() !== '') {
     return String(fromEnv).trim().replace(/\/$/, '')
   }
-  return import.meta.env.DEV ? 'http://localhost:3011' : 'http://localhost:3011'
+  // 生产默认 /api（需 Nginx 反代）；直连调试可设 VITE_MGMT_API_URL=http://host:3011
+  return import.meta.env.DEV ? 'http://localhost:3011' : '/api'
 }
 
 const request = axios.create({

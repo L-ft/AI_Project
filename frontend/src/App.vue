@@ -280,7 +280,7 @@ html, body {
 .view-content > * {
   position: absolute;
   inset: 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* ── 用户头像 / 下拉 ── */

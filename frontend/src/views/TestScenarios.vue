@@ -420,70 +420,123 @@
               <div class="scenario-detail-body">
                 <div class="scenario-detail-main detail-main-flex">
                   <template v-if="detailMainTab === 'steps'">
-                    <div class="detail-meta-bar">
-                      <n-select
-                        size="small"
-                        style="width: 72px"
-                        :value="detailScenario.priority || 'P0'"
-                        :options="priorityOptions"
-                        @update:value="onDetailPriorityChange"
-                      />
-                      <span class="detail-scenario-title">{{ detailScenario.name }}</span>
-                      <n-button quaternary circle size="tiny" @click="openEdit(detailScenario)">
-                        <template #icon><n-icon :component="EditOutlined" /></template>
-                      </n-button>
-                      <span class="detail-id-chip">
-                        <n-icon :component="LinkOutlined" style="font-size:12px" />
-                        {{ detailScenario.id }}
-                      </span>
-                    </div>
-                    <div class="detail-desc-line">
-                      {{ detailScenario.description || '添加描述' }}
-                    </div>
-                    <div class="detail-creator-line">
-                      {{ detailScenario.creator || '—' }}
-                      <span class="detail-time-muted">
-                        更新于 {{ formatDetailTime(detailScenario.updated_at || detailScenario.created_at) }}
-                        · 创建于 {{ formatDetailTime(detailScenario.created_at) }}
-                      </span>
-                    </div>
-                  </template>
-
-                  <template v-if="detailMainTab === 'steps'">
                     <div :class="['detail-steps-workspace', { 'workspace-empty': detailStepCount === 0 }]">
                       <aside class="step-list-sidebar">
                         <div class="step-list-toolbar">
-                          <span v-if="stepBulkSelectedCount > 0" class="step-toolbar-count">已选 {{ stepBulkSelectedCount }} 项</span>
-                          <span v-else class="step-toolbar-count muted">{{ detailStepCount }} 个步骤</span>
-                          <n-button quaternary size="tiny" :disabled="stepBulkSelectedCount === 0" @click="removeCheckedScenarioSteps">
-                            移除
+                          <div class="step-toolbar-title-box">
+                            <span class="step-toolbar-eyebrow">场景编排</span>
+                            <span class="step-toolbar-title">测试步骤</span>
+                          </div>
+                          <n-select
+                            v-model:value="detailEnvId"
+                            :options="envOptions"
+                            size="small"
+                            placeholder="请选择环境"
+                            class="step-toolbar-env"
+                            :consistent-menu-width="false"
+                          />
+                        </div>
+                        <div class="step-toolbar-action-row">
+                          <button type="button" class="step-link-btn" @click="openStepWizard">步骤向导</button>
+                          <button type="button" class="step-link-btn muted" :disabled="stepBulkSelectedCount === 0" @click="removeCheckedScenarioSteps">删除所选</button>
+                          <button type="button" class="step-link-btn" @click="runScenarioSteps('current')">从当前执行</button>
+                          <button type="button" class="step-link-btn" @click="runScenarioSteps('all')">运行全部</button>
+                        </div>
+                        <div class="step-toolbar-action-row secondary">
+                          <button type="button" class="step-link-btn" @click="syncSelectedScenarioStep">同步配置</button>
+                          <button type="button" class="step-link-btn" @click="runScenarioSteps('failed')">仅失败重跑</button>
+                          <button type="button" class="step-link-btn muted" :disabled="!stepScenarioRunning" @click="stopScenarioStepRun">停止运行</button>
+                        </div>
+                        <div class="step-quick-actions">
+                          <n-button size="tiny" type="primary" ghost @click="openImportApiModal">
+                            从接口导入
                           </n-button>
-                          <n-button quaternary size="tiny" @click="message.info('同步功能开发中')">立即同步</n-button>
-                          <n-button quaternary circle size="tiny">
-                            <template #icon><n-icon :component="SearchOutlined" /></template>
+                          <n-button size="tiny" quaternary @click="openImportCaseModal('formal')">
+                            从单接口用例导入
                           </n-button>
-                          <n-button quaternary circle size="tiny">
-                            <template #icon><n-icon :component="MenuOutlined" /></template>
+                          <n-button size="tiny" quaternary @click="openImportCaseModal('debug')">
+                            从接口调试用例导入
+                          </n-button>
+                          <n-button size="tiny" quaternary @click="showCurlModal = true">
+                            cURL
                           </n-button>
                         </div>
+                        <div class="step-filter-bar">
+                          <n-input v-model:value="stepListSearch" size="small" placeholder="搜索步骤名称、路径或方法" clearable class="step-filter-search">
+                            <template #prefix><n-icon :component="SearchOutlined" style="color:#a0aab8" /></template>
+                          </n-input>
+                          <n-select
+                            v-model:value="stepMethodFilter"
+                            :options="stepMethodFilterOptions"
+                            size="small"
+                            class="step-filter-method"
+                            :consistent-menu-width="false"
+                          />
+                        </div>
+                        <div class="step-stat-grid">
+                          <div class="step-stat-card">
+                            <span class="step-stat-label">步骤总数</span>
+                            <strong class="step-stat-value">{{ detailStepCount }}</strong>
+                          </div>
+                          <div class="step-stat-card ok">
+                            <span class="step-stat-label">通过</span>
+                            <strong class="step-stat-value">{{ stepPassCount }}</strong>
+                          </div>
+                          <div class="step-stat-card fail">
+                            <span class="step-stat-label">失败</span>
+                            <strong class="step-stat-value">{{ stepFailCount }}</strong>
+                          </div>
+                          <div class="step-stat-card pending">
+                            <span class="step-stat-label">未执行</span>
+                            <strong class="step-stat-value">{{ stepPendingCount }}</strong>
+                          </div>
+                        </div>
+                        <div class="step-recent-fail">
+                          <span class="step-recent-label">最近失败步骤</span>
+                          <span class="step-recent-value">{{ latestFailedStepLabel }}</span>
+                        </div>
                         <n-scrollbar class="step-list-scrollbar">
-                          <div v-if="detailStepCount === 0" class="step-list-zero">暂无步骤，点击下方添加</div>
+                          <div v-if="filteredStepCards.length === 0" class="step-list-zero">无匹配步骤，请调整筛选或搜索</div>
                           <div
-                            v-for="(step, idx) in detailStepsOrdered"
+                            v-for="item in filteredStepCards"
                             v-else
-                            :key="'stp-' + idx + '-' + String(step.case_id ?? '') + '-' + String(step.order ?? '')"
-                            :class="['step-list-item', { active: selectedStepIndex === idx }]"
-                            @click="selectScenarioStep(idx)"
+                            :key="'stp-' + item.idx + '-' + String(item.step.case_id ?? '') + '-' + String(item.step.order ?? '')"
+                            :class="['step-list-item', { active: selectedStepIndex === item.idx, 'drag-over': dragStepOverIndex === item.idx, 'dragging': dragStepFromIndex === item.idx }]"
+                            draggable="true"
+                            @click="selectScenarioStep(item.idx)"
+                            @dragstart.stop="handleStepDragStart(item.idx)"
+                            @dragover.prevent.stop="handleStepDragOver($event, item.idx)"
+                            @dragleave.stop="handleStepDragLeave($event)"
+                            @drop.prevent.stop="handleStepDrop(item.idx)"
+                            @dragend.stop="handleStepDragEnd()"
                           >
+                            <span class="step-drag-handle" title="拖动调整顺序" @mousedown.stop>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="19" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>
+                            </span>
                             <n-checkbox
-                              :checked="stepBulkCheckedIndices.includes(idx)"
+                              :checked="stepBulkCheckedIndices.includes(item.idx)"
                               @click.stop
-                              @update:checked="(v: boolean) => toggleStepBulkCheck(idx, v)"
+                              @update:checked="(v: boolean) => toggleStepBulkCheck(item.idx, v)"
                             />
-                            <span class="step-li-method" :style="methodBadgeStyle(stepSidebarMethod(idx))">{{ stepSidebarMethod(idx) }}</span>
+                            <div class="step-li-order">#{{ item.idx + 1 }}</div>
+                            <span class="step-li-method" :style="methodBadgeStyle(stepSidebarMethod(item.idx))">{{ stepSidebarMethod(item.idx) }}</span>
                             <div class="step-li-main">
-                              <div class="step-li-name">{{ step.name || '未命名步骤' }}</div>
-                              <div v-if="step.case_id" class="step-li-meta">{{ stepCaseMetaLabel(step) }}</div>
+                              <div class="step-li-topline">
+                                <div class="step-li-name">{{ item.step.name || '未命名步骤' }}</div>
+                                <span :class="['step-li-status', item.statusClass]">{{ item.statusText }}</span>
+                              </div>
+                              <div v-if="item.step.case_id" class="step-li-meta">{{ stepCaseMetaLabel(item.step) }}</div>
+                              <div v-else-if="item.step.source === 'interface' && item.step.interface_id" class="step-li-meta step-li-meta--iface">接口 #{{ item.step.interface_id }}</div>
+                              <div v-else-if="item.step.source === 'http' || item.step.source === 'curl'" class="step-li-meta step-li-meta--http">{{ item.step.source === 'curl' ? 'cURL 请求' : 'HTTP 请求' }}</div>
+                              <div v-else-if="item.step.source === 'wait_step'" class="step-li-meta step-li-meta--http">等待</div>
+                              <div v-else-if="item.step.source === 'script_step'" class="step-li-meta step-li-meta--http">脚本</div>
+                              <div v-else-if="item.step.source === 'group_step'" class="step-li-meta step-li-meta--iface">步骤组</div>
+                              <div v-else-if="item.step.source === 'db_step'" class="step-li-meta step-li-meta--http">数据库</div>
+                              <div class="step-li-submeta">
+                                <span>{{ item.lastCode }}</span>
+                                <span>{{ item.lastElapsed }}</span>
+                                <span>{{ item.lastRunAt }}</span>
+                              </div>
                             </div>
                           </div>
                         </n-scrollbar>
@@ -507,7 +560,7 @@
                             </template>
                             <div class="add-step-menu" @click.stop>
                               <div class="add-step-section">
-                                <div class="add-step-section-title">请求接口</div>
+                                <div class="add-step-section-title">HTTP 请求与导入</div>
                                 <div
                                   v-for="item in addStepRequestItems"
                                   :key="item.key"
@@ -521,7 +574,7 @@
                                 </div>
                               </div>
                               <div class="add-step-section">
-                                <div class="add-step-section-title">其他</div>
+                                <div class="add-step-section-title">流程与工具</div>
                                 <div class="add-step-grid">
                                   <div
                                     v-for="item in addStepOtherItems"
@@ -537,7 +590,7 @@
                                 </div>
                               </div>
                               <div class="add-step-section">
-                                <div class="add-step-section-title">场景用例</div>
+                                <div class="add-step-section-title">场景引用</div>
                                 <div
                                   v-for="item in addStepScenarioItems"
                                   :key="item.key"
@@ -557,56 +610,173 @@
                       <div class="step-editor-panel">
                         <n-spin :show="stepEditorLoading">
                           <div v-if="detailStepCount === 0" class="step-editor-placeholder">
-                            <p>当前场景还没有步骤</p>
-                            <p class="step-ph-sub">在左侧使用「添加步骤」导入接口用例或新建请求</p>
+                            <p>当前场景还没有测试步骤</p>
+                            <p class="step-ph-sub">可在左侧添加 HTTP 请求，或通过导入接口、用例与 cURL 快速开始编排</p>
+                            <div class="step-workspace-empty-actions">
+                              <n-button type="primary" @click="openImportApiModal">从接口导入</n-button>
+                              <n-button quaternary @click="openImportCaseModal('formal')">从单接口用例导入</n-button>
+                              <n-button quaternary @click="openImportCaseModal('debug')">从接口调试用例导入</n-button>
+                            </div>
                           </div>
                           <div v-else-if="selectedStepIndex === null" class="step-editor-placeholder">
-                            点击左侧步骤查看与编辑请求
+                            请从左侧列表选择一个步骤以查看与编辑
                           </div>
-                          <div v-else class="step-editor-inner">
-                            <div class="step-req-toolbar">
-                              <span class="step-req-method-tag" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
-                              <n-input v-model:value="stepEditorFullUrl" size="small" placeholder="https://api.example.com/path" class="step-req-url-input" />
-                              <n-button-group>
-                                <n-button
-                                  type="primary"
-                                  class="step-purple-btn"
-                                  size="small"
-                                  :loading="stepEditorSending"
-                                  @click="sendScenarioStepRequest"
-                                >发送</n-button>
-                                <n-button type="primary" class="step-purple-btn" size="small" style="padding: 0 8px">
-                                  <template #icon><n-icon :component="DownOutlined" /></template>
-                                </n-button>
-                              </n-button-group>
-                            </div>
-                            <n-tabs v-model:value="stepEditorTab" type="line" class="step-config-tabs" size="small">
-                              <n-tab-pane name="params" :tab="stepParamsTabLabel">
-                                <div class="step-tab-pane-inner">
-                                  <n-empty v-if="stepEditorQueryParams.length === 0" description="暂无 Query 参数" size="small" />
-                                  <n-table v-else :single-line="false" size="small" class="step-mini-table">
-                                    <thead>
-                                      <tr>
-                                        <th>参数名</th>
-                                        <th>示例值</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      <tr v-for="(row, ri) in stepEditorQueryParams" :key="'q-' + ri">
-                                        <td><n-input v-model:value="row.name" size="small" placeholder="name" /></td>
-                                        <td><n-input v-model:value="row.example" size="small" placeholder="value" /></td>
-                                      </tr>
-                                    </tbody>
-                                  </n-table>
+                          <div v-else class="step-editor-shell">
+                            <div class="step-editor-main">
+                              <div class="step-overview-card">
+                                <div class="step-overview-head">
+                                  <div class="step-overview-title-group">
+                                    <span class="step-overview-eyebrow">步骤概览</span>
+                                    <div class="step-overview-title-line">
+                                      <span class="step-overview-title">{{ currentStepTitle }}</span>
+                                      <span class="step-overview-method" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
+                                    </div>
+                                  </div>
+                                  <div class="step-overview-env">
+                                    <span class="step-overview-env-label">运行环境</span>
+                                    <n-select
+                                      v-model:value="detailEnvId"
+                                      :options="envOptions"
+                                      size="small"
+                                      placeholder="请选择环境"
+                                      style="width: 180px"
+                                      :consistent-menu-width="false"
+                                    />
+                                  </div>
                                 </div>
-                              </n-tab-pane>
+                                <div class="step-overview-meta">
+                                  <span class="step-overview-chip">步骤 {{ (selectedStepIndex ?? 0) + 1 }} / {{ detailStepCount }}</span>
+                                  <span class="step-overview-chip">{{ currentStepSourceLabel }}</span>
+                                  <span class="step-overview-chip" v-if="stepEditorCaseId">用例 #{{ stepEditorCaseId }}</span>
+                                  <span class="step-overview-chip" v-if="stepEditorInterfaceId">接口 #{{ stepEditorInterfaceId }}</span>
+                                  <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
+                                </div>
+                              </div>
+
+                              <div class="step-req-toolbar">
+                                <span v-if="!isCurrentStepCustom" class="step-req-method-tag" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
+                                <n-select
+                                  v-else
+                                  :value="stepEditorMethod"
+                                  :options="[
+                                    { label: 'GET', value: 'GET' },
+                                    { label: 'POST', value: 'POST' },
+                                    { label: 'PUT', value: 'PUT' },
+                                    { label: 'PATCH', value: 'PATCH' },
+                                    { label: 'DELETE', value: 'DELETE' },
+                                  ]"
+                                  size="small"
+                                  style="width: 88px; flex-shrink: 0"
+                                  :consistent-menu-width="false"
+                                  @update:value="onCustomStepMethodChange"
+                                />
+                                <n-input v-model:value="stepEditorFullUrl" size="small" placeholder="https://api.example.com/path" class="step-req-url-input" />
+                                <n-button
+                                  v-if="isCurrentStepCustom"
+                                  size="small"
+                                  class="step-save-cfg-btn"
+                                  :loading="httpStepSaving"
+                                  @click="saveHttpStepConfig"
+                                >保存</n-button>
+                                <n-button-group>
+                                  <n-button
+                                    type="primary"
+                                    class="step-purple-btn"
+                                    size="small"
+                                    :loading="stepEditorSending"
+                                    @click="sendScenarioStepRequest"
+                                  >发送</n-button>
+                                  <n-dropdown trigger="click" placement="bottom-end" :options="stepSendActionOptions" @select="handleStepSendActionSelect">
+                                    <n-button type="primary" class="step-purple-btn" size="small" style="padding: 0 8px">
+                                      <template #icon><n-icon :component="DownOutlined" /></template>
+                                    </n-button>
+                                  </n-dropdown>
+                                </n-button-group>
+                              </div>
+
+                              <div class="step-link-summary">
+                                <div class="step-link-summary-title">快速引用</div>
+                                <div class="step-link-summary-row">
+                                  <span class="step-link-summary-label">可引用变量</span>
+                                  <div class="step-link-summary-tags">
+                                    <span v-if="stepOutputTags.length === 0" class="step-link-summary-empty">暂无可引用变量</span>
+                                    <span v-for="tag in stepOutputTags" :key="tag" class="step-link-tag">{{ tag }}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div v-if="isUtilityStep" class="step-utility-panel">
+                                <div class="step-utility-head">
+                                  <div class="step-utility-title">{{ currentStepSourceLabel }}</div>
+                                  <n-button size="small" type="primary" :loading="httpStepSaving" @click="saveUtilityStepConfig">保存配置</n-button>
+                                </div>
+                                <div v-if="selectedUtilityStepType === 'wait_step'" class="step-utility-grid two-cols">
+                                  <n-input v-model:value="stepUtilityConfig.duration" size="small" placeholder="持续时长(ms)" />
+                                  <n-input v-model:value="stepUtilityConfig.note" size="small" placeholder="备注" />
+                                </div>
+                                <div v-else-if="selectedUtilityStepType === 'script_step'" class="step-utility-stack">
+                                  <div class="step-inline-op-actions">
+                                    <n-button size="tiny" quaternary @click="stepUtilityConfig.script = &quot;context.setVar('token', 'demo-token')&quot;">示例：设置变量</n-button>
+                                    <n-button size="tiny" quaternary @click="stepUtilityConfig.script = &quot;context.log('before request')&quot;">示例：打印日志</n-button>
+                                  </div>
+                                  <n-input
+                                    v-model:value="stepUtilityConfig.script"
+                                    type="textarea"
+                                    size="small"
+                                    :autosize="{ minRows: 10, maxRows: 16 }"
+                                    placeholder="context.setVar('token', 'demo-token')"
+                                  />
+                                </div>
+                                <div v-else-if="selectedUtilityStepType === 'group_step'" class="step-utility-stack">
+                                  <n-input v-model:value="stepUtilityConfig.group_name" size="small" placeholder="分组名称" />
+                                  <n-input v-model:value="stepUtilityConfig.note" type="textarea" size="small" :autosize="{ minRows: 4, maxRows: 8 }" placeholder="备注说明" />
+                                </div>
+                                <div v-else-if="selectedUtilityStepType === 'db_step'" class="step-utility-stack">
+                                  <div class="step-utility-grid two-cols">
+                                    <n-input v-model:value="stepUtilityConfig.datasource" size="small" placeholder="数据源，例如 default/mysql-main" />
+                                    <n-select
+                                      v-model:value="stepUtilityConfig.action"
+                                      size="small"
+                                      :options="[{ label: '查询', value: 'query' }, { label: '执行', value: 'execute' }]"
+                                      :consistent-menu-width="false"
+                                    />
+                                  </div>
+                                  <n-input
+                                    v-model:value="stepUtilityConfig.sql"
+                                    type="textarea"
+                                    size="small"
+                                    :autosize="{ minRows: 6, maxRows: 12 }"
+                                    placeholder="SELECT * FROM user WHERE id = 1"
+                                  />
+                                </div>
+                              </div>
+                              <n-tabs v-else v-model:value="stepEditorTab" type="line" class="step-config-tabs" size="small">
+                                <n-tab-pane name="params" :tab="stepParamsTabLabel">
+                                  <div class="step-tab-pane-inner">
+                                    <n-empty v-if="stepEditorQueryParams.length === 0" description="暂无 Query 参数" size="small" />
+                                    <n-table v-else :single-line="false" size="small" class="step-mini-table">
+                                      <thead>
+                                        <tr>
+                                          <th>参数名</th>
+                                          <th>示例值</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        <tr v-for="(row, ri) in stepEditorQueryParams" :key="'q-' + ri">
+                                          <td><n-input v-model:value="row.name" size="small" placeholder="name" /></td>
+                                          <td><n-input v-model:value="row.example" size="small" placeholder="value" /></td>
+                                        </tr>
+                                      </tbody>
+                                    </n-table>
+                                  </div>
+                                </n-tab-pane>
                               <n-tab-pane name="body" :tab="stepBodyTabLabel">
                                 <div class="step-tab-pane-inner">
                                   <n-radio-group v-model:value="stepEditorBodyType" size="small" class="step-body-type-group">
                                     <n-radio v-for="opt in stepBodyTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</n-radio>
                                   </n-radio-group>
                                   <div class="step-body-editor-bar">
-                                    <n-button size="tiny" quaternary @click="message.info('动态值开发中')">动态值</n-button>
+                                    <n-button size="tiny" quaternary @click="insertStepDynamicValue">动态值</n-button>
                                     <n-button size="tiny" quaternary @click="formatStepEditorJson">格式化</n-button>
                                   </div>
                                   <n-input
@@ -642,17 +812,101 @@
                                 <div class="step-tab-pane-inner"><n-empty description="暂无 Cookies" size="small" /></div>
                               </n-tab-pane>
                               <n-tab-pane name="auth" tab="Auth">
-                                <div class="step-tab-pane-inner"><n-empty description="暂无认证配置" size="small" /></div>
+                                <div class="step-tab-pane-inner">
+                                  <div class="step-auth-pane">
+                                    <div class="step-auth-head">
+                                      <div class="step-auth-title">认证配置</div>
+                                      <div class="step-auth-desc">选择一种认证方式后，请求发送时会自动注入，不需要手工重复写 Header。</div>
+                                    </div>
+                                    <div class="step-auth-grid">
+                                      <button type="button" :class="['step-auth-card', { active: stepAuthMode === 'none' }]" @click="stepAuthMode = 'none'">
+                                        <strong>无需认证</strong>
+                                        <span>适合公开接口或本地联调</span>
+                                      </button>
+                                      <button type="button" :class="['step-auth-card', { active: stepAuthMode === 'bearer' }]" @click="stepAuthMode = 'bearer'">
+                                        <strong>Bearer Token</strong>
+                                        <span>自动注入 Authorization 头</span>
+                                      </button>
+                                      <button type="button" :class="['step-auth-card', { active: stepAuthMode === 'basic' }]" @click="stepAuthMode = 'basic'">
+                                        <strong>Basic Auth</strong>
+                                        <span>使用用户名和密码拼接认证头</span>
+                                      </button>
+                                      <button type="button" :class="['step-auth-card', { active: stepAuthMode === 'apikey' }]" @click="stepAuthMode = 'apikey'">
+                                        <strong>API Key</strong>
+                                        <span>支持放在 Header 或 Query 中</span>
+                                      </button>
+                                    </div>
+                                    <div class="step-auth-note">
+                                      {{ stepAuthNote }}
+                                    </div>
+                                    <div class="step-auth-form">
+                                      <template v-if="stepAuthMode === 'bearer'">
+                                        <n-input v-model:value="stepAuthBearer.prefix" size="small" placeholder="Bearer" />
+                                        <n-input v-model:value="stepAuthBearer.token" size="small" placeholder="Token / 变量占位符" />
+                                      </template>
+                                      <template v-else-if="stepAuthMode === 'basic'">
+                                        <n-input v-model:value="stepAuthBasic.username" size="small" placeholder="用户名" />
+                                        <n-input v-model:value="stepAuthBasic.password" size="small" type="password" show-password-on="click" placeholder="密码" />
+                                      </template>
+                                      <template v-else-if="stepAuthMode === 'apikey'">
+                                        <n-select
+                                          v-model:value="stepAuthApiKey.position"
+                                          size="small"
+                                          :options="stepAuthApiKeyPositionOptions"
+                                          :consistent-menu-width="false"
+                                        />
+                                        <n-input v-model:value="stepAuthApiKey.key" size="small" placeholder="参数名，例如 X-API-Key" />
+                                        <n-input v-model:value="stepAuthApiKey.value" size="small" placeholder="参数值 / 变量占位符" />
+                                      </template>
+                                    </div>
+                                  </div>
+                                </div>
                               </n-tab-pane>
                               <n-tab-pane name="pre" tab="前置操作">
-                                <div class="step-tab-pane-inner"><n-empty description="暂无前置操作" size="small" /></div>
+                                <div class="step-tab-pane-inner step-pre-pane">
+                                  <div class="step-pre-quick-add">
+                                    <n-button size="tiny" quaternary @click="addStepPreOp('set_header')">新增 Header</n-button>
+                                    <n-button size="tiny" quaternary @click="addStepPreOp('set_query')">新增 Query</n-button>
+                                    <n-button size="tiny" quaternary @click="addStepPreOp('set_var')">设置变量</n-button>
+                                    <n-button size="tiny" quaternary @click="addStepPreOp('wait')">等待时间</n-button>
+                                    <n-button size="tiny" quaternary @click="addStepPreOp('script')">前置脚本</n-button>
+                                  </div>
+                                  <n-empty v-if="stepEditorPreOps.length === 0" description="暂无前置操作" size="small" />
+                                  <div v-else class="step-inline-op-list">
+                                    <div v-for="(op, pi) in stepEditorPreOps" :key="op.id || `pre-${pi}`" class="step-inline-op-card">
+                                      <div class="step-inline-op-head">
+                                        <strong>{{ stepPreOpTypeLabel(op.type) }}</strong>
+                                        <n-button text type="error" size="tiny" @click="removeStepPreOp(pi)">删除</n-button>
+                                      </div>
+                                      <div v-if="op.type === 'wait'" class="step-inline-op-grid two-cols">
+                                        <n-input v-model:value="op.config.duration" size="small" placeholder="等待时长(ms)" @blur="persistStepPreOperations" />
+                                        <n-input v-model:value="op.config.note" size="small" placeholder="备注" @blur="persistStepPreOperations" />
+                                      </div>
+                                      <div v-else-if="op.type === 'script'" class="step-inline-op-stack">
+                                        <div class="step-inline-op-actions">
+                                          <n-button size="tiny" quaternary @click="applyStepPreScriptPreset(op, 'token')">插入 Token 脚本</n-button>
+                                          <n-button size="tiny" quaternary @click="applyStepPreScriptPreset(op, 'trace')">插入 TraceId</n-button>
+                                        </div>
+                                        <n-input
+                                          v-model:value="op.config.script"
+                                          type="textarea"
+                                          size="small"
+                                          :autosize="{ minRows: 6, maxRows: 12 }"
+                                          placeholder="context.setHeader('Authorization', 'Bearer demo-token')"
+                                          @blur="persistStepPreOperations"
+                                        />
+                                      </div>
+                                      <div v-else class="step-inline-op-grid">
+                                        <n-input v-model:value="op.config.name" size="small" placeholder="参数名" @blur="persistStepPreOperations" />
+                                        <n-input v-model:value="op.config.value" size="small" placeholder="参数值" @blur="persistStepPreOperations" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
                               </n-tab-pane>
                               <n-tab-pane name="post" :tab="stepPostTabLabel">
                                 <div class="step-tab-pane-inner step-post-pane">
-                                  <template v-if="!stepEditorCaseId">
-                                    <n-empty description="导入接口用例后可配置后置操作" size="small" />
-                                  </template>
-                                  <template v-else>
+                                  <template v-if="stepEditorCaseId || isCurrentStepCustom || selectedStep?.source === 'interface'">
                                     <div class="step-validate-response-bar">
                                       <div class="step-vr-left">
                                         <span class="step-vr-title">校验响应（契约测试）</span>
@@ -685,6 +939,59 @@
                                         />
                                       </div>
                                     </div>
+                                    <div class="step-post-add-row">
+                                      <n-button size="tiny" quaternary @click="addStepAssertionOp">新增断言</n-button>
+                                      <n-button size="tiny" quaternary @click="addStepExtractOp">新增提取变量</n-button>
+                                    </div>
+                                    <div v-if="stepEditorAssertionOps.length > 0" class="step-inline-op-list">
+                                      <div v-for="(op, pi) in stepEditorAssertionOps" :key="op.id || `assert-${pi}`" class="step-inline-op-card">
+                                        <div class="step-inline-op-head">
+                                          <strong>响应断言</strong>
+                                          <n-button text type="error" size="tiny" @click="removeStepAssertionOp(pi)">删除</n-button>
+                                        </div>
+                                        <div class="step-inline-op-grid three-cols">
+                                          <n-input v-model:value="op.config.name" size="small" placeholder="断言名称" @blur="persistStepPostOperations" />
+                                          <n-select
+                                            v-model:value="op.config.target"
+                                            size="small"
+                                            :options="stepAssertionTargetOptions"
+                                            :consistent-menu-width="false"
+                                            @update:value="persistStepPostOperations"
+                                          />
+                                          <n-input v-model:value="op.config.expression" size="small" placeholder="表达式，如 data.code / content-type" @blur="persistStepPostOperations" />
+                                        </div>
+                                        <div class="step-inline-op-grid three-cols">
+                                          <n-select
+                                            v-model:value="op.config.operator"
+                                            size="small"
+                                            :options="stepAssertionOperatorOptions"
+                                            :consistent-menu-width="false"
+                                            @update:value="persistStepPostOperations"
+                                          />
+                                          <n-input v-model:value="op.config.value" size="small" placeholder="期望值 / 正则" @blur="persistStepPostOperations" />
+                                          <div class="step-inline-op-hint">{{ stepAssertionOpPreview(op) }}</div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div v-if="stepEditorExtractOps.length > 0" class="step-inline-op-list">
+                                      <div v-for="(op, pi) in stepEditorExtractOps" :key="op.id || `post-${pi}`" class="step-inline-op-card">
+                                        <div class="step-inline-op-head">
+                                          <strong>提取变量</strong>
+                                          <n-button text type="error" size="tiny" @click="removeStepExtractOp(pi)">删除</n-button>
+                                        </div>
+                                        <div class="step-inline-op-grid three-cols">
+                                          <n-input v-model:value="op.config.name" size="small" placeholder="变量名" @blur="persistStepPostOperations" />
+                                          <n-select
+                                            v-model:value="op.config.source"
+                                            size="small"
+                                            :options="stepExtractSourceOptions"
+                                            :consistent-menu-width="false"
+                                            @update:value="persistStepPostOperations"
+                                          />
+                                          <n-input v-model:value="op.config.expression" size="small" placeholder="表达式，如 data.token / content-type" @blur="persistStepPostOperations" />
+                                        </div>
+                                      </div>
+                                    </div>
                                     <n-empty
                                       v-if="stepEditorPostOpsOther.length === 0"
                                       description="暂无其他后置操作"
@@ -708,35 +1015,96 @@
                                       </tbody>
                                     </n-table>
                                   </template>
+                                  <template v-else>
+                                    <n-empty description="导入接口用例后可配置后置操作" size="small" />
+                                  </template>
                                 </div>
                               </n-tab-pane>
                               <n-tab-pane name="settings" tab="设置">
                                 <div class="step-tab-pane-inner"><n-empty description="暂无额外设置" size="small" /></div>
                               </n-tab-pane>
                             </n-tabs>
-
-                            <div v-if="stepEditorLastResponse" class="step-response-panel">
-                              <div class="step-response-head">
-                                <span class="step-response-title">响应结果</span>
-                                <template v-if="stepEditorLastResponse.error">
-                                  <n-tag type="error" size="small">失败</n-tag>
-                                  <span class="step-response-err">{{ stepEditorLastResponse.error }}</span>
-                                </template>
-                                <template v-else>
-                                  <n-tag
-                                    size="small"
-                                    :type="(stepEditorLastResponse.status_code ?? 0) < 400 ? 'success' : 'error'"
-                                  >
-                                    HTTP {{ stepEditorLastResponse.status_code }}
-                                  </n-tag>
-                                  <span
-                                    v-if="stepEditorLastResponse.elapsed != null"
-                                    class="step-response-meta"
-                                  >{{ Math.round(Number(stepEditorLastResponse.elapsed)) }} ms</span>
-                                </template>
-                              </div>
-                              <pre class="step-response-pre">{{ stepResponseBodyText }}</pre>
                             </div>
+                            <aside class="step-response-side">
+                              <div class="step-response-panel always-visible">
+                                <div class="step-response-head">
+                                  <span class="step-response-title">响应结果</span>
+                                  <template v-if="stepEditorLastResponse?.error">
+                                    <n-tag type="error" size="small">失败</n-tag>
+                                    <span class="step-response-err">{{ stepEditorLastResponse.error }}</span>
+                                  </template>
+                                  <template v-else-if="stepEditorLastResponse">
+                                    <n-tag
+                                      size="small"
+                                      :type="(stepEditorLastResponse.status_code ?? 0) < 400 ? 'success' : 'error'"
+                                    >
+                                      HTTP {{ stepEditorLastResponse.status_code }}
+                                    </n-tag>
+                                    <span
+                                      v-if="stepEditorLastResponse.elapsed != null"
+                                      class="step-response-meta"
+                                    >{{ Math.round(Number(stepEditorLastResponse.elapsed)) }} ms</span>
+                                  </template>
+                                  <n-button quaternary size="tiny" @click="copyStepResponseBody" :disabled="!stepEditorLastResponse">复制当前内容</n-button>
+                                </div>
+                                <div class="step-response-toolbar">
+                                  <div class="step-response-view-switch">
+                                    <button type="button" :class="['step-view-btn', { active: stepResponseViewMode === 'pretty' }]" @click="stepResponseViewMode = 'pretty'">Pretty</button>
+                                    <button type="button" :class="['step-view-btn', { active: stepResponseViewMode === 'raw' }]" @click="stepResponseViewMode = 'raw'">Raw</button>
+                                  </div>
+                                  <div class="step-response-tabs-mini">
+                                    <button type="button" :class="['step-mini-tab', { active: stepResponsePanelTab === 'body' }]" @click="stepResponsePanelTab = 'body'">响应体</button>
+                                    <button type="button" :class="['step-mini-tab', { active: stepResponsePanelTab === 'headers' }]" @click="stepResponsePanelTab = 'headers'">响应头</button>
+                                    <button type="button" :class="['step-mini-tab', { active: stepResponsePanelTab === 'assert' }]" @click="stepResponsePanelTab = 'assert'">断言 {{ stepResponseAssertionCount }}</button>
+                                    <button type="button" :class="['step-mini-tab', { active: stepResponsePanelTab === 'extract' }]" @click="stepResponsePanelTab = 'extract'">提取 {{ stepResponseExtractCount }}</button>
+                                  </div>
+                                </div>
+                                <div class="step-response-body-shell">
+                                  <template v-if="!stepEditorLastResponse">
+                                    <div class="step-response-empty">
+                                      发送当前步骤后，这里会展示完整响应结果
+                                    </div>
+                                  </template>
+                                  <template v-else-if="stepResponsePanelTab === 'body'">
+                                    <pre class="step-response-pre">{{ stepResponseViewMode === 'pretty' ? stepResponseBodyPrettyText : stepResponseBodyRawText }}</pre>
+                                  </template>
+                                  <template v-else-if="stepResponsePanelTab === 'headers'">
+                                    <div v-if="stepResponseHeaderEntries.length === 0" class="step-response-empty">暂无响应头信息</div>
+                                    <div v-else class="step-response-kv-list">
+                                      <div v-for="([k, v], idx) in stepResponseHeaderEntries" :key="`${k}-${idx}`" class="step-response-kv-row">
+                                        <span class="step-response-k">{{ k }}</span>
+                                        <span class="step-response-v">{{ v }}</span>
+                                      </div>
+                                    </div>
+                                  </template>
+                                  <template v-else-if="stepResponsePanelTab === 'assert'">
+                                    <div class="step-assert-card">
+                                      <div class="step-assert-line">
+                                        <span class="step-assert-label">校验响应</span>
+                                        <span :class="['step-assert-pill', stepResponseAssertionPass ? 'is-pass' : 'is-fail']">{{ stepResponseAssertionText }}</span>
+                                      </div>
+                                      <div class="step-assert-help">后置操作中的校验响应会影响此处判定结果。</div>
+                                      <div v-if="stepResponseAssertionResults.length > 0" class="step-assert-list">
+                                        <div v-for="(item, idx) in stepResponseAssertionResults" :key="`${item.name}-${idx}`" class="step-assert-list-item">
+                                          <span class="step-assert-item-name">{{ item.name }}</span>
+                                          <span :class="['step-assert-pill', item.passed ? 'is-pass' : 'is-fail']">{{ item.passed ? '通过' : '失败' }}</span>
+                                          <span class="step-assert-item-msg">{{ item.message }}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </template>
+                                  <template v-else>
+                                    <div v-if="stepResponseExtractItems.length === 0" class="step-response-empty">暂无可提取字段</div>
+                                    <div v-else class="step-response-kv-list">
+                                      <div v-for="item in stepResponseExtractItems" :key="item.key" class="step-response-kv-row">
+                                        <span class="step-response-k">{{ item.key }}</span>
+                                        <span class="step-response-v">{{ item.value }}</span>
+                                      </div>
+                                    </div>
+                                  </template>
+                                </div>
+                              </div>
+                            </aside>
                           </div>
                         </n-spin>
                       </div>
@@ -1372,6 +1740,176 @@
       </n-spin>
     </n-modal>
 
+    <!-- 从接口导入步骤（直接导入接口定义） -->
+    <n-modal
+      v-model:show="showImportApiModal"
+      preset="card"
+      :style="{ width: 'min(800px, calc(100vw - 32px))', borderRadius: '12px' }"
+      :mask-closable="false"
+      @after-leave="onImportApiModalLeave"
+    >
+      <template #header>
+        <div class="import-debug-modal-title">从接口导入步骤</div>
+        <div class="import-debug-modal-sub">从接口树中选择接口，直接导入为场景步骤（无需关联测试用例）</div>
+      </template>
+      <n-spin :show="importTreeLoading" class="import-case-modal-spin">
+        <div class="import-case-modal-body">
+          <div class="import-case-tree-pane">
+            <div class="import-pane-head">接口目录</div>
+            <n-input v-model:value="importTreePattern" placeholder="搜索目录 / 接口" clearable size="small" class="import-tree-search">
+              <template #prefix><n-icon :component="SearchOutlined" style="color:#a0aab8" /></template>
+            </n-input>
+            <n-scrollbar class="import-tree-scroll">
+              <n-tree
+                block-line
+                expand-on-click
+                :data="importModalTreeData"
+                :pattern="importTreePattern"
+                :render-label="renderImportModalTreeLabel"
+                @update:selected-keys="onImportApiTreeSelect"
+                class="import-modal-tree"
+              />
+            </n-scrollbar>
+          </div>
+          <div class="import-case-list-pane">
+            <div v-if="importApiSelectedList.length === 0" class="import-case-pane-placeholder">
+              从左侧点击接口节点，即可选中该接口作为导入步骤。可多次点击选中多个接口。
+            </div>
+            <template v-else>
+              <div class="import-pane-head">已选接口（{{ importApiSelectedList.length }} 个）</div>
+              <n-scrollbar style="max-height: 360px">
+                <div v-for="api in importApiSelectedList" :key="api.id" class="import-api-selected-row">
+                  <span class="idc-method import-if-method" :style="methodBadgeStyle(api.method)">{{ api.method }}</span>
+                  <div class="import-api-sel-info">
+                    <div class="import-api-sel-name">{{ api.name }}</div>
+                    <div class="import-api-sel-path">{{ api.path }}</div>
+                  </div>
+                  <n-button quaternary circle size="tiny" @click="removeImportApiSelected(api.id)">
+                    <template #icon><n-icon :component="CloseOutlined" /></template>
+                  </n-button>
+                </div>
+              </n-scrollbar>
+            </template>
+          </div>
+        </div>
+      </n-spin>
+      <template #footer>
+        <div class="import-debug-footer">
+          <span class="import-debug-hint" v-if="importApiSelectedList.length">已选 {{ importApiSelectedList.length }} 个接口</span>
+          <div class="import-debug-actions">
+            <n-button @click="showImportApiModal = false">取消</n-button>
+            <n-button
+              type="primary"
+              :loading="importApiSaving"
+              :disabled="importApiSelectedList.length === 0"
+              style="background:#7d33ff;border-color:#7d33ff"
+              @click="confirmImportApi"
+            >
+              导入为步骤
+            </n-button>
+          </div>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- 从 cURL 导入步骤 -->
+    <n-modal
+      v-model:show="showCurlModal"
+      preset="card"
+      :style="{ width: 'min(600px, calc(100vw - 32px))', borderRadius: '12px' }"
+      :mask-closable="false"
+    >
+      <template #header>
+        <div class="import-debug-modal-title">从 cURL 导入步骤</div>
+        <div class="import-debug-modal-sub">粘贴 cURL 命令，系统自动解析为 HTTP 请求步骤</div>
+      </template>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <n-input
+          v-model:value="curlInput"
+          type="textarea"
+          :rows="6"
+          :placeholder="curlInputPlaceholder"
+          style="font-family: monospace; font-size: 12px"
+        />
+        <n-button size="small" @click="parseCurlCommand" :disabled="!curlInput.trim()">解析 cURL</n-button>
+        <div v-if="curlParsed" class="curl-preview-box">
+          <div class="curl-preview-row">
+            <span class="curl-preview-label">方法</span>
+            <span class="step-li-method" :style="methodBadgeStyle(curlParsed.method)">{{ curlParsed.method }}</span>
+          </div>
+          <div class="curl-preview-row">
+            <span class="curl-preview-label">URL</span>
+            <span class="curl-preview-val">{{ curlParsed.url || '（未识别）' }}</span>
+          </div>
+          <div class="curl-preview-row">
+            <span class="curl-preview-label">Headers</span>
+            <span class="curl-preview-val">{{ Object.keys(curlParsed.headers).length }} 个</span>
+          </div>
+          <div class="curl-preview-row">
+            <span class="curl-preview-label">Body</span>
+            <span class="curl-preview-val">{{ curlParsed.body ? curlParsed.body.slice(0, 60) + (curlParsed.body.length > 60 ? '…' : '') : '（空）' }}</span>
+          </div>
+          <n-input
+            v-model:value="curlStepName"
+            size="small"
+            placeholder="步骤名称（可选）"
+            style="margin-top:8px"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <div class="import-debug-footer">
+          <div class="import-debug-actions">
+            <n-button @click="showCurlModal = false; curlParsed = null; curlInput = ''">取消</n-button>
+            <n-button
+              type="primary"
+              :loading="curlSaving"
+              :disabled="!curlParsed"
+              style="background:#7d33ff;border-color:#7d33ff"
+              @click="confirmImportCurl"
+            >
+              导入步骤
+            </n-button>
+          </div>
+        </div>
+      </template>
+    </n-modal>
+
+    <n-modal
+      v-model:show="stepWizardVisible"
+      preset="card"
+      title="步骤快速向导"
+      :style="{ width: '760px' }"
+      class="step-wizard-modal"
+    >
+      <div class="step-wizard-body">
+        <div class="step-wizard-headline">
+          <div class="step-wizard-title">{{ currentStepTitle }}</div>
+          <div class="step-wizard-subtitle">一键补齐认证、前置准备、响应校验和变量提取。</div>
+        </div>
+        <div class="step-wizard-grid">
+          <button
+            v-for="preset in stepWizardPresets"
+            :key="preset.key"
+            type="button"
+            class="step-wizard-card"
+            @click="applyStepWizardPreset(preset.key)"
+          >
+            <strong>{{ preset.label }}</strong>
+            <span>{{ preset.description }}</span>
+          </button>
+        </div>
+        <div class="step-wizard-footer-tip">
+          「从当前执行」会从当前选中步骤开始顺序执行；「运行全部」会从第一步开始完整重跑。
+        </div>
+      </div>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="stepWizardVisible = false">关闭</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
     <!-- 批量运行进度 -->
     <n-modal
       v-model:show="batchRunModalVisible"
@@ -1461,6 +1999,8 @@ import {
   loadStepExecContext,
   runStepExecContext,
   computeSummaryForLogEntries,
+  evaluatePostAssertions,
+  normalizeProxyHeaderMap,
   type ScenarioSendLogEntry as ExecScenarioLogEntry
 } from '@/utils/scenario-step-exec'
 
@@ -2378,9 +2918,14 @@ watch(
 )
 
 const selectedStepIndex = ref<number | null>(null)
+const stepDetailDrawerVisible = ref(false)
 const stepBulkCheckedIndices = ref<number[]>([])
 const stepBulkSelectedCount = computed(() => stepBulkCheckedIndices.value.length)
 const stepSidebarMethods = ref<Record<number, string>>({})
+const stepListSearch = ref('')
+const stepMethodFilter = ref<string>('all')
+const stepScenarioRunning = ref(false)
+const stopStepScenarioRunFlag = ref(false)
 
 const stepEditorLoading = ref(false)
 const stepEditorSending = ref(false)
@@ -2393,9 +2938,22 @@ const stepEditorPath = ref('')
 const stepEditorFullUrl = ref('')
 const stepEditorQueryParams = ref<any[]>([])
 const stepEditorHeaderParams = ref<any[]>([])
+const stepEditorPreOps = ref<any[]>([])
 const stepEditorPostOps = ref<any[]>([])
 const stepEditorBodyType = ref('none')
 const stepEditorBodyContent = ref('')
+const stepResponseViewMode = ref<'pretty' | 'raw'>('pretty')
+const stepResponsePanelTab = ref<'body' | 'headers' | 'assert' | 'extract'>('body')
+const stepAuthMode = ref<'none' | 'bearer' | 'basic' | 'apikey'>('none')
+const stepWizardVisible = ref(false)
+const stepUtilityConfig = ref<Record<string, any>>({})
+const stepAuthBearer = ref({ prefix: 'Bearer', token: '' })
+const stepAuthBasic = ref({ username: '', password: '' })
+const stepAuthApiKey = ref<{ position: 'header' | 'query'; key: string; value: string }>({
+  position: 'header',
+  key: 'X-API-Key',
+  value: ''
+})
 
 const stepBodyTypeOptions = [
   { label: 'none', value: 'none' },
@@ -2403,6 +2961,76 @@ const stepBodyTypeOptions = [
   { label: 'form-data', value: 'form-data' },
   { label: 'JSON', value: 'json' },
   { label: 'Text', value: 'text' }
+]
+
+const stepAuthApiKeyPositionOptions = [
+  { label: 'Header', value: 'header' },
+  { label: 'Query', value: 'query' }
+]
+
+const stepExtractSourceOptions = [
+  { label: '响应 JSON', value: 'body' },
+  { label: '响应头', value: 'header' }
+]
+
+const stepAssertionTargetOptions = [
+  { label: '状态码', value: 'status' },
+  { label: '响应 JSON', value: 'response_json' },
+  { label: '响应头', value: 'response_header' },
+  { label: '响应文本', value: 'response_text' }
+]
+
+const stepAssertionOperatorOptions = [
+  { label: '等于', value: 'eq' },
+  { label: '不等于', value: 'neq' },
+  { label: '包含', value: 'contains' },
+  { label: '存在', value: 'exists' },
+  { label: '正则匹配', value: 'regex' }
+]
+
+const stepSendActionOptions = [
+  { label: '保存并发送', key: 'save-and-send' },
+  { label: '复制 cURL', key: 'copy-curl' },
+  { label: '清空响应区', key: 'clear-response' }
+]
+
+const stepWizardPresets = [
+  {
+    key: 'login',
+    label: '登录接口向导',
+    description: '补齐 JSON Body、200 校验，并自动提取 token / userId。'
+  },
+  {
+    key: 'authorized-json',
+    label: '鉴权 JSON 接口',
+    description: '补齐 Bearer 认证、Content-Type、TraceId 和通用断言。'
+  },
+  {
+    key: 'query-debug',
+    label: '查询调试向导',
+    description: '适合 GET 查询类步骤，补齐 TraceId、基础断言和耗时等待。'
+  }
+]
+
+const selectedStep = computed(() => {
+  const idx = selectedStepIndex.value
+  if (idx == null) return null
+  return detailStepsOrdered.value[idx] || null
+})
+
+const isUtilityStep = computed(() =>
+  utilityStepKinds.includes(String(selectedStep.value?.source || '') as any)
+)
+
+const selectedUtilityStepType = computed(() => String(selectedStep.value?.source || ''))
+
+const stepMethodFilterOptions = [
+  { label: '全部方法', value: 'all' },
+  { label: 'GET', value: 'GET' },
+  { label: 'POST', value: 'POST' },
+  { label: 'PUT', value: 'PUT' },
+  { label: 'PATCH', value: 'PATCH' },
+  { label: 'DELETE', value: 'DELETE' }
 ]
 
 const stepResponseBodyText = computed(() => {
@@ -2419,6 +3047,75 @@ const stepResponseBodyText = computed(() => {
   } catch {
     return String(d)
   }
+})
+
+const stepResponseBodyRawText = computed(() => {
+  const r = stepEditorLastResponse.value
+  if (!r) return ''
+  if (r.error) return `${r.error}${r.msg ? '\n' + r.msg : ''}`
+  const d = r.data
+  if (d == null || d === '') return '(空响应体)'
+  if (typeof d === 'string') return d
+  try {
+    return JSON.stringify(d)
+  } catch {
+    return String(d)
+  }
+})
+
+const stepResponseBodyPrettyText = computed(() => stepResponseBodyText.value)
+
+const stepResponseHeaderEntries = computed(() => {
+  const headers = stepEditorLastResponse.value?.headers
+  if (!headers || typeof headers !== 'object') return [] as Array<[string, string]>
+  return Object.entries(headers as Record<string, unknown>).map(([k, v]) => [k, String(v ?? '')])
+})
+
+const stepLogsByName = computed(() => {
+  const map = new Map<string, ScenarioSendLogEntry>()
+  for (const log of currentScenarioSendLogs.value) {
+    const key = String(log.name || '').trim()
+    if (!key || map.has(key)) continue
+    map.set(key, log)
+  }
+  return map
+})
+
+const filteredStepCards = computed(() => {
+  const q = stepListSearch.value.trim().toLowerCase()
+  return detailStepsOrdered.value
+    .map((step: any, idx: number) => {
+      const method = stepSidebarMethod(idx)
+      const log = stepLogsByName.value.get(String(step?.name || '').trim())
+      const statusText = !log ? '待执行' : log.pass ? '已通过' : '失败'
+      const statusClass = !log ? 'pending' : log.pass ? 'passed' : 'failed'
+      return {
+        idx,
+        step,
+        method,
+        statusText,
+        statusClass,
+        lastCode: log?.statusCode != null ? `HTTP ${log.statusCode}` : '未响应',
+        lastElapsed: log?.elapsedMs != null ? `${Math.round(Number(log.elapsedMs))} ms` : '未执行',
+        lastRunAt: log ? new Date(log.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '刚刚'
+      }
+    })
+    .filter((item) => {
+      if (stepMethodFilter.value !== 'all' && item.method !== stepMethodFilter.value) return false
+      if (!q) return true
+      const name = String(item.step?.name || '').toLowerCase()
+      const url = String(item.step?.custom_url || item.step?.url || '').toLowerCase()
+      return name.includes(q) || url.includes(q)
+    })
+})
+
+const stepPassCount = computed(() => filteredStepCards.value.filter((item) => item.statusClass === 'passed').length)
+const stepFailCount = computed(() => filteredStepCards.value.filter((item) => item.statusClass === 'failed').length)
+const stepPendingCount = computed(() => filteredStepCards.value.filter((item) => item.statusClass === 'pending').length)
+
+const latestFailedStepLabel = computed(() => {
+  const row = currentScenarioSendLogs.value.find((log) => !log.pass)
+  return row ? row.name : '暂无'
 })
 
 const buildUrlWithQueryString = (url: string, rows: any[]): string => {
@@ -2459,8 +3156,16 @@ const stepPostTabLabel = computed(() => {
   return n ? `后置操作 (${n})` : '后置操作'
 })
 
+const stepEditorExtractOps = computed(() =>
+  stepEditorPostOps.value.filter((o) => o?.type === 'extract')
+)
+
+const stepEditorAssertionOps = computed(() =>
+  stepEditorPostOps.value.filter((o) => o?.type === 'assertion')
+)
+
 const stepEditorPostOpsOther = computed(() =>
-  stepEditorPostOps.value.filter((o) => o?.type !== VALIDATE_RESPONSE_TYPE)
+  stepEditorPostOps.value.filter((o) => o?.type !== VALIDATE_RESPONSE_TYPE && o?.type !== 'extract' && o?.type !== 'assertion')
 )
 
 const stepValidateEnabledUi = computed(() => {
@@ -2489,12 +3194,165 @@ const upsertValidateResponseOp = (patch: { enabled?: boolean; expect_status?: nu
 
 const persistStepPostOperations = async () => {
   const cid = stepEditorCaseId.value
-  if (!cid) return
+  if (!cid) {
+    await persistCurrentStepDraftToScenarioStep({ post_operations: stepEditorPostOps.value })
+    return
+  }
   try {
     await execRequest.patch(`/test-cases/${cid}`, { post_operations: stepEditorPostOps.value })
   } catch {
     message.error('保存后置操作失败')
   }
+}
+
+const persistCurrentStepDraftToScenarioStep = async (patch: Record<string, any>) => {
+  const idx = selectedStepIndex.value
+  const scenario = detailScenario.value
+  if (idx == null || !scenario?.id) return
+  const steps = [...(detailStepsOrdered.value as any[])]
+  const step = steps[idx]
+  if (!step) return
+  steps[idx] = { ...step, ...patch }
+  try {
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps })
+    await fetchScenarios()
+  } catch {
+    message.error('保存步骤配置失败')
+  }
+}
+
+const stepPreOpTypeLabel = (type: string) => {
+  if (type === 'set_header') return '设置 Header'
+  if (type === 'set_query') return '设置 Query'
+  if (type === 'set_var') return '设置变量'
+  if (type === 'wait') return '等待时间'
+  if (type === 'script') return '前置脚本'
+  return '前置操作'
+}
+
+const createStepPreOp = (type: 'set_header' | 'set_query' | 'set_var' | 'wait' | 'script') => {
+  const base = {
+    id: `pre-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    enabled: true,
+    config: {} as Record<string, any>
+  }
+  if (type === 'wait') {
+    base.config = { duration: '500', note: '' }
+  } else if (type === 'script') {
+    base.config = { script: '' }
+  } else {
+    base.config = { name: '', value: '' }
+  }
+  return base
+}
+
+const createStepExtractOp = () => ({
+  id: `post-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  type: 'extract',
+  enabled: true,
+  config: {
+    name: '',
+    source: 'body',
+    expression: ''
+  }
+})
+
+const createStepAssertionOp = () => ({
+  id: `assert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  type: 'assertion',
+  enabled: true,
+  config: {
+    name: '',
+    target: 'status',
+    expression: '',
+    operator: 'eq',
+    value: '200'
+  }
+})
+
+const persistStepPreOperations = async () => {
+  const cid = stepEditorCaseId.value
+  if (!cid) {
+    await persistCurrentStepDraftToScenarioStep({ pre_operations: stepEditorPreOps.value })
+    return
+  }
+  try {
+    await execRequest.patch(`/test-cases/${cid}`, { pre_operations: stepEditorPreOps.value })
+  } catch {
+    message.error('保存前置操作失败')
+  }
+}
+
+const addStepPreOp = async (type: 'set_header' | 'set_query' | 'set_var' | 'wait' | 'script') => {
+  stepEditorPreOps.value = [...stepEditorPreOps.value, createStepPreOp(type)]
+  await persistStepPreOperations()
+}
+
+const removeStepPreOp = async (idx: number) => {
+  stepEditorPreOps.value = stepEditorPreOps.value.filter((_, i) => i !== idx)
+  await persistStepPreOperations()
+}
+
+const addStepExtractOp = async () => {
+  stepEditorPostOps.value = [...stepEditorPostOps.value, createStepExtractOp()]
+  await persistStepPostOperations()
+}
+
+const addStepAssertionOp = async () => {
+  stepEditorPostOps.value = [...stepEditorPostOps.value, createStepAssertionOp()]
+  await persistStepPostOperations()
+}
+
+const removeStepAssertionOp = async (idx: number) => {
+  let seen = -1
+  stepEditorPostOps.value = stepEditorPostOps.value.filter((op) => {
+    if (op?.type !== 'assertion') return true
+    seen += 1
+    return seen !== idx
+  })
+  await persistStepPostOperations()
+}
+
+const applyStepPreScriptPreset = (op: any, preset: 'token' | 'trace') => {
+  if (preset === 'token') {
+    op.config.script = "context.setHeader('Authorization', 'Bearer {{token}}')"
+  } else {
+    op.config.script = "context.setHeader('X-Trace-Id', `trace-${Date.now()}`)"
+  }
+  void persistStepPreOperations()
+}
+
+const createUtilityStep = (type: 'wait_step' | 'script_step' | 'group_step' | 'db_step') => {
+  const base: any = {
+    source: type,
+    case_id: null,
+    interface_id: null,
+    pre_operations: [],
+    post_operations: [],
+    auth_config: { mode: 'none' },
+    utility_config: {}
+  }
+  if (type === 'wait_step') {
+    return { ...base, name: '等待时间', utility_config: { duration: '500', note: '' } }
+  }
+  if (type === 'script_step') {
+    return { ...base, name: '前置脚本步骤', utility_config: { script: "context.setVar('token', 'demo-token')" } }
+  }
+  if (type === 'group_step') {
+    return { ...base, name: '步骤分组', utility_config: { group_name: '新分组', note: '' } }
+  }
+  return { ...base, name: '数据库步骤', utility_config: { datasource: '', action: 'query', sql: '' } }
+}
+
+const removeStepExtractOp = async (idx: number) => {
+  let seen = -1
+  stepEditorPostOps.value = stepEditorPostOps.value.filter((op) => {
+    if (op?.type !== 'extract') return true
+    seen += 1
+    return seen !== idx
+  })
+  await persistStepPostOperations()
 }
 
 const onStepValidateEnabledChange = async (v: string) => {
@@ -2518,9 +3376,637 @@ const unwrapEntity = (res: any): any => {
 }
 
 const stepSidebarMethod = (idx: number) => stepSidebarMethods.value[idx] || 'GET'
+const currentStepTitle = computed(() => {
+  const idx = selectedStepIndex.value
+  if (idx == null) return '步骤详情'
+  const s = detailStepsOrdered.value[idx]
+  if (!s) return '步骤详情'
+  const name = String(s.name || '').trim()
+  return name || `步骤 ${idx + 1}`
+})
+
+const currentStepSourceLabel = computed(() => {
+  const step = selectedStep.value as any
+  if (!step) return '来源：未选择'
+  if (step.source === 'interface_case') return '来源：单接口用例'
+  if (step.source === 'debug_case') return '来源：调试用例'
+  if (step.source === 'interface') return '来源：接口定义'
+  if (step.source === 'curl') return '来源：cURL 导入'
+  if (step.source === 'http') return '来源：自定义请求'
+  if (step.source === 'wait_step') return '来源：等待时间步骤'
+  if (step.source === 'script_step') return '来源：脚本步骤'
+  if (step.source === 'group_step') return '来源：分组步骤'
+  if (step.source === 'db_step') return '来源：数据库步骤'
+  return `来源：${String(step.source || '步骤').replace(/_/g, ' ')}`
+})
+
+const stepResponseAssertionPass = computed(() => {
+  if (!stepEditorLastResponse.value) return false
+  if (stepEditorLastResponse.value.error) return false
+  const status = Number(stepEditorLastResponse.value?.status_code ?? 0)
+  return stepResponseValidatePass.value && stepResponsePostAssertionPass.value
+})
+
+const stepResponseAssertionText = computed(() => {
+  if (!stepEditorLastResponse.value) return '尚未执行'
+  return stepResponseAssertionPass.value ? '校验通过' : '校验失败'
+})
+
+const stepResponseAssertionCount = computed(() =>
+  (stepEditorPostOps.value.some((o) => o?.type === VALIDATE_RESPONSE_TYPE) ? 1 : 0) + stepEditorAssertionOps.value.length
+)
+
+const stepResponseValidatePass = computed(() => {
+  if (!stepEditorLastResponse.value || stepEditorLastResponse.value.error) return false
+  const status = Number(stepEditorLastResponse.value?.status_code ?? 0)
+  return evaluateValidateResponsePass(status, stepEditorPostOps.value, stepEditorLastResponse.value?.data).pass
+})
+
+const stepResponseAssertionResults = computed(() => {
+  if (!stepEditorLastResponse.value || stepEditorLastResponse.value.error) return []
+  const status = Number(stepEditorLastResponse.value?.status_code ?? 0)
+  const headers = normalizeProxyHeaderMap(stepEditorLastResponse.value?.headers)
+  return evaluatePostAssertions(status, headers, stepEditorLastResponse.value?.data, stepEditorPostOps.value).results
+})
+
+const stepResponsePostAssertionPass = computed(() =>
+  stepResponseAssertionResults.value.every((item) => item.passed)
+)
+
+const stepAssertionOpPreview = (op: any) => {
+  const target = stepAssertionTargetOptions.find((item) => item.value === op?.config?.target)?.label || '响应 JSON'
+  const operator = stepAssertionOperatorOptions.find((item) => item.value === op?.config?.operator)?.label || '等于'
+  return `${target} ${operator}`
+}
+
+const stepResponseExtractItems = computed(() => {
+  const configured = buildConfiguredStepExtractItems()
+  if (configured.length > 0) return configured
+  const data = stepEditorLastResponse.value?.data
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return [] as Array<{ key: string; value: string }>
+  const out: Array<{ key: string; value: string }> = []
+  const pushValue = (key: string, value: unknown) => {
+    if (out.length >= 8 || value == null || typeof value === 'object') return
+    out.push({ key, value: String(value) })
+  }
+  for (const [k, v] of Object.entries(data as Record<string, unknown>)) pushValue(k, v)
+  const nested = (data as Record<string, unknown>).data
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    for (const [k, v] of Object.entries(nested as Record<string, unknown>)) pushValue(`data.${k}`, v)
+  }
+  return out
+})
+
+const stepResponseExtractCount = computed(() => stepResponseExtractItems.value.length)
+
+const stepOutputTags = computed(() => {
+  const tags: string[] = []
+  for (const item of stepResponseExtractItems.value) {
+    const key = item.key.split('.').pop() || item.key
+    if (/token|id|code|msg|message|success/i.test(key)) tags.push(`{{${key}}}`)
+  }
+  return [...new Set(tags)].slice(0, 6)
+})
+
+const stepAuthNote = computed(() => {
+  if (stepAuthMode.value === 'bearer') return '将以 Authorization: Bearer <token> 的形式自动注入认证头。'
+  if (stepAuthMode.value === 'basic') return '将以用户名和密码拼接 Basic Authorization 头。'
+  if (stepAuthMode.value === 'apikey') return '适合将 API Key 放在 Header 或 Query 参数中的接口。'
+  return '当前不会注入认证信息，适合公开接口或通过 Cookies 认证的场景。'
+})
+
+const inferStepAuthModeFromHeaders = (rows: any[]) => {
+  const authRow = (Array.isArray(rows) ? rows : []).find(
+    (r) => String(r?.name || '').toLowerCase() === 'authorization'
+  )
+  if (authRow) {
+    const raw = String(authRow.example ?? authRow.value ?? '').toLowerCase()
+    if (raw.startsWith('bearer ')) return 'bearer' as const
+    if (raw.startsWith('basic ')) return 'basic' as const
+  }
+  const apiKeyRow = (Array.isArray(rows) ? rows : []).find((r) =>
+    /api[-_ ]?key/i.test(String(r?.name || ''))
+  )
+  return apiKeyRow ? ('apikey' as const) : ('none' as const)
+}
+
+const hydrateStepAuthState = (config?: any, rows?: any[]) => {
+  const mode = (config?.mode || inferStepAuthModeFromHeaders(rows || [])) as 'none' | 'bearer' | 'basic' | 'apikey'
+  stepAuthMode.value = mode
+  stepAuthBearer.value = {
+    prefix: String(config?.bearer?.prefix || 'Bearer'),
+    token: String(config?.bearer?.token || '')
+  }
+  stepAuthBasic.value = {
+    username: String(config?.basic?.username || ''),
+    password: String(config?.basic?.password || '')
+  }
+  stepAuthApiKey.value = {
+    position: config?.apikey?.position === 'query' ? 'query' : 'header',
+    key: String(config?.apikey?.key || 'X-API-Key'),
+    value: String(config?.apikey?.value || '')
+  }
+}
+
+const currentStepAuthConfig = computed(() => ({
+  mode: stepAuthMode.value,
+  bearer: { ...stepAuthBearer.value },
+  basic: { ...stepAuthBasic.value },
+  apikey: { ...stepAuthApiKey.value }
+}))
+
+const applyStepAuthToRequest = (headers: Record<string, string>, queryRows: any[], vars: Record<string, string> = {}) => {
+  if (stepAuthMode.value === 'bearer' && stepAuthBearer.value.token.trim()) {
+    headers.Authorization = `${stepAuthBearer.value.prefix || 'Bearer'} ${resolveStepTemplateText(stepAuthBearer.value.token.trim(), vars)}`
+    return
+  }
+  if (stepAuthMode.value === 'basic' && stepAuthBasic.value.username.trim()) {
+    const raw = `${resolveStepTemplateText(stepAuthBasic.value.username, vars)}:${resolveStepTemplateText(stepAuthBasic.value.password || '', vars)}`
+    headers.Authorization = `Basic ${btoa(unescape(encodeURIComponent(raw)))}`
+    return
+  }
+  if (stepAuthMode.value === 'apikey' && stepAuthApiKey.value.key.trim() && stepAuthApiKey.value.value.trim()) {
+    if (stepAuthApiKey.value.position === 'query') {
+      const existing = queryRows.find((row) => String(row?.name || '').trim() === stepAuthApiKey.value.key.trim())
+      const value = resolveStepTemplateText(stepAuthApiKey.value.value, vars)
+      if (existing) existing.example = value
+      else queryRows.push({ name: stepAuthApiKey.value.key.trim(), example: value })
+      return
+    }
+    headers[stepAuthApiKey.value.key.trim()] = resolveStepTemplateText(stepAuthApiKey.value.value, vars)
+  }
+}
+
+const resolveStepTemplateText = (text: string, vars: Record<string, string>) =>
+  String(text || '').replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, key) => vars[key] ?? '')
+
+const runStepPreScript = async (
+  script: string,
+  context: {
+    headers: Record<string, string>
+    queryRows: any[]
+    vars: Record<string, string>
+    setBody: (value: string) => void
+    setUrl: (value: string) => void
+    setMethod: (value: string) => void
+  }
+) => {
+  if (!script.trim()) return
+  const runtime = {
+    setHeader: (name: string, value: string) => {
+      if (!name) return
+      context.headers[String(name)] = String(value)
+    },
+    setQuery: (name: string, value: string) => {
+      if (!name) return
+      const row = context.queryRows.find((item) => String(item?.name || '').trim() === String(name).trim())
+      if (row) row.example = String(value)
+      else context.queryRows.push({ name: String(name), example: String(value) })
+    },
+    setVar: (name: string, value: string) => {
+      if (!name) return
+      context.vars[String(name)] = String(value)
+    },
+    setBody: context.setBody,
+    setUrl: context.setUrl,
+    setMethod: context.setMethod
+  }
+  await Promise.resolve(new Function('context', script)(runtime))
+}
+
+const resolveStepResponseValue = (source: string, expression: string, response: any) => {
+  const exp = String(expression || '').trim()
+  if (!exp) return undefined
+  if (source === 'header') {
+    const headers = response?.headers && typeof response.headers === 'object' ? response.headers : {}
+    const entry = Object.entries(headers).find(([k]) => k.toLowerCase() === exp.toLowerCase())
+    return entry?.[1]
+  }
+  const raw = response?.data
+  if (raw == null) return undefined
+  const data = typeof raw === 'string'
+    ? (() => { try { return JSON.parse(raw) } catch { return undefined } })()
+    : raw
+  if (data == null || typeof data !== 'object') return undefined
+  return exp
+    .replace(/^\./, '')
+    .split('.')
+    .filter(Boolean)
+    .reduce<any>((acc, key) => (acc != null ? acc[key] : undefined), data)
+}
+
+const buildConfiguredStepExtractItems = () => {
+  if (!stepEditorLastResponse.value) return [] as Array<{ key: string; value: string }>
+  const out: Array<{ key: string; value: string }> = []
+  for (const op of stepEditorExtractOps.value) {
+    const key = String(op?.config?.name || '').trim()
+    if (!key) continue
+    const value = resolveStepResponseValue(op?.config?.source || 'body', op?.config?.expression || '', stepEditorLastResponse.value)
+    if (value == null || typeof value === 'object') continue
+    out.push({ key, value: String(value) })
+  }
+  return out
+}
+
+const copyStepResponseBody = async () => {
+  if (!stepEditorLastResponse.value) return
+  try {
+    const text = stepResponseViewMode.value === 'pretty' ? stepResponseBodyPrettyText.value : stepResponseBodyRawText.value
+    await navigator.clipboard.writeText(text)
+    message.success('已复制响应内容')
+  } catch {
+    message.error('复制失败')
+  }
+}
+
+const focusSelectedStep = () => {
+  if (selectedStepIndex.value == null && detailStepCount.value > 0) {
+    selectScenarioStep(0)
+    return
+  }
+  if (selectedStepIndex.value != null) {
+    selectScenarioStep(selectedStepIndex.value)
+  }
+}
+
+const openStepWizard = () => {
+  if (selectedStepIndex.value == null && detailStepCount.value > 0) {
+    selectScenarioStep(0)
+  }
+  stepWizardVisible.value = true
+}
+
+const applyStepWizardPreset = async (key: string) => {
+  if (selectedStepIndex.value == null) {
+    message.warning('请先选择一个步骤')
+    return
+  }
+  if (key === 'login') {
+    stepEditorBodyType.value = 'json'
+    if (!stepEditorBodyContent.value.trim()) {
+      stepEditorBodyContent.value = '{\n  "username": "",\n  "password": ""\n}'
+    }
+    stepAuthMode.value = 'none'
+    stepEditorPostOps.value = [
+      defaultValidateResponseOp(),
+      {
+        id: `assert-${Date.now()}-code`,
+        type: 'assertion',
+        enabled: true,
+        config: { name: '业务码为成功', target: 'response_json', expression: 'code', operator: 'eq', value: '200' }
+      },
+      {
+        id: `extract-${Date.now()}-token`,
+        type: 'extract',
+        enabled: true,
+        config: { name: 'token', source: 'body', expression: 'data.token' }
+      },
+      {
+        id: `extract-${Date.now()}-uid`,
+        type: 'extract',
+        enabled: true,
+        config: { name: 'userId', source: 'body', expression: 'data.userId' }
+      }
+    ]
+  } else if (key === 'authorized-json') {
+    stepEditorBodyType.value = stepEditorMethod.value === 'GET' ? 'none' : 'json'
+    if (!stepEditorHeaderParams.value.some((row) => String(row?.name || '').toLowerCase() === 'content-type')) {
+      stepEditorHeaderParams.value = [...stepEditorHeaderParams.value, { name: 'Content-Type', example: 'application/json' }]
+    }
+    stepAuthMode.value = 'bearer'
+    if (!stepAuthBearer.value.token) stepAuthBearer.value.token = '{{token}}'
+    if (!stepEditorPreOps.value.some((op) => op?.type === 'set_header' && String(op?.config?.name || '').toLowerCase() === 'x-trace-id')) {
+      stepEditorPreOps.value = [...stepEditorPreOps.value, { id: `pre-${Date.now()}-trace`, type: 'set_header', enabled: true, config: { name: 'X-Trace-Id', value: `trace-${Date.now()}` } }]
+    }
+    if (!stepEditorPostOps.value.some((op) => op?.type === 'assertion')) {
+      stepEditorPostOps.value = [
+        ...stepEditorPostOps.value,
+        { id: `assert-${Date.now()}-success`, type: 'assertion', enabled: true, config: { name: '响应包含 success', target: 'response_text', expression: '', operator: 'contains', value: 'success' } }
+      ]
+    }
+  } else if (key === 'query-debug') {
+    stepEditorMethod.value = 'GET'
+    stepEditorPreOps.value = [
+      ...stepEditorPreOps.value,
+      { id: `pre-${Date.now()}-wait`, type: 'wait', enabled: true, config: { duration: '200', note: '等待链路稳定' } }
+    ]
+    stepEditorPostOps.value = [
+      defaultValidateResponseOp(),
+      {
+        id: `assert-${Date.now()}-status`,
+        type: 'assertion',
+        enabled: true,
+        config: { name: '状态码为 200', target: 'status', expression: '', operator: 'eq', value: '200' }
+      }
+    ]
+  }
+  await persistStepPreOperations()
+  await persistStepPostOperations()
+  if (isCurrentStepCustom.value) await saveHttpStepConfig()
+  stepWizardVisible.value = false
+  message.success('已应用步骤向导配置')
+}
+
+const insertStepDynamicValue = () => {
+  const tag = stepOutputTags.value[0] || '{{token}}'
+  stepEditorBodyContent.value = `${stepEditorBodyContent.value}${stepEditorBodyContent.value ? '\n' : ''}${tag}`
+  message.success('已插入动态变量占位符')
+}
+
+const buildCurrentStepCurlText = () => {
+  const method = String(stepEditorMethod.value || 'GET').toUpperCase()
+  const queryRows = cloneParamRows(stepEditorQueryParams.value)
+  const headers = buildProxyHeaders()
+  applyStepAuthToRequest(headers, queryRows, stepVars)
+  const url = buildUrlWithQueryString(stepEditorFullUrl.value.trim(), queryRows)
+  const lines = [`curl -X ${method} '${url}'`]
+  Object.entries(headers).forEach(([k, v]) => {
+    lines.push(`  -H '${k}: ${String(v).replace(/'/g, `'\"'\"'`)}'`)
+  })
+  if (stepEditorBodyType.value === 'json' && stepEditorBodyContent.value.trim()) {
+    lines.push(`  -d '${stepEditorBodyContent.value.replace(/'/g, `'\"'\"'`)}'`)
+  } else if (stepEditorBodyType.value === 'text' && stepEditorBodyContent.value.trim()) {
+    lines.push(`  --data-raw '${stepEditorBodyContent.value.replace(/'/g, `'\"'\"'`)}'`)
+  }
+  return lines.join(' \\\n')
+}
+
+const handleStepSendActionSelect = async (key: string) => {
+  if (key === 'save-and-send') {
+    if (isCurrentStepCustom.value) await saveHttpStepConfig()
+    await sendScenarioStepRequest()
+    return
+  }
+  if (key === 'copy-curl') {
+    try {
+      await navigator.clipboard.writeText(buildCurrentStepCurlText())
+      message.success('已复制当前步骤 cURL')
+    } catch {
+      message.error('复制 cURL 失败')
+    }
+    return
+  }
+  if (key === 'clear-response') {
+    stepEditorLastResponse.value = null
+  }
+}
+
+const syncSelectedScenarioStep = async () => {
+  const idx = selectedStepIndex.value
+  const scenario = detailScenario.value
+  if (idx == null || !scenario?.id) {
+    message.warning('请先选择一个步骤')
+    return
+  }
+  const steps = [...(detailStepsOrdered.value as any[])]
+  const step = steps[idx]
+  if (!step) return
+  if (step.source === 'http' || step.source === 'curl') {
+    await saveHttpStepConfig()
+    message.success('当前自定义步骤配置已同步保存')
+    return
+  }
+  try {
+    if (step.case_id) {
+      const tcRaw: any = await execRequest.get(`/test-cases/${step.case_id}`)
+      const tc = unwrapEntity(tcRaw) ?? tcRaw
+      if (tc?.name) step.name = tc.name
+      if (Array.isArray(tc?.pre_operations)) step.pre_operations = cloneParamRows(tc.pre_operations)
+      if (Array.isArray(tc?.post_operations)) step.post_operations = cloneParamRows(tc.post_operations)
+    }
+    if (step.interface_id) {
+      const ifaceRaw: any = await execRequest.get(`/interfaces/${step.interface_id}`)
+      const iface = unwrapEntity(ifaceRaw) ?? ifaceRaw
+      if (iface?.name && !step.case_id) step.name = iface.name
+      if (iface?.method) step.method = String(iface.method).toUpperCase()
+    }
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps })
+    await fetchScenarios()
+    await nextTick()
+    selectScenarioStep(idx)
+    message.success('步骤已同步最新配置')
+  } catch (err) {
+    console.error(err)
+    message.error('同步步骤失败')
+  }
+}
+
+const executeUtilityScenarioStep = async (step: any) => {
+  const source = String(step?.source || '')
+  const name = String(step?.name || '未命名步骤')
+  const cfg = step?.utility_config || {}
+  const startedAt = Date.now()
+  if (source === 'wait_step') {
+    const duration = Math.max(0, Number(cfg.duration || 0))
+    if (duration > 0) await new Promise((resolve) => window.setTimeout(resolve, duration))
+    return {
+      pass: true,
+      name,
+      method: 'STEP',
+      url: `wait://${duration}`,
+      statusCode: 200,
+      elapsedMs: Date.now() - startedAt,
+      responseBodyText: cfg.note ? String(cfg.note) : `等待 ${duration} ms 完成`,
+      responseSizeBytes: 0,
+      responseHeaders: {},
+      requestHeaders: {},
+      requestBodySnippet: ''
+    }
+  }
+  if (source === 'group_step') {
+    return {
+      pass: true,
+      name,
+      method: 'GROUP',
+      url: 'group://marker',
+      statusCode: 200,
+      elapsedMs: 0,
+      responseBodyText: String(cfg.note || cfg.group_name || '分组标记'),
+      responseSizeBytes: 0,
+      responseHeaders: {},
+      requestHeaders: {},
+      requestBodySnippet: ''
+    }
+  }
+  if (source === 'script_step') {
+    const vars: Record<string, string> = {}
+    try {
+      await runStepPreScript(String(cfg.script || ''), {
+        headers: {},
+        queryRows: [],
+        vars,
+        setBody: () => {},
+        setUrl: () => {},
+        setMethod: () => {}
+      })
+      return {
+        pass: true,
+        name,
+        method: 'SCRIPT',
+        url: 'script://local',
+        statusCode: 200,
+        elapsedMs: Date.now() - startedAt,
+        responseBodyText: JSON.stringify(vars, null, 2) || '脚本执行完成',
+        responseSizeBytes: 0,
+        responseHeaders: {},
+        requestHeaders: {},
+        requestBodySnippet: String(cfg.script || '')
+      }
+    } catch (err: any) {
+      return {
+        pass: false,
+        name,
+        method: 'SCRIPT',
+        url: 'script://local',
+        statusCode: 500,
+        elapsedMs: Date.now() - startedAt,
+        error: String(err?.message || err),
+        requestHeaders: {},
+        requestBodySnippet: String(cfg.script || '')
+      }
+    }
+  }
+  return {
+    pass: false,
+    name,
+    method: 'DB',
+    url: 'db://pending',
+    statusCode: 501,
+    elapsedMs: 0,
+    error: '数据库步骤编辑已开放，执行引擎暂未接入'
+  }
+}
+
+const runScenarioSteps = async (mode: 'all' | 'current' | 'failed') => {
+  const scenario = detailScenario.value
+  if (!scenario?.id) return
+  const envId = detailEnvId.value ?? scenario.env_id ?? null
+  let steps = [...detailStepsOrdered.value]
+  if (mode === 'current') {
+    if (selectedStepIndex.value == null) {
+      message.warning('请先选择当前步骤')
+      return
+    }
+    steps = steps.slice(selectedStepIndex.value)
+  } else if (mode === 'failed') {
+    const failedNames = new Set(currentScenarioSendLogs.value.filter((log) => !log.pass).map((log) => log.name))
+    steps = steps.filter((step: any) => failedNames.has(String(step?.name || '').trim()))
+    if (!steps.length) {
+      message.info('当前没有失败步骤')
+      return
+    }
+  }
+  if (!steps.length) {
+    message.warning('当前没有可执行步骤')
+    return
+  }
+
+  stepScenarioRunning.value = true
+  stopStepScenarioRunFlag.value = false
+  let pass = 0
+  let fail = 0
+  try {
+    for (const step of steps) {
+      if (stopStepScenarioRunFlag.value) break
+      const idx = detailStepsOrdered.value.findIndex((item: any) => item.order === step.order && item.name === step.name)
+      if (idx >= 0) {
+        selectedStepIndex.value = idx
+        await loadScenarioStepEditor()
+      }
+      if (utilityStepKinds.includes(String(step?.source || '') as any)) {
+        const entry = await executeUtilityScenarioStep(step)
+        if (entry.pass) pass++
+        else fail++
+        appendScenarioSendLog({
+          pass: entry.pass,
+          name: entry.name,
+          method: entry.method,
+          url: entry.url,
+          statusCode: entry.statusCode ?? null,
+          elapsedMs: entry.elapsedMs ?? null,
+          error: entry.error,
+          responseBodyText: entry.responseBodyText,
+          responseSizeBytes: entry.responseSizeBytes,
+          responseHeaders: entry.responseHeaders,
+          requestHeaders: entry.requestHeaders,
+          requestBodySnippet: entry.requestBodySnippet
+        })
+        stepEditorLastResponse.value = entry.error
+          ? { error: entry.error, status_code: entry.statusCode }
+          : {
+              status_code: entry.statusCode,
+              headers: entry.responseHeaders || {},
+              data: entry.responseBodyText || '',
+              elapsed: entry.elapsedMs
+            }
+        continue
+      }
+      const ctx = await loadStepExecContext(step, envId)
+      if (!ctx) {
+        fail++
+        appendScenarioSendLog({
+          pass: false,
+          name: String(step?.name || '未命名步骤'),
+          method: '—',
+          url: '—',
+          statusCode: null,
+          elapsedMs: null,
+          error: '步骤未绑定用例或接口，无法执行'
+        })
+        continue
+      }
+      const entry = await runStepExecContext(ctx)
+      if (entry.pass) pass++
+      else fail++
+      appendScenarioSendLog({
+        pass: entry.pass,
+        name: entry.name,
+        method: entry.method,
+        url: entry.url,
+        statusCode: entry.statusCode,
+        elapsedMs: entry.elapsedMs,
+        error: entry.error,
+        responseBodyText: entry.responseBodyText,
+        responseSizeBytes: entry.responseSizeBytes,
+        responseHeaders: entry.responseHeaders,
+        requestHeaders: entry.requestHeaders,
+        requestBodySnippet: entry.requestBodySnippet,
+        expectedStatusCode: entry.expectedStatusCode,
+        validateResponseEnabled: entry.validateResponseEnabled,
+        jsonBusinessCode: entry.jsonBusinessCode,
+        jsonBusinessOk: entry.jsonBusinessOk
+      })
+      stepEditorLastResponse.value = entry.error
+        ? { error: entry.error, status_code: entry.statusCode }
+        : {
+            status_code: entry.statusCode,
+            headers: entry.responseHeaders || {},
+            data: entry.responseBodyText || '',
+            elapsed: entry.elapsedMs
+          }
+    }
+    if (stopStepScenarioRunFlag.value) {
+      message.warning('步骤执行已停止')
+    } else {
+      message.success(`步骤执行完成：通过 ${pass}，失败 ${fail}`)
+    }
+  } catch (err) {
+    console.error(err)
+    message.error('步骤执行异常中断')
+  } finally {
+    stepScenarioRunning.value = false
+    stopStepScenarioRunFlag.value = false
+  }
+}
+
+const stopScenarioStepRun = () => {
+  stopStepScenarioRunFlag.value = true
+}
 
 const selectScenarioStep = (idx: number) => {
   selectedStepIndex.value = idx
+  stepDetailDrawerVisible.value = true
+  stepResponsePanelTab.value = 'body'
   loadScenarioStepEditor()
 }
 
@@ -2555,14 +4041,80 @@ const loadScenarioStepEditor = async () => {
   stepEditorLastResponse.value = null
   stepEditorCaseId.value = step.case_id ?? null
   stepEditorInterfaceId.value = step.interface_id ?? null
+
+  // ── source=http / curl：从步骤对象本身直接读取请求信息 ──
+  if (step.source === 'http' || step.source === 'curl') {
+    const m = String(step.method || 'GET').toUpperCase()
+    stepEditorMethod.value = m
+    stepEditorPath.value = ''
+    stepEditorFullUrl.value = step.custom_url || step.url || ''
+    stepEditorQueryParams.value = cloneParamRows(step.query_params || [])
+    stepEditorHeaderParams.value = cloneParamRows(step.header_params || [])
+    stepEditorPreOps.value = cloneParamRows(step.pre_operations || [])
+    hydrateStepAuthState(step.auth_config, stepEditorHeaderParams.value)
+    stepEditorBodyType.value = step.body_type || 'none'
+    stepEditorBodyContent.value = step.body_content || ''
+    stepEditorPostOps.value = mergePostOpsWithValidateResponse(cloneParamRows(step.post_operations || []))
+    stepSidebarMethods.value = { ...stepSidebarMethods.value, [idx]: m }
+    return
+  }
+
+  if (utilityStepKinds.includes(String(step.source || '') as any)) {
+    stepEditorMethod.value = 'GET'
+    stepEditorPath.value = ''
+    stepEditorFullUrl.value = ''
+    stepEditorQueryParams.value = []
+    stepEditorHeaderParams.value = []
+    stepEditorPreOps.value = cloneParamRows(step.pre_operations || [])
+    stepEditorPostOps.value = mergePostOpsWithValidateResponse(cloneParamRows(step.post_operations || []))
+    hydrateStepAuthState(step.auth_config, [])
+    stepEditorBodyType.value = 'none'
+    stepEditorBodyContent.value = ''
+    stepUtilityConfig.value = { ...(step.utility_config || {}) }
+    stepSidebarMethods.value = { ...stepSidebarMethods.value, [idx]: 'STEP' }
+    return
+  }
+
+  // ── source=interface：只有 interface_id，无 case_id，从接口定义加载 ──
+  if (step.source === 'interface' && step.interface_id) {
+    stepEditorLoading.value = true
+    try {
+      const ifaceRaw: any = await execRequest.get(`/interfaces/${step.interface_id}`)
+      const iface = unwrapEntity(ifaceRaw) ?? ifaceRaw
+      if (!iface?.id) { message.error('无法加载接口定义'); return }
+      const m = String(iface.method ?? 'GET').toUpperCase()
+      stepEditorMethod.value = m
+      stepEditorPath.value = iface.path || ''
+      stepSidebarMethods.value = { ...stepSidebarMethods.value, [idx]: m }
+      stepEditorQueryParams.value = cloneParamRows(iface.query_params)
+      stepEditorHeaderParams.value = cloneParamRows(iface.header_params)
+      stepEditorPreOps.value = cloneParamRows(step.pre_operations || [])
+      hydrateStepAuthState(step.auth_config, stepEditorHeaderParams.value)
+      const bd = iface.body_definition || { type: 'none', content: '' }
+      stepEditorBodyType.value = bd.type || 'none'
+      const c = bd.content
+      stepEditorBodyContent.value = typeof c === 'string' ? c : c != null ? JSON.stringify(c, null, 2) : ''
+      stepEditorPostOps.value = mergePostOpsWithValidateResponse(cloneParamRows(step.post_operations || []))
+      await rebuildStepEditorUrl()
+    } catch {
+      message.error('加载接口定义失败')
+    } finally {
+      stepEditorLoading.value = false
+    }
+    return
+  }
+
+  // ── 无 case_id 或 interface_id：空白步骤 ──
   if (!step.case_id || !step.interface_id) {
     stepEditorMethod.value = 'GET'
     stepEditorPath.value = ''
     stepEditorQueryParams.value = []
     stepEditorHeaderParams.value = []
+    stepEditorPreOps.value = cloneParamRows(step.pre_operations || [])
+    hydrateStepAuthState(step.auth_config, [])
     stepEditorBodyType.value = 'none'
     stepEditorBodyContent.value = ''
-    stepEditorPostOps.value = []
+    stepEditorPostOps.value = mergePostOpsWithValidateResponse(cloneParamRows(step.post_operations || []))
     stepEditorFullUrl.value = ''
     stepSidebarMethods.value = { ...stepSidebarMethods.value, [idx]: 'GET' }
     return
@@ -2589,6 +4141,10 @@ const loadScenarioStepEditor = async () => {
     const hpTc = cloneParamRows(tc?.header_params)
     const hpIface = cloneParamRows(iface.header_params)
     stepEditorHeaderParams.value = hpTc.length ? hpTc : hpIface
+    stepEditorPreOps.value = Array.isArray(tc?.pre_operations)
+      ? cloneParamRows(tc.pre_operations)
+      : cloneParamRows(step.pre_operations || [])
+    hydrateStepAuthState(step.auth_config, stepEditorHeaderParams.value)
     const bd = tc?.body_definition || iface.body_definition || { type: 'none', content: '' }
     stepEditorBodyType.value = bd.type || 'none'
     const c = bd.content
@@ -2626,6 +4182,368 @@ const removeCheckedScenarioSteps = async () => {
   }
 }
 
+// ── 步骤拖拽排序 ──
+const dragStepFromIndex = ref<number | null>(null)
+const dragStepOverIndex = ref<number | null>(null)
+
+const handleStepDragStart = (idx: number) => {
+  dragStepFromIndex.value = idx
+}
+
+const handleStepDragOver = (_evt: DragEvent, idx: number) => {
+  dragStepOverIndex.value = idx
+}
+
+const handleStepDragLeave = (evt: DragEvent) => {
+  const related = evt.relatedTarget as HTMLElement | null
+  if (!related || !related.closest?.('.step-list-item')) {
+    dragStepOverIndex.value = null
+  }
+}
+
+const handleStepDrop = async (toIdx: number) => {
+  const fromIdx = dragStepFromIndex.value
+  dragStepFromIndex.value = null
+  dragStepOverIndex.value = null
+  if (fromIdx === null || fromIdx === toIdx) return
+  const scenario = detailScenario.value
+  if (!scenario?.id) return
+  const steps = [...(detailStepsOrdered.value as any[])]
+  const [moved] = steps.splice(fromIdx, 1)
+  steps.splice(toIdx, 0, moved)
+  const newSteps = steps.map((s: any, i: number) => ({ ...s, order: i + 1 }))
+  // 修正已选步骤 index
+  if (selectedStepIndex.value === fromIdx) {
+    selectedStepIndex.value = toIdx
+  } else if (fromIdx < toIdx) {
+    if (selectedStepIndex.value! > fromIdx && selectedStepIndex.value! <= toIdx) {
+      selectedStepIndex.value = selectedStepIndex.value! - 1
+    }
+  } else {
+    if (selectedStepIndex.value! < fromIdx && selectedStepIndex.value! >= toIdx) {
+      selectedStepIndex.value = selectedStepIndex.value! + 1
+    }
+  }
+  try {
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps: newSteps })
+    await fetchScenarios()
+    message.success('顺序已调整')
+  } catch {
+    message.error('调整顺序失败')
+    await fetchScenarios()
+  }
+}
+
+const handleStepDragEnd = () => {
+  dragStepFromIndex.value = null
+  dragStepOverIndex.value = null
+}
+
+// ── 保存 source=http/curl 步骤的请求配置 ──
+const httpStepSaving = ref(false)
+
+const saveHttpStepConfig = async () => {
+  const idx = selectedStepIndex.value
+  if (idx == null) return
+  const scenario = detailScenario.value
+  if (!scenario?.id) return
+  const steps = [...(detailStepsOrdered.value as any[])]
+  const step = steps[idx]
+  if (!step || (step.source !== 'http' && step.source !== 'curl')) return
+  steps[idx] = {
+    ...step,
+    method: stepEditorMethod.value,
+    custom_url: stepEditorFullUrl.value,
+    query_params: stepEditorQueryParams.value,
+    header_params: stepEditorHeaderParams.value,
+    pre_operations: stepEditorPreOps.value,
+    post_operations: stepEditorPostOps.value,
+    auth_config: currentStepAuthConfig.value,
+    body_type: stepEditorBodyType.value,
+    body_content: stepEditorBodyContent.value
+  }
+  httpStepSaving.value = true
+  try {
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps })
+    message.success('请求配置已保存')
+    await fetchScenarios()
+  } catch {
+    message.error('保存失败')
+  } finally {
+    httpStepSaving.value = false
+  }
+}
+
+const saveUtilityStepConfig = async () => {
+  const idx = selectedStepIndex.value
+  const scenario = detailScenario.value
+  if (idx == null || !scenario?.id) return
+  const steps = [...(detailStepsOrdered.value as any[])]
+  const step = steps[idx]
+  if (!step || !utilityStepKinds.includes(String(step.source || '') as any)) return
+  steps[idx] = {
+    ...step,
+    utility_config: { ...stepUtilityConfig.value },
+    name:
+      step.source === 'group_step'
+        ? String(stepUtilityConfig.value.group_name || step.name || '步骤分组')
+        : step.name
+  }
+  httpStepSaving.value = true
+  try {
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps })
+    await fetchScenarios()
+    message.success('步骤配置已保存')
+  } catch {
+    message.error('保存失败')
+  } finally {
+    httpStepSaving.value = false
+  }
+}
+
+const isCurrentStepCustom = computed(() => {
+  const idx = selectedStepIndex.value
+  if (idx == null) return false
+  const step = detailStepsOrdered.value[idx]
+  return step?.source === 'http' || step?.source === 'curl'
+})
+
+const onCustomStepMethodChange = (v: string) => {
+  stepEditorMethod.value = v
+  if (selectedStepIndex.value != null) {
+    stepSidebarMethods.value = { ...stepSidebarMethods.value, [selectedStepIndex.value]: v }
+  }
+}
+
+// ── 直接添加空 HTTP 请求步骤 ──
+const addHttpStep = async () => {
+  const scenario = detailScenario.value
+  if (!scenario?.id) { message.warning('请先打开场景'); return }
+  const steps = [...(detailStepsOrdered.value as any[])]
+  const maxOrder = steps.reduce((m: number, s: any) => Math.max(m, s.order ?? 0), 0)
+  const newStep = {
+    order: maxOrder + 1,
+    name: '新建 HTTP 请求',
+    source: 'http',
+    method: 'GET',
+    custom_url: '',
+    query_params: [],
+    header_params: [],
+    pre_operations: [],
+    post_operations: [],
+    auth_config: { mode: 'none' },
+    body_type: 'none',
+    body_content: '',
+    case_id: null,
+    interface_id: null
+  }
+  steps.push(newStep)
+  try {
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps })
+    await fetchScenarios()
+    await nextTick()
+    selectScenarioStep(steps.length - 1)
+    message.success('已添加 HTTP 请求步骤，请在右侧填写请求信息')
+  } catch {
+    message.error('添加失败')
+  }
+}
+
+const addUtilityStep = async (type: 'wait_step' | 'script_step' | 'group_step' | 'db_step') => {
+  const scenario = detailScenario.value
+  if (!scenario?.id) { message.warning('请先打开场景'); return }
+  const steps = [...(detailStepsOrdered.value as any[])]
+  const maxOrder = steps.reduce((m: number, s: any) => Math.max(m, s.order ?? 0), 0)
+  steps.push({
+    order: maxOrder + 1,
+    ...createUtilityStep(type)
+  })
+  try {
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps })
+    await fetchScenarios()
+    await nextTick()
+    selectScenarioStep(steps.length - 1)
+    message.success('已添加步骤')
+  } catch {
+    message.error('添加失败')
+  }
+}
+
+// ── 从接口导入步骤 (import-api) ──
+const showImportApiModal = ref(false)
+const importApiSelectedMap = ref<Record<number, { id: number; name: string; method: string; path: string }>>({})
+const importApiSaving = ref(false)
+
+const importApiSelectedList = computed(() =>
+  Object.values(importApiSelectedMap.value)
+)
+
+const openImportApiModal = () => {
+  importApiSelectedMap.value = {}
+  importTreePattern.value = ''
+  showImportApiModal.value = true
+  loadImportModalTreeData()
+}
+
+const onImportApiModalLeave = () => {
+  importModalTreeData.value = []
+  importInterfacesIndex.value = new Map()
+  importApiSelectedMap.value = {}
+  importTreePattern.value = ''
+}
+
+const onImportApiTreeSelect = (keys: Array<string | number>) => {
+  const key = String(keys[0] ?? '')
+  if (!key.startsWith('api-')) return
+  const id = Number(key.slice(4))
+  if (Number.isNaN(id)) return
+  const iface = importInterfacesIndex.value.get(id)
+  if (!iface) return
+  const next = { ...importApiSelectedMap.value }
+  if (next[id]) {
+    delete next[id]
+    message.info(`已取消选中「${iface.name}」`)
+  } else {
+    next[id] = iface
+    message.success(`已选中「${iface.name}」`)
+  }
+  importApiSelectedMap.value = next
+}
+
+const removeImportApiSelected = (id: number) => {
+  const next = { ...importApiSelectedMap.value }
+  delete next[id]
+  importApiSelectedMap.value = next
+}
+
+const confirmImportApi = async () => {
+  const scenario = detailScenario.value
+  if (!scenario?.id) { message.warning('请先打开场景'); return }
+  const selected = importApiSelectedList.value
+  if (!selected.length) return
+  const steps = [...(Array.isArray(scenario.steps) ? scenario.steps : [])]
+  const existingIfaceIds = new Set(steps.map((s: any) => s.interface_id).filter(Boolean))
+  let maxOrder = steps.reduce((m: number, s: any) => Math.max(m, s.order ?? 0), 0)
+  let added = 0
+  for (const api of selected) {
+    if (existingIfaceIds.has(api.id)) continue
+    maxOrder += 1
+    steps.push({
+      order: maxOrder,
+      interface_id: api.id,
+      case_id: null,
+      name: api.name,
+      source: 'interface',
+      method: api.method
+    })
+    existingIfaceIds.add(api.id)
+    added++
+  }
+  if (!added) { message.warning('所选接口已在当前场景中，未添加新步骤'); return }
+  importApiSaving.value = true
+  try {
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps })
+    message.success(`已导入 ${added} 个接口步骤`)
+    showImportApiModal.value = false
+    await fetchScenarios()
+  } catch {
+    message.error('保存步骤失败')
+  } finally {
+    importApiSaving.value = false
+  }
+}
+
+// ── 从 cURL 导入步骤 ──
+const showCurlModal = ref(false)
+const curlInput = ref('')
+const curlStepName = ref('')
+const curlInputPlaceholder = `粘贴 cURL 命令，例如：\ncurl -X POST 'https://api.example.com/users' \\\n  -H 'Content-Type: application/json' \\\n  -d '{"name":"test"}'`
+const curlParsed = ref<{ method: string; url: string; headers: Record<string, string>; body: string } | null>(null)
+const curlSaving = ref(false)
+
+const parseCurlCommand = () => {
+  const raw = curlInput.value
+  if (!raw.trim()) return
+  const str = raw.trim().replace(/\\\n/g, ' ').replace(/\s+/g, ' ')
+  // 提取 URL
+  let url = ''
+  const urlM = str.match(/(?:^|\s)['"]?(https?:\/\/[^'">\s]+)['"]?/i)
+  if (urlM) url = urlM[1].replace(/['"]/g, '')
+  // 提取 Method
+  let method = 'GET'
+  const mM = str.match(/-X\s+['"]?(\w+)['"]?/)
+  if (mM) method = mM[1].toUpperCase()
+  else if (/(?:--data(?:-raw|-binary|-urlencode)?|-d)\s/.test(str)) method = 'POST'
+  // 提取 Headers
+  const headers: Record<string, string> = {}
+  const hRegex = /-H\s+['"]([^'"]+)['"]/g
+  let hM: RegExpExecArray | null
+  while ((hM = hRegex.exec(str)) !== null) {
+    const sep = hM[1].indexOf(':')
+    if (sep < 0) continue
+    const k = hM[1].slice(0, sep).trim()
+    const v = hM[1].slice(sep + 1).trim()
+    headers[k] = v
+  }
+  // 提取 Body
+  let body = ''
+  const bM = str.match(/(?:--data(?:-raw|-binary|-urlencode)?|-d)\s+['"]([^'"]*)['"]/i)
+  if (bM) body = bM[1].replace(/\\n/g, '\n').replace(/\\"/g, '"')
+  curlParsed.value = { method, url, headers, body }
+  curlStepName.value = url ? `${method} ${new URL(url).pathname}` : '从 cURL 导入'
+}
+
+const confirmImportCurl = async () => {
+  if (!curlParsed.value) return
+  const scenario = detailScenario.value
+  if (!scenario?.id) { message.warning('请先打开场景'); return }
+  const { method, url, headers, body } = curlParsed.value
+  const steps = [...(Array.isArray(scenario.steps) ? scenario.steps : [])] as any[]
+  const maxOrder = steps.reduce((m: number, s: any) => Math.max(m, s.order ?? 0), 0)
+  let bodyType = 'none'
+  let bodyContent = ''
+  if (body) {
+    const ct = headers['Content-Type'] || headers['content-type'] || ''
+    if (ct.includes('json') || (body.trim().startsWith('{') || body.trim().startsWith('['))) {
+      bodyType = 'json'
+    } else if (ct.includes('form-urlencoded')) {
+      bodyType = 'x-www-form-urlencoded'
+    } else {
+      bodyType = 'text'
+    }
+    bodyContent = body
+  }
+  const headerParams = Object.entries(headers).map(([name, example]) => ({ name, example }))
+  steps.push({
+    order: maxOrder + 1,
+    name: curlStepName.value.trim() || 'cURL 导入步骤',
+    source: 'curl',
+    method,
+    custom_url: url,
+    query_params: [],
+    header_params: headerParams,
+    body_type: bodyType,
+    body_content: bodyContent,
+    case_id: null,
+    interface_id: null
+  })
+  curlSaving.value = true
+  try {
+    await execRequest.patch(`/test-scenarios/${scenario.id}`, { steps })
+    message.success('已从 cURL 导入步骤')
+    showCurlModal.value = false
+    curlParsed.value = null
+    curlInput.value = ''
+    await fetchScenarios()
+    await nextTick()
+    selectScenarioStep(steps.length - 1)
+  } catch {
+    message.error('导入失败')
+  } finally {
+    curlSaving.value = false
+  }
+}
+
 const formatStepEditorJson = () => {
   if (stepEditorBodyType.value !== 'json') return
   try {
@@ -2658,22 +4576,113 @@ const currentStepNameForReport = () => {
 }
 
 const sendScenarioStepRequest = async () => {
-  const rawUrl = stepEditorFullUrl.value.trim()
+  if (isUtilityStep.value && selectedStep.value) {
+    const scenarioStep = {
+      ...selectedStep.value,
+      utility_config: { ...stepUtilityConfig.value }
+    }
+    const result = await executeUtilityScenarioStep(scenarioStep)
+    stepEditorLastResponse.value = result.error
+      ? { error: result.error, status_code: result.statusCode }
+      : {
+          status_code: result.statusCode,
+          headers: result.responseHeaders || {},
+          data: result.responseBodyText || '',
+          elapsed: result.elapsedMs
+        }
+    appendScenarioSendLog({
+      pass: result.pass,
+      name: result.name,
+      method: result.method,
+      url: result.url,
+      statusCode: result.statusCode ?? null,
+      elapsedMs: result.elapsedMs ?? null,
+      error: result.error,
+      responseBodyText: result.responseBodyText,
+      responseSizeBytes: result.responseSizeBytes,
+      responseHeaders: result.responseHeaders,
+      requestHeaders: result.requestHeaders,
+      requestBodySnippet: result.requestBodySnippet
+    })
+    if (result.pass) message.success('步骤执行完成')
+    else message.error(result.error || '步骤执行失败')
+    return
+  }
+  let runtimeUrl = stepEditorFullUrl.value.trim()
+  let runtimeMethod = String(stepEditorMethod.value || 'GET').toUpperCase()
+  let runtimeBodyText = stepEditorBodyContent.value
+  if (!runtimeUrl) {
+    message.warning('请填写请求 URL')
+    return
+  }
+  const stepVars: Record<string, string> = {}
+  const upperMethodSeed = String(stepEditorMethod.value || 'GET').toUpperCase()
+  const queryRows = cloneParamRows(stepEditorQueryParams.value)
+  const headers: Record<string, string> = { ...buildProxyHeaders() }
+  for (const op of stepEditorPreOps.value) {
+    if (op?.enabled === false) continue
+    if (op?.type === 'wait') {
+      const waitMs = Math.max(0, Number(op?.config?.duration || 0))
+      if (waitMs > 0) await new Promise((resolve) => window.setTimeout(resolve, waitMs))
+      continue
+    }
+    if (op?.type === 'set_var') {
+      const key = String(op?.config?.name || '').trim()
+      if (!key) continue
+      stepVars[key] = String(op?.config?.value || '')
+      continue
+    }
+    if (op?.type === 'script') {
+      try {
+        await runStepPreScript(String(op?.config?.script || ''), {
+          headers,
+          queryRows,
+          vars: stepVars,
+          setBody: (value) => { runtimeBodyText = String(value) },
+          setUrl: (value) => { runtimeUrl = String(value) },
+          setMethod: (value) => { runtimeMethod = String(value || 'GET').toUpperCase() }
+        })
+      } catch (err: any) {
+        message.error(`前置脚本执行失败：${err?.message || err}`)
+        return
+      }
+      continue
+    }
+    if (op?.type === 'set_query') {
+      const key = String(op?.config?.name || '').trim()
+      if (!key) continue
+      const existing = queryRows.find((row) => String(row?.name || '').trim() === key)
+      const value = resolveStepTemplateText(String(op?.config?.value || ''), stepVars)
+      if (existing) existing.example = value
+      else queryRows.push({ name: key, example: value })
+      continue
+    }
+  }
+  Object.keys(headers).forEach((key) => {
+    headers[key] = resolveStepTemplateText(headers[key], stepVars)
+  })
+  let rawUrl = resolveStepTemplateText(runtimeUrl, stepVars)
   if (!rawUrl) {
     message.warning('请填写请求 URL')
     return
   }
-  const upper = String(stepEditorMethod.value || 'GET').toUpperCase()
+  const upper = runtimeMethod || upperMethodSeed
   const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(upper)
-  const hasParamRows = stepEditorQueryParams.value.some((r) => String(r.name || '').trim())
+  const hasParamRows = queryRows.some((r) => String(r.name || '').trim())
   const baseUrl = rawUrl.split('?')[0]
 
   let finalUrl = rawUrl
   let body: any = null
-  const headers: Record<string, string> = { ...buildProxyHeaders() }
+  for (const op of stepEditorPreOps.value) {
+    if (op?.enabled === false || op?.type !== 'set_header') continue
+    const key = String(op?.config?.name || '').trim()
+    if (!key) continue
+    headers[key] = resolveStepTemplateText(String(op?.config?.value || ''), stepVars)
+  }
+  applyStepAuthToRequest(headers, queryRows)
 
   if (upper === 'GET' || upper === 'HEAD') {
-    finalUrl = buildUrlWithQueryString(rawUrl, stepEditorQueryParams.value)
+    finalUrl = buildUrlWithQueryString(rawUrl, queryRows)
   } else if (
     isWrite &&
     stepEditorBodyType.value === 'none' &&
@@ -2681,28 +4690,28 @@ const sendScenarioStepRequest = async () => {
   ) {
     // POST/PUT 等仅有 Params、无 Body：按表单提交（OAuth 等常见场景）
     finalUrl = baseUrl
-    body = buildFormBodyFromParamRows(stepEditorQueryParams.value)
+    body = buildFormBodyFromParamRows(queryRows)
     if (!headers['Content-Type'] && !headers['content-type']) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
     }
   } else if (isWrite && stepEditorBodyType.value === 'x-www-form-urlencoded') {
     finalUrl = baseUrl
-    body = buildFormBodyFromParamRows(stepEditorQueryParams.value)
+    body = buildFormBodyFromParamRows(queryRows)
     if (!headers['Content-Type'] && !headers['content-type']) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
     }
   } else {
-    finalUrl = buildUrlWithQueryString(rawUrl, stepEditorQueryParams.value)
+    finalUrl = buildUrlWithQueryString(rawUrl, queryRows)
     if (isWrite) {
       if (stepEditorBodyType.value === 'json' && stepEditorBodyContent.value.trim()) {
         try {
-          body = JSON.parse(stepEditorBodyContent.value)
+          body = JSON.parse(resolveStepTemplateText(runtimeBodyText, stepVars))
         } catch {
           message.error('Body JSON 无法解析')
           return
         }
       } else if (stepEditorBodyType.value === 'text') {
-        body = stepEditorBodyContent.value
+        body = resolveStepTemplateText(runtimeBodyText, stepVars)
       } else if (stepEditorBodyType.value === 'form-data') {
         message.warning('form-data 请暂用 JSON 或 x-www-form-urlencoded')
         return
@@ -2763,9 +4772,10 @@ const sendScenarioStepRequest = async () => {
       const code = Number(env.status_code ?? 0)
       const ev = evaluateValidateResponsePass(code, stepEditorPostOps.value, env.data)
       const rh = normalizeProxyHeaderMap(env.headers)
+      const assertionEval = evaluatePostAssertions(code, rh, env.data, stepEditorPostOps.value)
       const { text, bytes } = stringifyResponseForLog(env.data)
       appendScenarioSendLog({
-        pass: ev.pass,
+        pass: ev.pass && assertionEval.pass,
         name,
         method: upper,
         url: finalUrl,
@@ -2834,12 +4844,19 @@ watch(
     const n = detailStepCount.value
     if (n === 0) {
       selectedStepIndex.value = null
+      stepDetailDrawerVisible.value = false
       stepBulkCheckedIndices.value = []
       stepSidebarMethods.value = {}
+      stepEditorPreOps.value = []
+      stepEditorPostOps.value = []
+      hydrateStepAuthState()
       return
     }
     if (selectedStepIndex.value == null || selectedStepIndex.value >= n) {
       selectedStepIndex.value = 0
+    }
+    if (scenarioPanelMode.value === 'detail' && detailMainTab.value === 'steps') {
+      stepDetailDrawerVisible.value = true
     }
     loadScenarioStepEditor()
   },
@@ -2849,6 +4866,12 @@ watch(
 watch(detailEnvId, () => {
   if (selectedStepIndex.value != null && detailStepCount.value > 0) {
     rebuildStepEditorUrl()
+  }
+})
+
+watch(detailMainTab, (tab) => {
+  if (tab === 'steps' && scenarioPanelMode.value === 'detail' && detailStepCount.value > 0) {
+    stepDetailDrawerVisible.value = true
   }
 })
 
@@ -2934,6 +4957,8 @@ const addStepScenarioItems: AddStepMenuItem[] = [
   { key: 'import-scenario', label: '从其它场景用例导入', icon: ImportOutlined, iconBg: 'step-icon-slate' },
   { key: 'ref-scenario', label: '引用其它场景用例', icon: LinkOutlined, iconBg: 'step-icon-slate' }
 ]
+
+const utilityStepKinds = ['wait_step', 'script_step', 'group_step', 'db_step'] as const
 
 const methodBadgeStyle = (method: string) => {
   const map: Record<string, string> = {
@@ -3252,6 +5277,38 @@ const handleAddStepItem = (item: AddStepMenuItem) => {
     openImportCaseModal('formal')
     return
   }
+  if (item.key === 'import-api') {
+    openImportApiModal()
+    return
+  }
+  if (item.key === 'http') {
+    addHttpStep()
+    return
+  }
+  if (item.key === 'wait') {
+    addUtilityStep('wait_step')
+    return
+  }
+  if (item.key === 'script') {
+    addUtilityStep('script_step')
+    return
+  }
+  if (item.key === 'group') {
+    addUtilityStep('group_step')
+    return
+  }
+  if (item.key === 'db') {
+    addUtilityStep('db_step')
+    return
+  }
+  if (item.key === 'curl') {
+    curlInput.value = ''
+    curlParsed.value = null
+    curlStepName.value = ''
+    showCurlModal.value = true
+    return
+  }
+  // 其余项目（group/branch/foreach/for/script/db/wait/import-scenario/ref-scenario）暂未实现
   message.info(`「${item.label}」功能开发中`)
 }
 
@@ -3270,6 +5327,7 @@ const enterScenarioList = () => {
   activeView.value = 'all'
   scenarioPanelMode.value = 'list'
   selectedScenarioForDetail.value = null
+  stepDetailDrawerVisible.value = false
   selectedSidebarKeys.value = [ROOT_KEY]
 }
 
@@ -3277,6 +5335,7 @@ const openScenarioDetail = (row: any) => {
   activeView.value = 'all'
   scenarioPanelMode.value = 'detail'
   selectedScenarioForDetail.value = row
+  stepDetailDrawerVisible.value = false
   selectedSidebarKeys.value = [`scenario-${row.id}`]
 }
 
@@ -3938,7 +5997,7 @@ onUnmounted(() => {
 }
 .sb-search-box:focus-within {
   background: #fff;
-  border-color: #818cf8;
+  border-color: var(--color-primary-400);
   box-shadow: 0 0 0 2px rgba(129,140,248,0.18);
 }
 
@@ -3950,7 +6009,7 @@ onUnmounted(() => {
   background: transparent;
   font-size: 12px;
   color: #374151;
-  caret-color: #6366f1;
+  caret-color: var(--color-primary-500);
   line-height: 1;
 }
 .sb-search-input::placeholder {
@@ -3969,9 +6028,9 @@ onUnmounted(() => {
   transition: all 0.15s;
 }
 .sidebar-tool-btn:hover {
-  border-color: #818cf8;
-  color: #6366f1;
-  background: rgba(99,102,241,0.06);
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-500);
+  background: rgba(var(--color-primary-rgb),0.06);
 }
 
 .sidebar-add-btn {
@@ -3979,15 +6038,15 @@ onUnmounted(() => {
   width: 32px; height: 32px;
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400));
   color: #fff;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(99,102,241,0.35);
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb),0.35);
   transition: all 0.2s ease;
 }
 .sidebar-add-btn:hover {
-  box-shadow: 0 4px 14px rgba(99,102,241,0.5);
+  box-shadow: 0 4px 14px rgba(var(--color-primary-rgb),0.5);
   transform: rotate(90deg);
 }
 
@@ -4014,8 +6073,8 @@ onUnmounted(() => {
   margin-bottom: 2px;
 }
 .nav-item:hover { background: #f5f6fb; }
-.nav-item.active { background: rgba(99,102,241,0.08); }
-.nav-item.active .nav-label { color: #6366f1; font-weight: 600; }
+.nav-item.active { background: rgba(var(--color-primary-rgb),0.08); }
+.nav-item.active .nav-label { color: var(--color-primary-500); font-weight: 600; }
 
 .nav-icon-wrap {
   width: 32px;
@@ -4038,8 +6097,8 @@ onUnmounted(() => {
 }
 
 .nav-badge {
-  background: rgba(99,102,241,0.12);
-  color: #6366f1;
+  background: rgba(var(--color-primary-rgb),0.12);
+  color: var(--color-primary-500);
   font-size: 10px;
   font-weight: 700;
   padding: 1px 6px;
@@ -4111,8 +6170,8 @@ onUnmounted(() => {
   background: transparent !important;
 }
 :deep(.scenario-tree .n-tree-node--selected > .n-tree-node-content) {
-  background: rgba(99,102,241,0.1) !important;
-  color: #6366f1;
+  background: rgba(var(--color-primary-rgb),0.1) !important;
+  color: var(--color-primary-500);
   font-weight: 500;
 }
 :deep(.scenario-tree .n-tree-node:not(.n-tree-node--disabled):hover) {
@@ -4124,12 +6183,12 @@ onUnmounted(() => {
 
 /* 树根部「新建」按钮 */
 .tree-root-add-btn {
-  color: #6366f1;
-  background: rgba(99,102,241,0.1);
+  color: var(--color-primary-500);
+  background: rgba(var(--color-primary-rgb),0.1);
   transition: background 0.15s, transform 0.15s;
 }
 .tree-root-add-btn:hover {
-  background: rgba(99,102,241,0.2);
+  background: rgba(var(--color-primary-rgb),0.2);
   transform: scale(1.08);
 }
 
@@ -4167,12 +6226,12 @@ onUnmounted(() => {
   background: transparent;
 }
 .new-btn {
-  background: linear-gradient(135deg, #6366f1, #818cf8) !important;
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400)) !important;
   border: none !important;
   border-radius: 9px !important;
   font-size: 13px !important;
   height: 36px !important;
-  box-shadow: 0 4px 12px rgba(99,102,241,0.3) !important;
+  box-shadow: 0 4px 12px rgba(var(--color-primary-rgb),0.3) !important;
 }
 
 /* ═══ 渐变顶栏 ═══ */
@@ -4188,7 +6247,7 @@ onUnmounted(() => {
   top: -40px; right: -40px;
   width: 140px; height: 140px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(99,102,241,0.10) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(var(--color-primary-rgb),0.10) 0%, transparent 70%);
   pointer-events: none;
 }
 .ts-topbar-inner {
@@ -4210,9 +6269,9 @@ onUnmounted(() => {
 .ts-topbar-title-row { display: flex; align-items: center; gap: 10px; }
 .ts-topbar-title-icon {
   width: 32px; height: 32px; border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400));
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 3px 10px rgba(99,102,241,0.3); flex-shrink: 0;
+  box-shadow: 0 3px 10px rgba(var(--color-primary-rgb),0.3); flex-shrink: 0;
 }
 .ts-topbar-title {
   margin: 0; font-size: 18px; font-weight: 700; color: #111827;
@@ -4407,45 +6466,6 @@ onUnmounted(() => {
   min-height: 0;
   overflow: hidden;
 }
-.scenario-detail-main.detail-main-flex > .detail-meta-bar,
-.scenario-detail-main.detail-main-flex > .detail-desc-line,
-.scenario-detail-main.detail-main-flex > .detail-creator-line {
-  flex-shrink: 0;
-}
-.detail-meta-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-.detail-scenario-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1a1f36;
-}
-.detail-id-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #8792a2;
-  margin-left: 4px;
-}
-.detail-desc-line {
-  margin-top: 10px;
-  font-size: 13px;
-  color: #a0aab8;
-}
-.detail-creator-line {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #5c6676;
-}
-.detail-time-muted {
-  color: #a0aab8;
-  margin-left: 8px;
-}
-
 /* ── 单场景 · 测试报告（步骤「发送」记录） ── */
 .detail-report-root {
   flex: 1 1 auto;
@@ -5083,7 +7103,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   min-height: 0;
-  margin-top: 16px;
+  margin-top: 0;
   border: 1px solid #eaecf4;
   border-radius: 12px;
   background: #fff;
@@ -5104,11 +7124,118 @@ onUnmounted(() => {
 .step-list-toolbar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 10px 8px;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 12px 10px;
   border-bottom: 1px solid #eaecf4;
   font-size: 12px;
+}
+.step-toolbar-title-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.step-toolbar-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: #7d33ff;
+}
+.step-toolbar-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+.step-toolbar-env {
+  width: 170px;
+}
+.step-toolbar-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px 0;
+}
+.step-toolbar-action-row.secondary {
+  padding-top: 8px;
+}
+.step-link-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 12px;
+  color: #6b4eff;
+  cursor: pointer;
+}
+.step-link-btn.muted {
+  color: #94a3b8;
+}
+.step-link-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.step-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid #eaecf4;
+  background: linear-gradient(180deg, #fcfcff 0%, #f7f8fc 100%);
+}
+.step-filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eaecf4;
+}
+.step-filter-search {
+  flex: 1;
+}
+.step-filter-method {
+  width: 112px;
+}
+.step-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid #eaecf4;
+}
+.step-stat-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.step-stat-card.ok {
+  background: linear-gradient(180deg, #f0fdf4 0%, #f7fffa 100%);
+}
+.step-stat-card.fail {
+  background: linear-gradient(180deg, #fff1f2 0%, #fff7f7 100%);
+}
+.step-stat-card.pending {
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+.step-stat-label {
+  font-size: 12px;
+  color: #64748b;
+}
+.step-stat-value {
+  font-size: 28px;
+  line-height: 1;
+  color: #0f172a;
+}
+.step-recent-fail {
+  padding: 0 12px 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+.step-recent-label {
+  color: #f97316;
+}
+.step-recent-value {
+  color: #334155;
 }
 .step-toolbar-count {
   font-weight: 600;
@@ -5134,12 +7261,14 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 12px;
   margin: 4px 8px;
-  border-radius: 8px;
+  border-radius: 14px;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid #eceff6;
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  position: relative;
+  background: #fff;
 }
 .step-list-item:hover {
   background: #f3f0ff;
@@ -5148,6 +7277,33 @@ onUnmounted(() => {
   background: #f5f0ff;
   border-color: rgba(125, 51, 255, 0.28);
   box-shadow: inset 3px 0 0 #7d33ff;
+}
+/* 拖拽排序样式 */
+.step-list-item.drag-over {
+  border-color: #7d33ff;
+  background: #f0ebff;
+  box-shadow: inset 3px 0 0 #7d33ff, 0 0 0 2px rgba(125,51,255,0.15);
+}
+.step-list-item.dragging {
+  opacity: 0.45;
+  background: #f8f0ff;
+}
+.step-drag-handle {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: #c0c8d8;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0 2px;
+}
+.step-list-item:hover .step-drag-handle {
+  opacity: 1;
+}
+.step-drag-handle:active {
+  cursor: grabbing;
 }
 .step-li-method {
   font-size: 10px;
@@ -5158,9 +7314,22 @@ onUnmounted(() => {
   line-height: 1.35;
   margin-top: 2px;
 }
+.step-li-order {
+  min-width: 24px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b4eff;
+  line-height: 24px;
+}
 .step-li-main {
   flex: 1;
   min-width: 0;
+}
+.step-li-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .step-li-name {
   font-size: 13px;
@@ -5174,6 +7343,42 @@ onUnmounted(() => {
   color: #a0aab8;
   margin-top: 4px;
 }
+.step-li-submeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.step-li-status {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.step-li-status.passed {
+  background: rgba(34, 197, 94, 0.1);
+  color: #15803d;
+}
+.step-li-status.failed {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+.step-li-status.pending {
+  background: rgba(148, 163, 184, 0.12);
+  color: #475569;
+}
+.step-li-meta--iface {
+  color: #7d33ff;
+}
+.step-li-meta--http {
+  color: #0ea5e9;
+}
 .step-list-footer {
   padding: 10px;
   border-top: 1px solid #eaecf4;
@@ -5182,6 +7387,13 @@ onUnmounted(() => {
 .step-add-footer-btn {
   border-color: #7d33ff !important;
   color: #7d33ff !important;
+}
+.step-workspace-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  justify-content: center;
 }
 .step-editor-panel {
   flex: 1;
@@ -5195,6 +7407,28 @@ onUnmounted(() => {
   min-height: 100%;
   display: flex;
   flex-direction: column;
+}
+.step-editor-shell {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  height: 100%;
+}
+.step-editor-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px 16px;
+  border-left: 1px solid #eef1f6;
+}
+.step-response-side {
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid #eef1f6;
+  background: linear-gradient(180deg, #fbfcff 0%, #f7f9fc 100%);
+  display: flex;
 }
 .step-editor-placeholder {
   flex: 1;
@@ -5213,19 +7447,135 @@ onUnmounted(() => {
   color: #a0aab8;
   line-height: 1.5;
 }
-.step-editor-inner {
+.step-overview-card {
+  border: 1px solid #e6ebf5;
+  background: linear-gradient(135deg, #f6f8ff 0%, #eff4ff 100%);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.step-overview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.step-overview-title-group {
+  min-width: 0;
+}
+.step-overview-eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7d33ff;
+  margin-bottom: 6px;
+}
+.step-overview-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.step-overview-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.step-overview-method {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.step-overview-env {
   display: flex;
   flex-direction: column;
-  padding: 16px 20px 20px;
-  min-height: 100%;
-  box-sizing: border-box;
+  gap: 6px;
+  align-items: flex-end;
+}
+.step-overview-env-label {
+  font-size: 12px;
+  color: #64748b;
+}
+.step-overview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.step-overview-chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid #dbe4f3;
+  font-size: 12px;
+  color: #475569;
+}
+.step-overview-chip--ok {
+  color: #0f766e;
+  background: rgba(236, 253, 245, 0.9);
+  border-color: #bbf7d0;
+}
+.step-link-summary {
+  border: 1px solid #e6ebf5;
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: #fbfcff;
+  margin-bottom: 12px;
+}
+.step-link-summary-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #3b4360;
+  margin-bottom: 12px;
+}
+.step-link-summary-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.step-link-summary-label {
+  width: 70px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 28px;
+}
+.step-link-summary-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.step-link-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+}
+.step-link-summary-empty {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 28px;
 }
 .step-response-panel {
-  margin-top: 16px;
+  margin: 0;
   border: 1px solid #eaecf4;
-  border-radius: 8px;
+  border-radius: 0;
   background: #fafbfc;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.step-response-panel.always-visible {
+  border: none;
+  background: transparent;
 }
 .step-response-head {
   display: flex;
@@ -5250,10 +7600,63 @@ onUnmounted(() => {
   font-size: 12px;
   color: #dc2626;
 }
+.step-response-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 0;
+}
+.step-response-view-switch {
+  display: inline-flex;
+  gap: 8px;
+}
+.step-view-btn,
+.step-mini-tab,
+.step-auth-card {
+  border: 1px solid #d9e0ec;
+  background: #fff;
+  cursor: pointer;
+}
+.step-view-btn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #475569;
+}
+.step-view-btn.active {
+  border-color: #7d33ff;
+  color: #7d33ff;
+  background: rgba(125, 51, 255, 0.08);
+}
+.step-response-tabs-mini {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.step-mini-tab {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #475569;
+}
+.step-mini-tab.active {
+  border-color: #7d33ff;
+  color: #7d33ff;
+  background: rgba(125, 51, 255, 0.08);
+}
+.step-response-body-shell {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+}
 .step-response-pre {
   margin: 0;
   padding: 12px 14px;
-  max-height: min(360px, 40vh);
+  flex: 1;
   overflow: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
@@ -5262,6 +7665,111 @@ onUnmounted(() => {
   word-break: break-word;
   color: #1e293b;
   background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+.step-response-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  border: 1px dashed #dbe4f3;
+  border-radius: 12px;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.78);
+}
+.step-response-kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+}
+.step-response-kv-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e2e8f0;
+}
+.step-response-k {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  word-break: break-word;
+}
+.step-response-v {
+  font-size: 12px;
+  color: #475569;
+  word-break: break-word;
+}
+.step-assert-card {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e2e8f0;
+}
+.step-assert-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.step-assert-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+.step-assert-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.step-assert-pill.is-pass {
+  color: #15803d;
+  background: rgba(34, 197, 94, 0.12);
+}
+.step-assert-pill.is-fail {
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.1);
+}
+.step-assert-help {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #64748b;
+}
+.step-assert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.step-assert-list-item {
+  display: grid;
+  grid-template-columns: 120px 60px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.step-assert-item-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+}
+.step-assert-item-msg {
+  min-width: 0;
+  font-size: 12px;
+  color: #64748b;
+  word-break: break-all;
 }
 .step-purple-btn {
   background: #7d33ff !important;
@@ -5291,10 +7799,215 @@ onUnmounted(() => {
 }
 .step-config-tabs :deep(.n-tabs-pane-wrapper) {
   overflow: auto;
-  max-height: min(420px, calc(100vh - 360px));
+  max-height: min(520px, calc(100vh - 300px));
 }
 .step-tab-pane-inner {
   padding-top: 10px;
+}
+.step-auth-pane {
+  border: 1px solid #e6ebf5;
+  border-radius: 14px;
+  background: #fbfcff;
+  padding: 14px;
+}
+.step-auth-head {
+  margin-bottom: 14px;
+}
+.step-auth-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 6px;
+}
+.step-auth-desc {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.6;
+}
+.step-auth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.step-auth-card {
+  border-radius: 14px;
+  padding: 14px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.18s ease;
+}
+.step-auth-card strong {
+  font-size: 14px;
+  color: #1f2937;
+}
+.step-auth-card span {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+.step-auth-card.active {
+  border-color: #8b5cf6;
+  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.12);
+  background: linear-gradient(180deg, #f7f3ff 0%, #ffffff 100%);
+}
+.step-auth-note {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed #dbe4f3;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.6;
+}
+.step-auth-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.step-pre-pane,
+.step-post-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.step-pre-quick-add,
+.step-post-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.step-inline-op-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.step-inline-op-card {
+  border: 1px solid #e6ebf5;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fbfcff;
+}
+.step-inline-op-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.step-inline-op-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.step-inline-op-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.step-inline-op-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.step-inline-op-grid.two-cols {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.step-inline-op-grid.three-cols {
+  grid-template-columns: 160px 140px minmax(0, 1fr);
+}
+.step-inline-op-hint {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+}
+.step-wizard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.step-wizard-headline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.step-wizard-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+}
+.step-wizard-subtitle,
+.step-wizard-footer-tip {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.6;
+}
+.step-wizard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.step-wizard-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  text-align: left;
+  transition: all 0.2s ease;
+}
+.step-wizard-card:hover {
+  border-color: #8b5cf6;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(139, 92, 246, 0.12);
+}
+.step-wizard-card strong {
+  font-size: 14px;
+  color: #1f2937;
+}
+.step-wizard-card span {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.6;
+}
+.step-utility-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #e6ebf5;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+}
+.step-utility-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.step-utility-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+}
+.step-utility-grid {
+  display: grid;
+  gap: 12px;
+}
+.step-utility-grid.two-cols {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.step-utility-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .step-post-pane .step-post-other-empty {
   margin-top: 12px;
@@ -5368,6 +8081,28 @@ onUnmounted(() => {
   color: #8792a2;
   font-size: 11px;
   word-break: break-all;
+}
+@media (max-width: 1680px) {
+  .step-editor-shell {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+@media (max-width: 1360px) {
+  .step-editor-shell {
+    grid-template-columns: 1fr;
+  }
+  .step-response-side {
+    border-left: none;
+    border-top: 1px solid #eef1f6;
+    min-height: 360px;
+  }
+  .step-overview-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .step-overview-env {
+    align-items: stretch;
+  }
 }
 .detail-steps-head {
   margin-top: 28px;
@@ -5716,6 +8451,78 @@ onUnmounted(() => {
 .add-step-btn {
   border-color: #7d33ff !important;
   color: #7d33ff !important;
+}
+
+/* 从接口导入：选中列表行 */
+.import-api-selected-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f2f8;
+}
+.import-api-selected-row:last-child {
+  border-bottom: none;
+}
+.import-api-sel-info {
+  flex: 1;
+  min-width: 0;
+}
+.import-api-sel-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1f36;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.import-api-sel-path {
+  font-size: 11px;
+  color: #a0aab8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* cURL 解析预览 */
+.curl-preview-box {
+  padding: 14px;
+  background: #f8f9ff;
+  border: 1px solid #e8eaf0;
+  border-radius: 8px;
+}
+.curl-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.curl-preview-row:last-child {
+  margin-bottom: 0;
+}
+.curl-preview-label {
+  width: 56px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #a0aab8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.curl-preview-val {
+  color: #1a1f36;
+  font-size: 12px;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+/* HTTP 步骤保存按钮 */
+.step-save-cfg-btn {
+  flex-shrink: 0;
+  border-color: #7d33ff !important;
+  color: #7d33ff !important;
+  background: transparent !important;
 }
 
 :deep(.add-step-popover-trigger) {
@@ -6111,17 +8918,17 @@ onUnmounted(() => {
   top: -60px; right: -60px;
   width: 180px; height: 180px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(var(--color-primary-rgb),0.07) 0%, transparent 70%);
   pointer-events: none;
 }
 .welcome-logo-box {
   width: 64px; height: 64px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400));
   border-radius: 16px;
   margin: 0 auto 20px;
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 20px; font-weight: 900;
-  box-shadow: 0 8px 24px rgba(99,102,241,0.35), 0 0 0 8px rgba(99,102,241,0.1);
+  box-shadow: 0 8px 24px rgba(var(--color-primary-rgb),0.35), 0 0 0 8px rgba(var(--color-primary-rgb),0.1);
   letter-spacing: 1px;
   position: relative;
   z-index: 1;
@@ -6138,9 +8945,9 @@ onUnmounted(() => {
   display: flex; gap: 12px; justify-content: center; position: relative; z-index: 1;
 }
 .welcome-btn-primary {
-  background: linear-gradient(135deg, #6366f1, #818cf8) !important;
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400)) !important;
   border: none !important; border-radius: 9px !important;
-  box-shadow: 0 4px 14px rgba(99,102,241,0.35) !important;
+  box-shadow: 0 4px 14px rgba(var(--color-primary-rgb),0.35) !important;
 }
 .welcome-btn-secondary {
   border-radius: 9px !important;
@@ -6163,13 +8970,13 @@ onUnmounted(() => {
   cursor: default;
 }
 .welcome-guide-item:hover {
-  box-shadow: 0 8px 24px rgba(99,102,241,0.08);
+  box-shadow: 0 8px 24px rgba(var(--color-primary-rgb),0.08);
   transform: translateY(-3px);
-  border-color: rgba(99,102,241,0.18);
+  border-color: rgba(var(--color-primary-rgb),0.18);
 }
 .welcome-guide-icon {
   width: 40px; height: 40px;
-  background: rgba(99,102,241,0.08);
+  background: rgba(var(--color-primary-rgb),0.08);
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;

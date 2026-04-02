@@ -1,7 +1,7 @@
 <template>
   <aside
     :class="['page-sidebar', { collapsed, 'page-sidebar--light': siderVariant === 'light' }]"
-    :style="{ width: collapsed ? '72px' : '300px' }"
+    :style="{ width: collapsed ? '72px' : '260px' }"
   >
     <div class="sidebar-top">
       <div class="sidebar-toolbar">
@@ -224,9 +224,9 @@ const search = computed({
   transition: background 0.18s, color 0.18s, border-color 0.18s;
 }
 .sidebar-collapse-btn:hover {
-  background: rgba(99,102,241,0.2);
+  background: rgba(var(--color-primary-rgb),0.2);
   color: #a5b4fc;
-  border-color: rgba(99,102,241,0.35);
+  border-color: rgba(var(--color-primary-rgb),0.35);
 }
 
 .page-sidebar--light .sidebar-collapse-btn {
@@ -236,9 +236,9 @@ const search = computed({
   height: 32px;
 }
 .page-sidebar--light .sidebar-collapse-btn:hover {
-  border-color: #818cf8;
-  color: #6366f1;
-  background: rgba(99,102,241,0.06);
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-500);
+  background: rgba(var(--color-primary-rgb),0.06);
 }
 
 .tree-content {
@@ -255,22 +255,22 @@ const search = computed({
   height: 20px;
   border-radius: 5px;
   color: #a5b4fc;
-  background: rgba(99,102,241,0.2);
+  background: rgba(var(--color-primary-rgb),0.2);
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s, transform 0.15s;
 }
 .nav-add-icon:hover {
-  background: rgba(99,102,241,0.35);
+  background: rgba(var(--color-primary-rgb),0.35);
   transform: rotate(90deg) scale(1.1);
 }
 
 .page-sidebar--light .nav-add-icon {
-  color: #6366f1;
-  background: rgba(99,102,241,0.1);
+  color: var(--color-primary-500);
+  background: rgba(var(--color-primary-rgb),0.1);
 }
 .page-sidebar--light .nav-add-icon:hover {
-  background: rgba(99,102,241,0.2);
+  background: rgba(var(--color-primary-rgb),0.2);
   transform: rotate(90deg) scale(1.1);
 }
 </style>

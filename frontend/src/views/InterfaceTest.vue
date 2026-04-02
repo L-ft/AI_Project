@@ -66,47 +66,31 @@
     <n-layout :native-scrollbar="false" class="it-main">
 
       <!-- 顶栏 -->
-      <div class="it-topbar">
-        <div class="it-topbar-deco"></div>
-        <div class="it-topbar-inner">
-          <div class="it-topbar-left">
-            <div class="it-topbar-breadcrumb">
-              <span>接口管理</span>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-              <span>单接口测试</span>
-              <template v-if="tabs.length > 0">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-                <span class="it-topbar-breadcrumb--active">{{ activeTabLabel }}</span>
-              </template>
-            </div>
-            <div class="it-topbar-title-row">
-              <div class="it-topbar-title-icon">
-                <n-icon :component="ApiOutlined" :size="18" />
-              </div>
-              <h1 class="it-topbar-title">单接口测试</h1>
-              <span class="it-topbar-badge">Beta</span>
-            </div>
+      <PageTopbar
+        title="单接口测试"
+        badge="Beta"
+        :breadcrumbs="tabs.length > 0 ? ['接口管理', '单接口测试', activeTabLabel] : ['接口管理', '单接口测试']"
+      >
+        <template #icon><n-icon :component="ApiOutlined" :size="18" /></template>
+        <template #right>
+          <div v-if="tabs.length > 0" class="it-topbar-env">
+            <span class="it-topbar-env-label">运行环境</span>
+            <n-select
+              v-model:value="selectedEnvId"
+              placeholder="选择环境"
+              size="small"
+              style="width: 150px"
+              :options="envOptions"
+            />
           </div>
-          <div class="it-topbar-right">
-            <div v-if="tabs.length > 0" class="it-topbar-env">
-              <span class="it-topbar-env-label">运行环境</span>
-              <n-select
-                v-model:value="selectedEnvId"
-                placeholder="选择环境"
-                size="small"
-                style="width: 150px"
-                :options="envOptions"
-              />
-            </div>
-            <div v-else class="it-topbar-pills">
-              <span class="it-topbar-pill it-topbar-pill--green">
-                <i class="it-pill-dot"></i>服务在线
-              </span>
-              <span class="it-topbar-pill">{{ stats.total }} 个接口</span>
-            </div>
+          <div v-else class="it-topbar-pills">
+            <span class="it-topbar-pill it-topbar-pill--green">
+              <i class="it-pill-dot"></i>服务在线
+            </span>
+            <span class="it-topbar-pill">{{ stats.total }} 个接口</span>
           </div>
-        </div>
-      </div>
+        </template>
+      </PageTopbar>
 
       <!-- 主内容 -->
       <div class="it-content-area">
@@ -304,18 +288,17 @@ import ApiDesignView from '../components/ApiDesignView.vue'
 import ApiDebugView from '../components/ApiDebugView.vue'
 import ApiTestCaseView from '../components/ApiTestCaseView.vue'
 import NewFolderModal from '../components/NewFolderModal.vue'
+import PageTopbar from '../components/PageTopbar.vue'
 import execRequest from '../api/exec-request'
 
 const message = useMessage()
 const dialog = useDialog()
 
-// ── tabs ──
 const activeKey = ref('')
 const tabs = ref<any[]>([])
 const subTabByTabKey = reactive<Record<string, string>>({})
 const activeTabLabel = computed(() => tabs.value.find(x => x.key === activeKey.value)?.label ?? '—')
 
-// ── environments ──
 const environments = ref<any[]>([])
 const selectedEnvId = ref<number | string | null>(null)
 
@@ -326,7 +309,6 @@ const envOptions = computed(() => {
 
 const selectedEnvBaseUrl = computed(() => environments.value.find(e => e.id === selectedEnvId.value)?.base_url || '')
 
-// ── stats（展示用，从树数据派生） ──
 const stats = computed(() => {
   const total = countApiNodes(treeData.value)
   return {
@@ -346,7 +328,6 @@ function countApiNodes(nodes: TreeNode[]): number {
   return n
 }
 
-// ── tree ──
 interface TreeNode {
   id?: number
   label: string
@@ -442,7 +423,6 @@ const fetchTreeData = async () => {
   }
 }
 
-// ── method badge helpers ──
 const METHOD_STYLE: Record<string, { color: string; bg: string }> = {
   GET:     { color: '#389e0d', bg: 'rgba(82,196,26,0.14)' },
   POST:    { color: '#d46b08', bg: 'rgba(250,173,20,0.16)' },
@@ -521,7 +501,6 @@ const handleSelect = (keys: string[], options: any[]) => {
 }
 
 const handleExpand = (keys: string[]) => { expandedKeys.value = keys }
-const handleLoad = () => {}
 
 const handlePlus = () => {
   const newApi: TreeNode = {
@@ -572,7 +551,6 @@ const handleDeleteApi = (node: TreeNode) => {
   })
 }
 
-// ── tabs ──
 const addTab = async (node: any) => {
   const existing = tabs.value.find(t => t.key === node.key)
   if (!existing) {
@@ -679,7 +657,7 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
 
 .it-sider-search-wrap:focus-within {
   background: #fff;
-  border-color: #818cf8;
+  border-color: var(--color-primary-400);
   box-shadow: 0 0 0 3px rgba(129,140,248,0.25), 0 1px 4px rgba(0,0,0,0.12);
 }
 
@@ -698,7 +676,7 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
   outline: none;
   font-size: 12px;
   color: #374151;
-  caret-color: #6366f1;
+  caret-color: var(--color-primary-500);
 }
 
 .it-sider-search-input::placeholder {
@@ -709,9 +687,9 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
   flex-shrink: 0;
   width: 32px;
   height: 32px;
-  border: 1px solid rgba(99,102,241,0.4);
+  border: 1px solid rgba(var(--color-primary-rgb),0.4);
   border-radius: 8px;
-  background: linear-gradient(135deg, rgba(99,102,241,0.22), rgba(139,92,246,0.16));
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.22), rgba(139,92,246,0.16));
   color: #a5b4fc;
   cursor: pointer;
   display: inline-flex;
@@ -721,11 +699,11 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
 }
 
 .it-sider-add-btn:hover {
-  background: linear-gradient(135deg, #6366f1, #7c3aed);
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-700));
   border-color: transparent;
   color: #fff;
   transform: rotate(90deg);
-  box-shadow: 0 4px 12px rgba(99,102,241,0.45);
+  box-shadow: 0 4px 12px rgba(var(--color-primary-rgb),0.45);
 }
 
 /* 树容器 */
@@ -760,9 +738,9 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
   --n-node-text-color-disabled: rgba(255,255,255,0.28);
   --n-arrow-color: rgba(255,255,255,0.35);
   --n-line-color: rgba(255,255,255,0.08);
-  --n-node-color-active: rgba(99,102,241,0.18);
+  --n-node-color-active: rgba(var(--color-primary-rgb),0.18);
   --n-node-color-hover: rgba(255,255,255,0.05);
-  --n-node-color-pressed: rgba(99,102,241,0.12);
+  --n-node-color-pressed: rgba(var(--color-primary-rgb),0.12);
   --n-node-border-radius: 8px;
   --n-node-content-height: 34px;
   background: transparent;
@@ -774,7 +752,7 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
 }
 
 .it-tree :deep(.n-tree-node--selected .n-tree-node-content) {
-  background: rgba(99, 102, 241, 0.2) !important;
+  background: rgba(var(--color-primary-rgb), 0.2) !important;
   border-radius: 8px;
 }
 
@@ -910,111 +888,7 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
   min-height: 0;
 }
 
-/* ── 顶栏 ── */
-.it-topbar {
-  flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(135deg, #ffffff 0%, #f8f7ff 60%, #f0f0ff 100%);
-  border-bottom: 1px solid #e4e4f0;
-  box-sizing: border-box;
-}
-
-/* 右上角装饰光晕 */
-.it-topbar-deco {
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 140px;
-  height: 140px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(99,102,241,0.10) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.it-topbar-inner {
-  position: relative;
-  z-index: 1;
-  height: 72px;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.it-topbar-left {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.it-topbar-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #9ca3af;
-}
-
-.it-topbar-breadcrumb svg {
-  flex-shrink: 0;
-  color: #d1d5db;
-}
-
-.it-topbar-breadcrumb--active {
-  color: #6366f1;
-  font-weight: 500;
-}
-
-.it-topbar-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.it-topbar-title-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 3px 10px rgba(99,102,241,0.3);
-  flex-shrink: 0;
-}
-
-.it-topbar-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #111827;
-  letter-spacing: -0.02em;
-  line-height: 1;
-}
-
-.it-topbar-badge {
-  height: 18px;
-  padding: 0 7px;
-  border-radius: 9px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.1));
-  color: #6366f1;
-  border: 1px solid rgba(99,102,241,0.2);
-  display: inline-flex;
-  align-items: center;
-}
-
-.it-topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
+/* ── Topbar 右侧控件 ── */
 .it-topbar-env {
   display: flex;
   align-items: center;
@@ -1161,7 +1035,7 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
 .it-hero-glow-ring {
   position: absolute;
   border-radius: 50%;
-  border: 1px solid rgba(99,102,241,0.18);
+  border: 1px solid rgba(var(--color-primary-rgb),0.18);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -1176,13 +1050,13 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
 .it-hero-ring-2 {
   width: 180px; height: 180px;
   animation-delay: 0.5s;
-  border-color: rgba(99,102,241,0.10);
+  border-color: rgba(var(--color-primary-rgb),0.10);
 }
 
 .it-hero-ring-3 {
   width: 240px; height: 240px;
   animation-delay: 1s;
-  border-color: rgba(99,102,241,0.06);
+  border-color: rgba(var(--color-primary-rgb),0.06);
 }
 
 @keyframes it-ring-pulse {
@@ -1197,13 +1071,13 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
   width: 64px;
   height: 64px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-400) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
   margin-bottom: 20px;
-  box-shadow: 0 8px 24px rgba(99,102,241,0.35), 0 0 0 8px rgba(99,102,241,0.1);
+  box-shadow: 0 8px 24px rgba(var(--color-primary-rgb),0.35), 0 0 0 8px rgba(var(--color-primary-rgb),0.1);
   animation: it-icon-float 3.5s ease-in-out infinite;
 }
 
@@ -1262,14 +1136,14 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
 }
 
 .it-hero-btn--primary {
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400));
   color: #fff;
-  box-shadow: 0 4px 14px rgba(99,102,241,0.35);
+  box-shadow: 0 4px 14px rgba(var(--color-primary-rgb),0.35);
 }
 
 .it-hero-btn--primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(99,102,241,0.45);
+  box-shadow: 0 8px 20px rgba(var(--color-primary-rgb),0.45);
 }
 
 .it-hero-btn--ghost {
@@ -1407,7 +1281,7 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
 }
 
 .it-feat-card--debug .it-feat-card-bg {
-  background: linear-gradient(135deg, rgba(99,102,241,0.07) 0%, rgba(139,92,246,0.04) 100%);
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.07) 0%, rgba(139,92,246,0.04) 100%);
 }
 
 .it-feat-card--mock .it-feat-card-bg {
@@ -1418,7 +1292,7 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
   background: linear-gradient(135deg, rgba(16,185,129,0.07) 0%, rgba(5,150,105,0.04) 100%);
 }
 
-.it-feat-card--debug:hover { border-color: rgba(99,102,241,0.2); }
+.it-feat-card--debug:hover { border-color: rgba(var(--color-primary-rgb),0.2); }
 .it-feat-card--mock:hover  { border-color: rgba(6,182,212,0.2);  }
 .it-feat-card--env:hover   { border-color: rgba(16,185,129,0.2); }
 
@@ -1438,7 +1312,7 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
   transform: scale(1.1) rotate(-5deg);
 }
 
-.it-feat-card--debug .it-feat-icon-wrap { background: rgba(99,102,241,0.1); color: #6366f1; }
+.it-feat-card--debug .it-feat-icon-wrap { background: rgba(var(--color-primary-rgb),0.1); color: var(--color-primary-500); }
 .it-feat-card--mock  .it-feat-icon-wrap { background: rgba(6,182,212,0.1);  color: #0891b2; }
 .it-feat-card--env   .it-feat-icon-wrap { background: rgba(16,185,129,0.1); color: #059669; }
 

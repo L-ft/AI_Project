@@ -1,81 +1,85 @@
 <template>
-  <div class="user-mgmt-container">
-    <n-card :bordered="false" class="ai-glass-card">
-      <template #header>
-        <n-space align="center">
-          <n-input v-model:value="searchForm.username" placeholder="用户名" clearable style="width: 200px" />
-          <n-input v-model:value="searchForm.phone_number" placeholder="手机号" clearable style="width: 200px" />
-        </n-space>
-      </template>
-      <template #header-extra>
-        <n-button type="primary" secondary @click="showAddModal = true">
+  <div class="user-mgmt-page">
+    <div class="user-mgmt-inner">
+
+      <!-- 页头 -->
+      <header class="mgmt-header">
+        <div class="mgmt-header-text">
+          <p class="mgmt-eyebrow">权限中心</p>
+          <h1 class="mgmt-title">用户管理</h1>
+          <p class="mgmt-sub">管理平台账号与角色分配，精细控制成员访问级别与操作权限。</p>
+        </div>
+        <n-button type="primary" @click="showAddModal = true">
           <template #icon><n-icon :component="PlusOutlined" /></template>
           新增用户
         </n-button>
-      </template>
+      </header>
 
-      <n-table :single-line="false">
-        <thead>
-          <tr>
-            <th>用户名</th>
-            <th>手机号</th>
-            <th>所属角色</th>
-            <th>启用状态</th>
-            <th>注册时间</th>
-            <th>修改时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in filteredUsers" :key="user.id">
-            <td>
-              <n-space align="center">
-                <n-avatar round size="small" :style="{ backgroundColor: '#0077ff' }">
-                  {{ user.username?.slice(0, 1).toUpperCase() }}
-                </n-avatar>
-                <n-text strong>{{ user.username }}</n-text>
-              </n-space>
-            </td>
-            <td><code>{{ user.phone_number }}</code></td>
-            <td>
-              <n-tag :type="getRoleTagType(user.role_id)" round ghost>
-                {{ user.role_name || '未分配' }}
-              </n-tag>
-            </td>
-            <td>
-              <n-switch 
-                :value="user.status" 
-                :checked-value="1" 
-                :unchecked-value="0"
-                @update:value="(val) => handleStatusToggle(user, val)"
-                :disabled="user.id === 1"
-              >
-                <template #checked>启用</template>
-                <template #unchecked>禁用</template>
-              </n-switch>
-            </td>
-            <td>{{ formatDate(user.created_at) }}</td>
-            <td>{{ formatDate(user.updated_at) }}</td>
-            <td>
-              <n-space>
-                <n-button size="small" ghost type="primary" @click="handleEditUser(user)">
-                  编辑
-                </n-button>
-                <n-button size="small" ghost type="info" @click="handleEditRole(user)">
-                  分配角色
-                </n-button>
-                <n-button size="small" ghost type="warning" @click="handleOpenResetPwd(user)">
-                  重置密码
-                </n-button>
-                <n-button size="small" ghost type="error" @click="handleDelete(user)" :disabled="user.id === 1">
-                  删除
-                </n-button>
-              </n-space>
-            </td>
-          </tr>
-        </tbody>
-      </n-table>
-    </n-card>
+      <!-- 搜索工具栏 -->
+      <div class="mgmt-toolbar">
+        <n-input v-model:value="searchForm.username" placeholder="搜索用户名..." clearable class="mgmt-search">
+          <template #prefix><n-icon :component="SearchOutlined" class="mgmt-search-ico" /></template>
+        </n-input>
+        <n-input v-model:value="searchForm.phone_number" placeholder="搜索手机号..." clearable style="width: 200px" />
+      </div>
+
+      <!-- 用户表格 -->
+      <n-card :bordered="false" class="mgmt-card">
+        <n-table :single-line="false" class="mgmt-table">
+          <thead>
+            <tr>
+              <th>用户名</th>
+              <th>手机号</th>
+              <th>所属角色</th>
+              <th>启用状态</th>
+              <th>注册时间</th>
+              <th>修改时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="user in filteredUsers" :key="user.id">
+              <td>
+                <n-space align="center">
+                  <n-avatar round size="small" :style="{ backgroundColor: 'var(--color-primary-500)' }">
+                    {{ user.username?.slice(0, 1).toUpperCase() }}
+                  </n-avatar>
+                  <n-text strong>{{ user.username }}</n-text>
+                </n-space>
+              </td>
+              <td><code class="code-text">{{ user.phone_number }}</code></td>
+              <td>
+                <n-tag :type="getRoleTagType(user.role_id)" round ghost>
+                  {{ user.role_name || '未分配' }}
+                </n-tag>
+              </td>
+              <td>
+                <n-switch
+                  :value="user.status"
+                  :checked-value="1"
+                  :unchecked-value="0"
+                  @update:value="(val) => handleStatusToggle(user, val)"
+                  :disabled="user.id === 1"
+                >
+                  <template #checked>启用</template>
+                  <template #unchecked>禁用</template>
+                </n-switch>
+              </td>
+              <td class="date-cell">{{ formatDate(user.created_at) }}</td>
+              <td class="date-cell">{{ formatDate(user.updated_at) }}</td>
+              <td>
+                <n-space :size="4">
+                  <n-button size="small" ghost type="primary" @click="handleEditUser(user)">编辑</n-button>
+                  <n-button size="small" ghost type="info" @click="handleEditRole(user)">分配角色</n-button>
+                  <n-button size="small" ghost type="warning" @click="handleOpenResetPwd(user)">重置密码</n-button>
+                  <n-button size="small" ghost type="error" @click="handleDelete(user)" :disabled="user.id === 1">删除</n-button>
+                </n-space>
+              </td>
+            </tr>
+          </tbody>
+        </n-table>
+      </n-card>
+    </div>
 
     <!-- 新增用户弹窗 -->
     <n-modal v-model:show="showAddModal" preset="dialog" title="新增用户" positive-text="确定" negative-text="取消" @positive-click="submitAddUser" @after-leave="resetForm">
@@ -139,12 +143,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { 
-  NCard, NTable, NButton, NTag, NSpace, NIcon, NAvatar, NText, 
+import {
+  NCard, NTable, NButton, NTag, NSpace, NIcon, NAvatar, NText,
   NModal, NForm, NFormItem, NSelect, NInput, NSwitch, NAlert, useDialog, useMessage,
   FormRules
 } from 'naive-ui'
-import { PlusOutlined } from '@vicons/antd'
+import { PlusOutlined, SearchOutlined } from '@vicons/antd'
 import request from '../api/request'
 import { useUserStore } from '../store/user'
 
@@ -154,53 +158,36 @@ const users = ref<any[]>([])
 const roles = ref<any[]>([])
 const roleOptions = ref<any[]>([])
 
-const searchForm = ref({
-  username: '',
-  phone_number: ''
-})
+const searchForm = ref({ username: '', phone_number: '' })
 
-const filteredUsers = computed(() => {
-  return users.value.filter(user => {
-    const matchName = !searchForm.value.username || 
+const filteredUsers = computed(() =>
+  users.value.filter(user => {
+    const matchName = !searchForm.value.username ||
       user.username?.toLowerCase().includes(searchForm.value.username.toLowerCase())
-    const matchPhone = !searchForm.value.phone_number || 
+    const matchPhone = !searchForm.value.phone_number ||
       user.phone_number?.includes(searchForm.value.phone_number)
     return matchName && matchPhone
   })
-})
+)
 
-// 新增用户相关
 const showAddModal = ref(false)
-const formValue = ref({
-  username: '',
-  phone_number: '',
-  password: '',
-  role_id: 3,
-  status: 1
-})
+const formValue = ref({ username: '', phone_number: '', password: '', role_id: 3, status: 1 })
 const rules: FormRules = {
-  username: { required: true, message: '请输入用户名', trigger: 'blur' },
+  username:     { required: true, message: '请输入用户名', trigger: 'blur' },
   phone_number: { required: true, message: '请输入手机号', trigger: 'blur' },
-  password: { required: true, message: '请输入初始密码', trigger: 'blur' },
-  role_id: { required: true, message: '请选择角色', type: 'number', trigger: 'change' }
+  password:     { required: true, message: '请输入初始密码', trigger: 'blur' },
+  role_id:      { required: true, message: '请选择角色', type: 'number', trigger: 'change' }
 }
 
-// 分配角色相关
 const showRoleModal = ref(false)
 const currentUser = ref<any>(null)
 const selectedRoleId = ref<number | null>(null)
 
-// 重置密码相关
 const showResetPwdModal = ref(false)
 const newPassword = ref('')
 
-// 编辑用户相关
 const showEditUserModal = ref(false)
-const editUserForm = ref({
-  id: 0,
-  username: '',
-  phone_number: ''
-})
+const editUserForm = ref({ id: 0, username: '', phone_number: '' })
 
 const dialog = useDialog()
 const message = useMessage()
@@ -213,21 +200,16 @@ const loadData = async () => {
     ])
     users.value = userData
     roles.value = roleData
-    roleOptions.value = roleData.map((r: any) => ({
-      label: r.name,
-      value: r.id
-    }))
-  } catch (err) {
+    roleOptions.value = roleData.map((r: any) => ({ label: r.name, value: r.id }))
+  } catch {
     message.error('加载数据失败')
   }
 }
 
 const getRoleTagType = (roleId: number) => {
-  switch (roleId) {
-    case 1: return 'error'   // ADMIN
-    case 2: return 'warning' // DEV
-    default: return 'info'    // TESTER
-  }
+  if (roleId === 1) return 'error'
+  if (roleId === 2) return 'warning'
+  return 'info'
 }
 
 const submitAddUser = async () => {
@@ -247,22 +229,12 @@ const submitAddUser = async () => {
 }
 
 const resetForm = () => {
-  formValue.value = {
-    username: '',
-    phone_number: '',
-    password: '',
-    role_id: 3,
-    status: 1
-  }
+  formValue.value = { username: '', phone_number: '', password: '', role_id: 3, status: 1 }
 }
 
 const handleEditUser = (user: any) => {
   currentUser.value = user
-  editUserForm.value = {
-    id: user.id,
-    username: user.username,
-    phone_number: user.phone_number
-  }
+  editUserForm.value = { id: user.id, username: user.username, phone_number: user.phone_number }
   showEditUserModal.value = true
 }
 
@@ -272,14 +244,9 @@ const submitEditUser = async () => {
       username: editUserForm.value.username,
       phone_number: editUserForm.value.phone_number
     })
-    
-    // 如果修改的是当前登录用户，则立即提示并强制退出
     if (Number(editUserForm.value.id) === Number(userStore.uid)) {
       message.loading('正在重置您的会话，请使用新手机号重新登录...', { duration: 2000 })
-      setTimeout(() => {
-        userStore.logout()
-        window.location.href = '/login'
-      }, 1500)
+      setTimeout(() => { userStore.logout(); window.location.href = '/login' }, 1500)
     } else {
       message.success('用户信息更新成功，该用户下次操作将被强制下线')
       loadData()
@@ -301,8 +268,8 @@ const handleStatusToggle = async (user: any, newVal: number) => {
   try {
     await request.put(`/rbac/users/${user.id}/status`, { status: newVal })
     message.success(`用户 ${user.username} 已${newVal === 1 ? '启用' : '禁用'}`)
-    user.status = newVal 
-  } catch (err) {
+    user.status = newVal
+  } catch {
     message.error('状态更新失败')
   }
 }
@@ -314,15 +281,12 @@ const handleOpenResetPwd = (user: any) => {
 }
 
 const submitResetPwd = async () => {
-  if (!newPassword.value) {
-    message.error('请输入新密码')
-    return false
-  }
+  if (!newPassword.value) { message.error('请输入新密码'); return false }
   try {
     await request.put(`/rbac/users/${currentUser.value.id}/password`, { password: newPassword.value })
     message.success('密码已成功重置')
     showResetPwdModal.value = false
-  } catch (err) {
+  } catch {
     message.error('密码重置失败')
   }
 }
@@ -333,7 +297,7 @@ const submitRoleChange = async () => {
     await request.put(`/rbac/users/${currentUser.value.id}/role`, { roleId: selectedRoleId.value })
     message.success('角色分配成功')
     loadData()
-  } catch (err) {
+  } catch {
     message.error('分配失败')
   }
 }
@@ -349,7 +313,7 @@ const handleDelete = (user: any) => {
         await request.delete(`/rbac/users/${user.id}`)
         message.success('用户已删除')
         loadData()
-      } catch (err) {
+      } catch {
         message.error('删除失败')
       }
     }
@@ -366,11 +330,91 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.user-mgmt-container { padding: 10px; }
-.ai-glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  border: 1px solid rgba(0, 119, 255, 0.1);
+@import '@/styles/design-tokens.css';
+
+.user-mgmt-page {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background: linear-gradient(165deg, var(--color-gray-50) 0%, #eef0f8 45%, var(--color-gray-50) 100%);
+  font-family: var(--font-family-base);
+}
+
+.user-mgmt-inner {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: var(--space-6) var(--page-padding-x) var(--space-10);
+}
+
+.mgmt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.mgmt-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-primary-500);
+  margin-bottom: var(--space-2);
+}
+
+.mgmt-title {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-2);
+}
+
+.mgmt-sub {
+  font-size: var(--text-md);
+  color: var(--color-text-tertiary);
+  max-width: 520px;
+  line-height: var(--leading-relaxed);
+  margin: 0;
+}
+
+.mgmt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.mgmt-search {
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.mgmt-search-ico {
+  color: var(--color-text-disabled);
+}
+
+.mgmt-card {
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: var(--shadow-sm);
+  background: var(--color-bg-surface);
+}
+
+.code-text {
+  font-family: var(--font-family-mono);
+  font-size: var(--text-sm);
+  background: var(--color-gray-100);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+}
+
+.date-cell {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
 }
 </style>

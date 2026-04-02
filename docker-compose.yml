@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mysql_final:
     image: mysql:8.0
@@ -11,8 +9,16 @@ services:
     ports:
       - "3308:3306"
     volumes:
+      # 必须持久化数据目录；否则每次删容器/重建会得到全新库，init 脚本会再跑一遍，业务数据会丢
+      - mysql_data:/var/lib/mysql
       - ./docker/mysql/init_rbac_full.sql:/docker-entrypoint-initdb.d/init.sql
       - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
     networks:
       - ai_platform_net
 
@@ -38,8 +44,10 @@ services:
     ports:
       - "3011:3000"
     depends_on:
-      - mysql_final
-      - redis_final
+      mysql_final:
+        condition: service_healthy
+      redis_final:
+        condition: service_started
     networks:
       - ai_platform_net
 
@@ -55,20 +63,30 @@ services:
     ports:
       - "8010:8000"
     depends_on:
-      - mysql_final
-      - redis_final
+      mysql_final:
+        condition: service_healthy
+      redis_final:
+        condition: service_started
     networks:
       - ai_platform_net
 
   frontend_final:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_MGMT_API_URL: /api
+        VITE_EXEC_ENGINE_URL: /engine
     container_name: ai_platform_fe_v1
     ports:
       - "3010:80"
     depends_on:
       - mgmt_api_final
+      - exec_engine_final
     networks:
       - ai_platform_net
+
+volumes:
+  mysql_data:
 
 networks:
   ai_platform_net:

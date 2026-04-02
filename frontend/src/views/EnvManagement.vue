@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="env-mgmt">
 
     <!-- 左侧边栏 -->
@@ -74,37 +74,27 @@
     <div class="env-main">
 
       <!-- 顶部栏 -->
-      <div class="env-topbar">
-        <div class="env-topbar-deco"></div>
-        <div class="env-topbar-inner">
-          <div class="env-topbar-left">
-            <div class="env-topbar-breadcrumb">
-              <span>环境管理</span>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-              <span class="env-breadcrumb-active">{{ selectedEnv?.name || '请选择环境' }}</span>
-            </div>
-            <div class="env-topbar-title-row">
-              <div class="env-topbar-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
-                  <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                </svg>
-              </div>
-              <h1 class="env-topbar-title">环境管理</h1>
-              <span class="env-topbar-badge">Config</span>
-            </div>
-          </div>
-          <div class="env-topbar-right">
-            <span class="env-topbar-pill env-topbar-pill--green" v-if="selectedEnv?.is_active">
-              <i class="env-pill-dot"></i>当前激活
-            </span>
-            <span class="env-topbar-pill">{{ envList.length }} 个环境</span>
-            <span class="env-topbar-pill env-vars-pill" v-if="selectedEnv">
-              {{ editForm.variables.length }} 个变量
-            </span>
-          </div>
-        </div>
-      </div>
+      <PageTopbar
+        title="环境管理"
+        badge="Config"
+        :breadcrumbs="['环境管理', selectedEnv?.name || '请选择环境']"
+      >
+        <template #icon>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </template>
+        <template #right>
+          <span class="env-topbar-pill env-topbar-pill--green" v-if="selectedEnv?.is_active">
+            <i class="env-pill-dot"></i>当前激活
+          </span>
+          <span class="env-topbar-pill">{{ envList.length }} 个环境</span>
+          <span class="env-topbar-pill env-vars-pill" v-if="selectedEnv">
+            {{ editForm.variables.length }} 个变量
+          </span>
+        </template>
+      </PageTopbar>
 
       <!-- 选中环境后显示内容 -->
       <template v-if="selectedEnv">
@@ -296,7 +286,7 @@
       <!-- 空状态 -->
       <div v-else class="env-empty-state">
         <div class="env-empty-icon-wrap">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="1.5" stroke-linecap="round">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-linecap="round">
             <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
           </svg>
@@ -350,7 +340,7 @@
           <n-button @click="showModal = false" :disabled="modalLoading">取消</n-button>
           <n-button
             type="primary"
-            color="#6366f1"
+            color="#7d33ff"
             :loading="modalLoading"
             :disabled="!modalForm.name.trim() || !modalForm.base_url.trim()"
             @click="handleModalSubmit"
@@ -369,6 +359,7 @@ import { ref, computed, watch } from 'vue'
 import {
   NModal, NInput, NButton, NSwitch, NScrollbar, NPopconfirm, useMessage
 } from 'naive-ui'
+import PageTopbar from '../components/PageTopbar.vue'
 import execRequest from '../api/exec-request'
 
 // --------------------
@@ -453,9 +444,9 @@ function envColor(name: string) {
   if (!name) return '#8792a2'
   if (name.includes('正式') || name.includes('生产') || name.includes('prod')) return '#ef4444'
   if (name.includes('预发') || name.includes('pre') || name.includes('staging')) return '#f97316'
-  if (name.includes('测试') || name.includes('test') || name.includes('qa')) return '#6366f1'
+  if (name.includes('测试') || name.includes('test') || name.includes('qa')) return '#7d33ff'
   if (name.includes('开发') || name.includes('dev') || name.includes('local')) return '#10b981'
-  const colors = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899']
+  const colors = ['#7d33ff', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899']
   let hash = 0
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff
   return colors[Math.abs(hash) % colors.length]
@@ -699,7 +690,7 @@ fetchEnvs()
 }
 .env-search-wrap:focus-within {
   background: #fff;
-  border-color: #818cf8;
+  border-color: var(--color-primary-400);
   box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.18);
 }
 .env-search-wrap svg {
@@ -707,7 +698,7 @@ fetchEnvs()
 }
 .env-search-input {
   flex: 1; min-width: 0; border: none; background: transparent; outline: none;
-  font-size: 12px; color: #374151; caret-color: #6366f1;
+  font-size: 12px; color: #374151; caret-color: var(--color-primary-500);
 }
 .env-search-input::placeholder { color: #b0b7c3; }
 
@@ -715,14 +706,14 @@ fetchEnvs()
   flex-shrink: 0;
   width: 32px; height: 32px;
   border: none; border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400));
   color: #fff; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.35);
   transition: all 0.2s ease;
 }
 .env-add-btn:hover {
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 4px 14px rgba(var(--color-primary-rgb), 0.5);
   transform: rotate(90deg);
 }
 
@@ -757,8 +748,8 @@ fetchEnvs()
   border-radius: 8px;
   font-size: 10px;
   font-weight: 700;
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  background: rgba(var(--color-primary-rgb), 0.1);
+  color: var(--color-primary-500);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -785,9 +776,9 @@ fetchEnvs()
 }
 .env-item:hover { background: #f5f6fb; }
 .env-item.active {
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(var(--color-primary-rgb), 0.08);
 }
-.env-item.active .env-item-name { color: #6366f1; font-weight: 500; }
+.env-item.active .env-item-name { color: var(--color-primary-500); font-weight: 500; }
 
 .env-item-dot {
   width: 8px; height: 8px;
@@ -835,7 +826,7 @@ fetchEnvs()
 }
 .env-act-btn:hover {
   background: #eef1f8;
-  color: #6366f1;
+  color: var(--color-primary-500);
 }
 .env-act-btn--danger:hover {
   background: rgba(239, 68, 68, 0.1);
@@ -854,52 +845,7 @@ fetchEnvs()
   min-width: 0;
 }
 
-/* 顶部栏 */
-.env-topbar {
-  flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(135deg, #ffffff 0%, #f8f7ff 60%, #f0f0ff 100%);
-  border-bottom: 1px solid #e4e4f0;
-}
-.env-topbar-deco {
-  position: absolute; top: -40px; right: -40px;
-  width: 140px; height: 140px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.10) 0%, transparent 70%);
-  pointer-events: none;
-}
-.env-topbar-inner {
-  position: relative; z-index: 1;
-  height: 72px; padding: 0 24px;
-  display: flex; align-items: center;
-  justify-content: space-between; gap: 16px;
-}
-.env-topbar-left { display: flex; flex-direction: column; gap: 5px; }
-.env-topbar-breadcrumb {
-  display: flex; align-items: center; gap: 4px;
-  font-size: 12px; color: #9ca3af;
-}
-.env-topbar-breadcrumb svg { flex-shrink: 0; color: #d1d5db; }
-.env-breadcrumb-active { color: #6366f1; font-weight: 500; }
-.env-topbar-title-row { display: flex; align-items: center; gap: 10px; }
-.env-topbar-icon {
-  width: 32px; height: 32px; border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
-  color: #fff; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3); flex-shrink: 0;
-}
-.env-topbar-title {
-  margin: 0; font-size: 18px; font-weight: 700; color: #111827;
-  letter-spacing: -0.02em; line-height: 1;
-}
-.env-topbar-badge {
-  height: 18px; padding: 0 7px; border-radius: 9px;
-  font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
-  background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.1));
-  color: #6366f1; border: 1px solid rgba(99,102,241,0.2);
-  display: inline-flex; align-items: center;
-}
-.env-topbar-right { display: flex; align-items: center; gap: 8px; }
+/* ── Topbar 右侧控件 ── */
 .env-topbar-pill {
   display: inline-flex; align-items: center; gap: 5px;
   height: 26px; padding: 0 10px; border-radius: 13px;
@@ -921,9 +867,9 @@ fetchEnvs()
   50% { opacity: 0.5; }
 }
 .env-vars-pill {
-  background: rgba(99,102,241,0.08);
-  color: #6366f1;
-  border-color: rgba(99,102,241,0.2);
+  background: rgba(125, 51, 255, 0.08);
+  color: #7d33ff;
+  border-color: rgba(125, 51, 255, 0.2);
 }
 
 /* 滚动内容区 */
@@ -950,7 +896,7 @@ fetchEnvs()
 .section-title-bar {
   width: 3px; height: 16px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #6366f1, #818cf8);
+  background: linear-gradient(180deg, var(--color-primary-500), var(--color-primary-400));
   flex-shrink: 0;
 }
 .env-var-count-badge {
@@ -958,8 +904,8 @@ fetchEnvs()
   min-width: 20px; height: 20px; padding: 0 5px;
   border-radius: 10px;
   font-size: 11px; font-weight: 700;
-  background: rgba(99,102,241,0.1);
-  color: #6366f1;
+  background: rgba(var(--color-primary-rgb),0.1);
+  color: var(--color-primary-500);
 }
 
 /* 表单网格 */
@@ -1024,13 +970,13 @@ fetchEnvs()
   min-width: 180px;
 }
 .env-var-search-wrap:focus-within {
-  border-color: #818cf8;
+  border-color: var(--color-primary-400);
   box-shadow: 0 0 0 2px rgba(129,140,248,0.15);
   background: #fff;
 }
 .env-var-search-input {
   flex: 1; border: none; background: transparent; outline: none;
-  font-size: 12px; color: #374151; caret-color: #6366f1;
+  font-size: 12px; color: #374151; caret-color: var(--color-primary-500);
 }
 .env-var-search-input::placeholder { color: #b0b7c3; }
 
@@ -1041,10 +987,10 @@ fetchEnvs()
   gap: 5px;
   height: 30px;
   padding: 0 14px;
-  border: 1.5px dashed rgba(99,102,241,0.4);
+  border: 1.5px dashed rgba(var(--color-primary-rgb),0.4);
   border-radius: 7px;
-  background: rgba(99,102,241,0.04);
-  color: #6366f1;
+  background: rgba(var(--color-primary-rgb),0.04);
+  color: var(--color-primary-500);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -1052,8 +998,8 @@ fetchEnvs()
 }
 .env-add-var-btn:hover {
   border-style: solid;
-  background: rgba(99,102,241,0.08);
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.12);
+  background: rgba(var(--color-primary-rgb),0.08);
+  box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb),0.12);
 }
 
 /* 变量表格 */
@@ -1107,7 +1053,7 @@ fetchEnvs()
   border-radius: 6px;
   font-size: 13px;
   color: #374151;
-  caret-color: #6366f1;
+  caret-color: var(--color-primary-500);
   outline: none;
   transition: border-color 0.15s, background 0.15s;
   box-sizing: border-box;
@@ -1117,7 +1063,7 @@ fetchEnvs()
   background: #fff;
 }
 .env-cell-input:focus {
-  border-color: #818cf8;
+  border-color: var(--color-primary-400);
   background: #fff;
   box-shadow: 0 0 0 2px rgba(129,140,248,0.14);
 }
@@ -1138,7 +1084,7 @@ fetchEnvs()
   display: flex; align-items: center; justify-content: center;
   transition: color 0.15s;
 }
-.env-cell-eye:hover { color: #6366f1; }
+.env-cell-eye:hover { color: var(--color-primary-500); }
 
 /* 删除按钮 */
 .env-var-del-btn {
@@ -1165,7 +1111,7 @@ fetchEnvs()
 }
 .env-var-empty-add {
   background: none; border: none; cursor: pointer;
-  color: #6366f1; font-size: 13px;
+  color: var(--color-primary-500); font-size: 13px;
   text-decoration: underline;
   padding: 0;
 }
@@ -1211,8 +1157,8 @@ fetchEnvs()
   transition: all 0.15s;
 }
 .env-footer-reset-btn:hover:not(:disabled) {
-  border-color: #818cf8;
-  color: #6366f1;
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-500);
 }
 .env-footer-reset-btn:disabled { opacity: 0.4; cursor: default; }
 
@@ -1224,16 +1170,16 @@ fetchEnvs()
   padding: 0 22px;
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400));
   color: #fff;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 3px 10px rgba(99,102,241,0.3);
+  box-shadow: 0 3px 10px rgba(var(--color-primary-rgb),0.3);
   transition: box-shadow 0.2s, transform 0.15s;
 }
 .env-footer-save-btn:hover:not(:disabled) {
-  box-shadow: 0 6px 18px rgba(99,102,241,0.45);
+  box-shadow: 0 6px 18px rgba(var(--color-primary-rgb),0.45);
   transform: translateY(-1px);
 }
 .env-footer-save-btn:disabled { opacity: 0.6; cursor: default; }
@@ -1257,8 +1203,8 @@ fetchEnvs()
 .env-empty-icon-wrap {
   width: 80px; height: 80px;
   border-radius: 20px;
-  background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.08));
-  border: 1px solid rgba(99,102,241,0.15);
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.1), rgba(139,92,246,0.08));
+  border: 1px solid rgba(var(--color-primary-rgb),0.15);
   display: flex; align-items: center; justify-content: center;
 }
 .env-empty-title {
@@ -1276,15 +1222,15 @@ fetchEnvs()
   display: inline-flex; align-items: center; gap: 7px;
   height: 38px; padding: 0 22px;
   border: none; border-radius: 9px;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400));
   color: #fff; font-size: 13px; font-weight: 500; cursor: pointer;
-  box-shadow: 0 3px 10px rgba(99,102,241,0.3);
+  box-shadow: 0 3px 10px rgba(var(--color-primary-rgb),0.3);
   transition: transform 0.18s, box-shadow 0.18s;
   margin-top: 6px;
 }
 .env-empty-create-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(99,102,241,0.4);
+  box-shadow: 0 6px 18px rgba(var(--color-primary-rgb),0.4);
 }
 
 /* 弹窗 */

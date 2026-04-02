@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Any, Dict, Optional, List
 import asyncio
 import os
+import time
 from faker import Faker
 import httpx
 from sqlalchemy.orm import Session
@@ -33,14 +34,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 初始化数据库
+# 初始化数据库（MySQL 可能比本容器先起但未就绪，需重试，否则会跳过建表导致 500）
 @app.on_event("startup")
 def startup_event():
-    try:
-        init_db()
-        print("数据库初始化成功")
-    except Exception as e:
-        print(f"数据库初始化失败: {e}")
+    last_err: Optional[Exception] = None
+    for attempt in range(1, 31):
+        try:
+            init_db()
+            print("数据库初始化成功")
+            return
+        except Exception as e:
+            last_err = e
+            print(f"数据库初始化失败 (第 {attempt}/30 次，2s 后重试): {e}")
+            time.sleep(2)
+    print(f"数据库初始化在多次重试后仍失败: {last_err}")
 
 @app.get("/health")
 def health_check():

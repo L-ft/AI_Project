@@ -8,7 +8,8 @@ function getExecEngineBaseURL(): string {
     return String(fromEnv).trim().replace(/\/$/, '')
   }
   if (import.meta.env.DEV) return '/engine'
-  return 'http://localhost:8010'
+  // 生产默认走同源 /engine（需 Nginx 反代）；本地直连调试可设 VITE_EXEC_ENGINE_URL=http://localhost:8010
+  return '/engine'
 }
 
 const execRequest = axios.create({

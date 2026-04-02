@@ -4,6 +4,10 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [vue()],
+  // 确保构建输出使用 UTF-8
+  build: {
+    charset: 'utf8',
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

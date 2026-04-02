@@ -134,6 +134,94 @@ export const evaluateValidateResponsePass = (
   }
 }
 
+export type ScenarioAssertionResult = {
+  name: string
+  passed: boolean
+  message: string
+}
+
+const parseResponseDataObject = (data: unknown): unknown => {
+  if (typeof data !== 'string') return data
+  try {
+    return JSON.parse(data)
+  } catch {
+    return data
+  }
+}
+
+const getNestedValue = (data: unknown, expression: string) => {
+  if (!expression) return data
+  const path = expression.replace(/^\./, '').split('.').filter(Boolean)
+  return path.reduce<any>((acc, key) => (acc != null ? acc[key] : undefined), data as any)
+}
+
+const getAssertionTargetValue = (
+  target: string,
+  expression: string,
+  statusCode: number | null | undefined,
+  headers: Record<string, string>,
+  data: unknown
+) => {
+  if (target === 'status' || target === 'status_code') return statusCode
+  if (target === 'response_header' || target === 'header') {
+    const matched = Object.entries(headers).find(([key]) => key.toLowerCase() === String(expression || '').trim().toLowerCase())
+    return matched?.[1]
+  }
+  if (target === 'response_text' || target === 'text') {
+    return typeof data === 'string' ? data : stringifyResponseForLog(data).text
+  }
+  const parsed = parseResponseDataObject(data)
+  return getNestedValue(parsed, expression)
+}
+
+const compareAssertionValue = (actual: unknown, operator: string, expected: unknown) => {
+  const actualText = actual == null ? '' : String(actual)
+  const expectedText = expected == null ? '' : String(expected)
+  if (operator === 'exists') return actual !== undefined && actual !== null && actualText !== ''
+  if (operator === 'not_exists') return actual === undefined || actual === null || actualText === ''
+  if (operator === 'contains') return actualText.includes(expectedText)
+  if (operator === 'not_contains') return !actualText.includes(expectedText)
+  if (operator === 'regex') {
+    try {
+      return new RegExp(expectedText).test(actualText)
+    } catch {
+      return false
+    }
+  }
+  if (operator === 'gt') return Number(actual) > Number(expected)
+  if (operator === 'gte') return Number(actual) >= Number(expected)
+  if (operator === 'lt') return Number(actual) < Number(expected)
+  if (operator === 'lte') return Number(actual) <= Number(expected)
+  if (operator === 'neq') return actualText !== expectedText
+  return actualText === expectedText
+}
+
+export const evaluatePostAssertions = (
+  statusCode: number | null | undefined,
+  headers: Record<string, string> | undefined,
+  data: unknown,
+  postOps: any[] | undefined
+): { pass: boolean; results: ScenarioAssertionResult[] } => {
+  const headerMap = headers || {}
+  const ops = Array.isArray(postOps) ? postOps.filter((op) => op?.type === 'assertion' && op?.enabled !== false) : []
+  const results = ops.map((op, index) => {
+    const target = String(op?.config?.target || 'response_json')
+    const expression = String(op?.config?.expression || '')
+    const operator = String(op?.config?.operator || 'eq')
+    const expected = op?.config?.value ?? ''
+    const actual = getAssertionTargetValue(target, expression, statusCode, headerMap, data)
+    const passed = compareAssertionValue(actual, operator, expected)
+    const name = String(op?.config?.name || op?.name || `断言 ${index + 1}`)
+    const actualText = actual == null ? '空值' : String(actual)
+    const expectedText = expected == null ? '' : String(expected)
+    const message = passed
+      ? `实际值 ${actualText} 校验通过`
+      : `实际值 ${actualText}，期望 ${expectedText || operator}`
+    return { name, passed, message }
+  })
+  return { pass: results.every((item) => item.passed), results }
+}
+
 export const normalizeExecProxyResponse = (raw: unknown) => {
   const pick = (o: Record<string, unknown>) => ({
     status_code: o.status_code != null ? Number(o.status_code) : null,
@@ -271,15 +359,138 @@ function buildProxyHeadersFromRows(rows: any[], bodyType: string): Record<string
   return h
 }
 
+function applyAuthConfigToRequest(headers: Record<string, string>, queryParams: any[], authConfig: any, vars: Record<string, string> = {}) {
+  if (!authConfig || typeof authConfig !== 'object') return
+  const mode = String(authConfig.mode || 'none')
+  if (mode === 'bearer') {
+    const token = resolveTemplateText(String(authConfig?.bearer?.token || '').trim(), vars)
+    if (!token) return
+    const prefix = String(authConfig?.bearer?.prefix || 'Bearer').trim() || 'Bearer'
+    headers.Authorization = `${prefix} ${token}`
+    return
+  }
+  if (mode === 'basic') {
+    const username = resolveTemplateText(String(authConfig?.basic?.username || '').trim(), vars)
+    if (!username) return
+    const password = resolveTemplateText(String(authConfig?.basic?.password || ''), vars)
+    const encoded = btoa(unescape(encodeURIComponent(`${username}:${password}`)))
+    headers.Authorization = `Basic ${encoded}`
+    return
+  }
+  if (mode === 'apikey') {
+    const key = String(authConfig?.apikey?.key || '').trim()
+    const value = resolveTemplateText(String(authConfig?.apikey?.value || '').trim(), vars)
+    if (!key || !value) return
+    if (authConfig?.apikey?.position === 'query') {
+      const existing = queryParams.find((row) => String(row?.name || '').trim() === key)
+      if (existing) existing.example = value
+      else queryParams.push({ name: key, example: value })
+      return
+    }
+    headers[key] = value
+  }
+}
+
+function resolveTemplateText(text: string, vars: Record<string, string>) {
+  return String(text || '').replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, key) => vars[key] ?? '')
+}
+
+async function runPreScript(
+  script: string,
+  ctx: {
+    headers: Record<string, string>
+    queryParams: any[]
+    vars: Record<string, string>
+    setBody: (value: string) => void
+    setUrl: (value: string) => void
+    setMethod: (value: string) => void
+  }
+) {
+  if (!String(script || '').trim()) return
+  const context = {
+    setHeader: (name: string, value: string) => {
+      if (!name) return
+      ctx.headers[String(name)] = String(value)
+    },
+    setQuery: (name: string, value: string) => {
+      if (!name) return
+      const existing = ctx.queryParams.find((row) => String(row?.name || '').trim() === String(name).trim())
+      if (existing) existing.example = String(value)
+      else ctx.queryParams.push({ name: String(name), example: String(value) })
+    },
+    setVar: (name: string, value: string) => {
+      if (!name) return
+      ctx.vars[String(name)] = String(value)
+    },
+    setBody: ctx.setBody,
+    setUrl: ctx.setUrl,
+    setMethod: ctx.setMethod
+  }
+  await Promise.resolve(new Function('context', script)(context))
+}
+
+async function applyPreOpsToRequest(queryParams: any[], headers: Record<string, string>, preOps: any[]) {
+  const vars: Record<string, string> = {}
+  let bodyText = ''
+  let urlText = ''
+  let methodText = ''
+  for (const op of Array.isArray(preOps) ? preOps : []) {
+    if (op?.enabled === false) continue
+    if (op?.type === 'wait') {
+      const duration = Math.max(0, Number(op?.config?.duration || 0))
+      if (duration > 0) await new Promise((resolve) => setTimeout(resolve, duration))
+      continue
+    }
+    if (op?.type === 'set_var') {
+      const key = String(op?.config?.name || '').trim()
+      if (!key) continue
+      vars[key] = String(op?.config?.value || '')
+      continue
+    }
+    if (op?.type === 'script') {
+      await runPreScript(String(op?.config?.script || ''), {
+        headers,
+        queryParams,
+        vars,
+        setBody: (value) => { bodyText = String(value) },
+        setUrl: (value) => { urlText = String(value) },
+        setMethod: (value) => { methodText = String(value || '') }
+      })
+      continue
+    }
+    const key = String(op?.config?.name || '').trim()
+    if (!key) continue
+    const value = resolveTemplateText(String(op?.config?.value || ''), vars)
+    if (op?.type === 'set_header') {
+      headers[key] = value
+      continue
+    }
+    if (op?.type === 'set_query') {
+      const existing = queryParams.find((row) => String(row?.name || '').trim() === key)
+      if (existing) existing.example = value
+      else queryParams.push({ name: key, example: value })
+    }
+  }
+  Object.keys(headers).forEach((key) => {
+    headers[key] = resolveTemplateText(headers[key], vars)
+  })
+  queryParams.forEach((row) => {
+    row.example = resolveTemplateText(String(row.example ?? row.value ?? ''), vars)
+  })
+  return { vars, bodyText, urlText, methodText }
+}
+
 export type StepExecContext = {
   stepName: string
   method: string
   rawUrl: string
   queryParams: any[]
   headerParams: any[]
+  preOps: any[]
   bodyType: string
   bodyContent: string
   postOps: any[]
+  authConfig?: any
 }
 
 /**
@@ -289,6 +500,45 @@ export async function loadStepExecContext(
   step: any,
   envId: number | null
 ): Promise<StepExecContext | null> {
+  if (step?.source === 'http' || step?.source === 'curl') {
+    return {
+      stepName: String(step?.name || '').trim() || '未命名步骤',
+      method: String(step?.method || 'GET').toUpperCase(),
+      rawUrl: String(step?.custom_url || step?.url || '').trim(),
+      queryParams: cloneParamRows(step?.query_params),
+      headerParams: cloneParamRows(step?.header_params),
+      preOps: cloneParamRows(step?.pre_operations),
+      bodyType: String(step?.body_type || 'none'),
+      bodyContent: String(step?.body_content || ''),
+      postOps: mergePostOpsWithValidateResponse(cloneParamRows(step?.post_operations)),
+      authConfig: step?.auth_config
+    }
+  }
+  if (step?.source === 'interface' && step?.interface_id) {
+    try {
+      const ifaceRaw: any = await execRequest.get(`/interfaces/${step.interface_id}`)
+      const iface = unwrapEntity(ifaceRaw) ?? ifaceRaw
+      if (!iface?.id) return null
+      const path = iface.path || ''
+      const base = await fetchEnvBaseUrl(envId)
+      const p = path.startsWith('/') ? path : path ? `/${path}` : ''
+      const rawContent = step?.body_content ?? iface?.body_definition?.content ?? ''
+      return {
+        stepName: String(step?.name || iface?.name || '').trim() || '未命名步骤',
+        method: String(iface?.method || step?.method || 'GET').toUpperCase(),
+        rawUrl: base ? `${base}${p}` : p || '',
+        queryParams: cloneParamRows(step?.query_params?.length ? step.query_params : iface?.query_params),
+        headerParams: cloneParamRows(step?.header_params?.length ? step.header_params : iface?.header_params),
+        preOps: cloneParamRows(step?.pre_operations),
+        bodyType: String(step?.body_type || iface?.body_definition?.type || 'none'),
+        bodyContent: typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent, null, 2),
+        postOps: mergePostOpsWithValidateResponse(cloneParamRows(step?.post_operations)),
+        authConfig: step?.auth_config
+      }
+    } catch {
+      return null
+    }
+  }
   if (!step?.case_id || !step?.interface_id) return null
   try {
     const [tcRaw, ifaceRaw] = await Promise.all([
@@ -316,6 +566,9 @@ export async function loadStepExecContext(
       typeof c === 'string' ? c : c != null ? JSON.stringify(c, null, 2) : ''
     const rawPost = Array.isArray(tc?.post_operations) ? cloneParamRows(tc.post_operations) : []
     const postOps = mergePostOpsWithValidateResponse(rawPost)
+    const preOps = Array.isArray(tc?.pre_operations)
+      ? cloneParamRows(tc.pre_operations)
+      : cloneParamRows(step?.pre_operations)
     const stepName = String(step?.name || '').trim() || '未命名步骤'
     return {
       stepName,
@@ -323,9 +576,11 @@ export async function loadStepExecContext(
       rawUrl,
       queryParams,
       headerParams,
+      preOps,
       bodyType,
       bodyContent,
-      postOps
+      postOps,
+      authConfig: step?.auth_config
     }
   } catch {
     return null
@@ -338,13 +593,22 @@ export async function loadStepExecContext(
 export async function runStepExecContext(ctx: StepExecContext): Promise<ScenarioSendLogEntry> {
   const now = Date.now()
   const id = `${now}-${Math.random().toString(36).slice(2, 10)}`
-  const upper = String(ctx.method || 'GET').toUpperCase()
-  const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(upper)
-  const hasParamRows = ctx.queryParams.some((r) => String(r.name || '').trim())
-  const urlBase = ctx.rawUrl.trim().split('?')[0]
-  let finalUrl = ctx.rawUrl.trim()
-  let body: any = null
+  let methodValue = String(ctx.method || 'GET').toUpperCase()
+  let runtimeUrl = String(ctx.rawUrl || '').trim()
+  let runtimeBody = String(ctx.bodyContent || '')
+  const queryParams = cloneParamRows(ctx.queryParams)
   const headers: Record<string, string> = { ...buildProxyHeadersFromRows(ctx.headerParams, ctx.bodyType) }
+  const preRuntime = await applyPreOpsToRequest(queryParams, headers, ctx.preOps)
+  if (preRuntime.methodText) methodValue = String(preRuntime.methodText).toUpperCase()
+  if (preRuntime.urlText) runtimeUrl = resolveTemplateText(preRuntime.urlText, preRuntime.vars)
+  if (preRuntime.bodyText) runtimeBody = resolveTemplateText(preRuntime.bodyText, preRuntime.vars)
+  applyAuthConfigToRequest(headers, queryParams, ctx.authConfig, preRuntime.vars)
+  const upper = methodValue
+  const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(upper)
+  const hasParamRows = queryParams.some((r) => String(r.name || '').trim())
+  const urlBase = runtimeUrl.split('?')[0]
+  let finalUrl = runtimeUrl
+  let body: any = null
 
   if (!finalUrl) {
     return {
@@ -364,25 +628,25 @@ export async function runStepExecContext(ctx: StepExecContext): Promise<Scenario
   }
 
   if (upper === 'GET' || upper === 'HEAD') {
-    finalUrl = buildUrlWithQueryString(ctx.rawUrl.trim(), ctx.queryParams)
+    finalUrl = buildUrlWithQueryString(runtimeUrl, queryParams)
   } else if (isWrite && ctx.bodyType === 'none' && hasParamRows) {
     finalUrl = urlBase
-    body = buildFormBodyFromParamRows(ctx.queryParams)
+    body = buildFormBodyFromParamRows(queryParams)
     if (!headers['Content-Type'] && !headers['content-type']) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
     }
   } else if (isWrite && ctx.bodyType === 'x-www-form-urlencoded') {
     finalUrl = urlBase
-    body = buildFormBodyFromParamRows(ctx.queryParams)
+    body = buildFormBodyFromParamRows(queryParams)
     if (!headers['Content-Type'] && !headers['content-type']) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
     }
   } else {
-    finalUrl = buildUrlWithQueryString(ctx.rawUrl.trim(), ctx.queryParams)
+    finalUrl = buildUrlWithQueryString(runtimeUrl, queryParams)
     if (isWrite) {
-      if (ctx.bodyType === 'json' && ctx.bodyContent.trim()) {
+      if (ctx.bodyType === 'json' && runtimeBody.trim()) {
         try {
-          body = JSON.parse(ctx.bodyContent)
+          body = JSON.parse(runtimeBody)
         } catch {
           return {
             id,
@@ -395,12 +659,12 @@ export async function runStepExecContext(ctx: StepExecContext): Promise<Scenario
             elapsedMs: null,
             error: 'Body JSON 无法解析',
             requestHeaders: { ...headers },
-            requestBodySnippet: buildRequestBodySnippet(ctx.bodyContent),
+            requestBodySnippet: buildRequestBodySnippet(runtimeBody),
             ...evaluateValidateResponsePass(null, ctx.postOps)
           }
         }
       } else if (ctx.bodyType === 'text') {
-        body = ctx.bodyContent
+        body = runtimeBody
       } else if (ctx.bodyType === 'form-data') {
         return {
           id,
@@ -453,11 +717,12 @@ export async function runStepExecContext(ctx: StepExecContext): Promise<Scenario
     const code = Number(env.status_code ?? 0)
     const ev = evaluateValidateResponsePass(code, ctx.postOps, env.data)
     const rh = normalizeProxyHeaderMap(env.headers)
+    const assertionEval = evaluatePostAssertions(code, rh, env.data, ctx.postOps)
     const { text, bytes } = stringifyResponseForLog(env.data)
     return {
       id,
       at: now,
-      pass: ev.pass,
+      pass: ev.pass && assertionEval.pass,
       name: ctx.stepName,
       method: upper,
       url: finalUrl,
