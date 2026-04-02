@@ -7247,13 +7247,7 @@ onUnmounted(() => {
   min-height: 360px;
 }
 .step-list-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 12px 10px;
-  border-bottom: 1px solid #eaecf4;
-  font-size: 12px;
+  display: none;
 }
 .step-toolbar-title-box {
   display: flex;
@@ -7290,37 +7284,47 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid #e4e7f0;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #d8def0;
   border-radius: 999px;
   background: #fff;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1;
   color: #5b5bd6;
+  text-align: center;
   cursor: pointer;
-  transition: all 0.18s ease;
+  box-shadow: none;
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
 }
 .step-link-btn:hover {
   border-color: rgba(125, 51, 255, 0.28);
   background: rgba(125, 51, 255, 0.06);
+  transform: translateY(-1px);
 }
 .step-link-btn.primary {
   border-color: #7d33ff;
-  background: linear-gradient(135deg, rgba(125, 51, 255, 0.14), rgba(125, 51, 255, 0.04));
+  background: rgba(125, 51, 255, 0.08);
+  color: #7d33ff;
 }
 .step-link-btn.muted {
-  color: #94a3b8;
+  color: #64748b;
 }
 .step-link-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.55;
   cursor: not-allowed;
+  transform: none;
 }
 .step-toolbar-spotlight {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding: 10px 12px 4px;
+  display: none;
+}
+.step-toolbar-action-row.secondary .step-link-btn:first-child {
+  display: none;
 }
 .step-spotlight-card {
   border: 1px solid #e6ebf5;
@@ -8397,6 +8401,10 @@ onUnmounted(() => {
   }
 }
 @media (max-width: 1360px) {
+  .step-toolbar-action-row,
+  .step-toolbar-action-row.secondary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .step-detail-fixed-drawer {
     top: var(--header-height, 56px);
     right: 0;
