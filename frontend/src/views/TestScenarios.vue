@@ -8340,8 +8340,8 @@ onUnmounted(() => {
   align-self: stretch;
   margin: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1.08fr) minmax(320px, 0.92fr);
   border: none;
   border-radius: 0;
   background:
@@ -8357,35 +8357,57 @@ onUnmounted(() => {
 .step-editor-main {
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  height: auto;
   grid-column: 1;
   grid-row: 2;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 12px;
-  padding: 18px 18px 18px;
+  padding: 18px 18px 12px;
   overflow: hidden;
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 100%);
 }
 .step-side-stack {
   min-width: 0;
   min-height: 0;
-  height: 100%;
-  grid-column: 2;
-  grid-row: 2;
-  padding: 18px 18px 18px 0;
-  border-left: 1px solid #e9eef7;
+  height: auto;
+  grid-column: 1;
+  grid-row: 3;
+  padding: 0 18px 18px;
+  border-left: none;
+  border-top: 1px solid #eef1f6;
   background: linear-gradient(180deg, #f8fbff 0%, #f3f7fd 100%);
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  gap: 0;
+  gap: 12px;
   overflow: hidden;
+  align-content: stretch;
+  position: relative;
+}
+.step-side-stack::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 18px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98) 0%, rgba(248, 251, 255, 0) 100%);
+  pointer-events: none;
+  z-index: 0;
 }
 .step-response-side {
   min-width: 0;
   min-height: 0;
   display: flex;
-  height: 100%;
+  height: auto;
+  max-height: 100%;
   overflow: hidden;
+  align-items: stretch;
+  position: relative;
+  z-index: 1;
+  padding-top: 14px;
 }
 .step-editor-placeholder {
   flex: 1;
@@ -8570,6 +8592,7 @@ onUnmounted(() => {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 249, 253, 0.98) 100%);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
   min-height: 100%;
+  overflow: hidden;
 }
 .step-response-head {
   display: flex;
@@ -8598,14 +8621,17 @@ onUnmounted(() => {
 }
 .step-response-toolbar {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
   padding: 12px 16px 0;
+  flex-wrap: wrap;
   flex-shrink: 0;
 }
 .step-response-view-switch {
   display: inline-flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .step-view-btn,
 .step-mini-tab,
@@ -8630,6 +8656,7 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
 }
 .step-mini-tab {
   height: 30px;
@@ -8651,6 +8678,7 @@ onUnmounted(() => {
   flex-direction: column;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(244, 247, 252, 0.92) 100%);
+  overflow: hidden;
 }
 .step-response-body-shell > * {
   min-height: 0;
@@ -8878,6 +8906,10 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.92);
   flex-shrink: 0;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  backdrop-filter: blur(8px);
 }
 .step-req-method-tag {
   font-size: 11px;
@@ -8901,6 +8933,7 @@ onUnmounted(() => {
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.04);
+  position: relative;
 }
 .step-config-tabs :deep(.n-tabs-nav) {
   margin-bottom: 0;
@@ -9360,10 +9393,21 @@ onUnmounted(() => {
   }
   .step-response-side {
     min-height: 280px;
+    padding-top: 12px;
+  }
+  .step-response-toolbar {
+    align-items: flex-start;
+  }
+  .step-response-tabs-mini {
+    justify-content: flex-start;
   }
   .step-editor-main {
     grid-column: 1;
     grid-row: 2;
+  }
+  .step-req-toolbar {
+    position: static;
+    backdrop-filter: none;
   }
   .step-overview-card--top {
     margin: 18px 18px 12px;
