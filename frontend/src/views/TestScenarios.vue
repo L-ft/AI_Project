@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-layout">
 
     <!-- ── 左侧边栏 ── -->
@@ -715,7 +715,8 @@
                                       <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
                                     </div>
                                   </div>
-                                  <div class="step-editor-main">
+                                  <div class="step-editor-content">
+                                    <div class="step-editor-main">
                               <div class="step-req-toolbar">
                                 <span v-if="!isCurrentStepCustom" class="step-req-method-tag" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
                                 <n-select
@@ -757,7 +758,7 @@
                                 </n-button-group>
                               </div>
 
-                              <div v-if="isUtilityStep" class="step-utility-panel">
+                              <div v-if="isUtilityStep" class="step-utility-panel step-utility-panel--scroll">
                                 <div class="step-utility-head">
                                   <div class="step-utility-title">{{ currentStepSourceLabel }}</div>
                                   <n-button size="small" type="primary" :loading="httpStepSaving" @click="saveUtilityStepConfig">保存配置</n-button>
@@ -1059,43 +1060,9 @@
                                 <div class="step-tab-pane-inner"><n-empty description="暂无额外设置" size="small" /></div>
                               </n-tab-pane>
                               </n-tabs>
-                            </div>
-                            <aside class="step-side-stack">
-                              <div class="step-overview-card step-overview-card--side">
-                                <div class="step-overview-head">
-                                  <div class="step-overview-title-group">
-                                    <span class="step-overview-eyebrow">步骤概览</span>
-                                    <div class="step-overview-title-line">
-                                      <span class="step-overview-title">{{ currentStepTitle }}</span>
-                                      <span class="step-overview-method" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
                                     </div>
-                                  </div>
-                                  <div class="step-overview-env">
-                                    <span class="step-overview-env-label">运行环境</span>
-                                    <div class="step-overview-env-actions">
-                                      <n-select
-                                        v-model:value="detailEnvId"
-                                        :options="envOptions"
-                                        size="small"
-                                        placeholder="请选择环境"
-                                        style="width: 180px"
-                                        :consistent-menu-width="false"
-                                      />
-                                      <n-button quaternary circle size="small" @click="stepDetailDrawerOpened = false">
-                                        <template #icon><n-icon :component="CloseOutlined" /></template>
-                                      </n-button>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div class="step-overview-meta">
-                                  <span class="step-overview-chip">步骤 {{ (selectedStepIndex ?? 0) + 1 }} / {{ detailStepCount }}</span>
-                                  <span class="step-overview-chip">{{ currentStepSourceLabel }}</span>
-                                  <span class="step-overview-chip" v-if="stepEditorCaseId">用例 #{{ stepEditorCaseId }}</span>
-                                  <span class="step-overview-chip" v-if="stepEditorInterfaceId">接口 #{{ stepEditorInterfaceId }}</span>
-                                  <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
-                                </div>
-                              </div>
-                            <aside class="step-response-side">
+                                    <div class="step-editor-bottom">
+                            <div class="step-response-side">
                               <div class="step-response-panel always-visible">
                                 <div class="step-response-head">
                                   <span class="step-response-title">响应结果</span>
@@ -1204,8 +1171,9 @@
                                   </template>
                                 </div>
                               </div>
-                            </aside>
-                            </aside>
+                            </div>
+                                    </div>
+                                  </div>
                           </div>
                               </n-spin>
                             </div>
@@ -8354,37 +8322,41 @@ onUnmounted(() => {
   border-radius: 0;
   box-shadow: none;
 }
+.step-editor-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  height: 100%;
+  grid-template-rows: minmax(0, 55%) minmax(0, 45%);
+  gap: 14px;
+  padding: 0 18px 18px;
+  overflow: hidden;
+}
 .step-editor-main {
   min-width: 0;
   min-height: 0;
-  flex: 1 1 auto;
-  height: auto;
+  height: 100%;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
-  padding: 18px 18px 12px;
   overflow: hidden;
   position: relative;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 100%);
 }
-.step-side-stack {
+.step-editor-bottom {
   min-width: 0;
   min-height: 0;
-  flex: 0 0 340px;
-  height: 340px;
-  padding: 0 18px 18px;
-  border-left: none;
-  border-top: 1px solid #eef1f6;
+  height: 100%;
+  padding: 0;
   background: linear-gradient(180deg, #f8fbff 0%, #f3f7fd 100%);
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  gap: 12px;
+  display: flex;
   overflow: hidden;
   align-content: stretch;
   position: relative;
+  border-top: 1px solid #eef1f6;
 }
-.step-side-stack::before {
+.step-editor-bottom::before {
   content: '';
   position: absolute;
   top: 0;
@@ -8399,13 +8371,14 @@ onUnmounted(() => {
   min-width: 0;
   min-height: 0;
   display: flex;
+  flex: 1 1 auto;
   height: 100%;
   max-height: 100%;
   overflow: hidden;
   align-items: stretch;
   position: relative;
   z-index: 1;
-  padding-top: 14px;
+  padding: 12px 18px 18px;
 }
 .step-editor-placeholder {
   flex: 1;
@@ -8443,12 +8416,7 @@ onUnmounted(() => {
     linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 54%);
   pointer-events: none;
 }
-.step-overview-card--side {
-  display: none;
-}
 .step-overview-card--top {
-  grid-column: 1 / -1;
-  grid-row: 1;
   margin: 18px 18px 0;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
 }
@@ -8589,7 +8557,8 @@ onUnmounted(() => {
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 249, 253, 0.98) 100%);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
-  min-height: 100%;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 .step-response-head {
@@ -8995,6 +8964,15 @@ onUnmounted(() => {
 .step-tab-pane-inner > .step-utility-panel {
   width: 100%;
 }
+.step-utility-panel--scroll {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #e6ebf5;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.04);
+  padding: 16px;
+}
 .step-auth-pane {
   border: 1px solid #e6ebf5;
   border-radius: 14px;
@@ -9341,8 +9319,8 @@ onUnmounted(() => {
   word-break: break-all;
 }
 @media (max-width: 1680px) {
-  .step-editor-shell {
-    grid-template-columns: minmax(0, 1fr) 340px;
+  .step-editor-content {
+    grid-template-rows: minmax(0, 55%) minmax(0, 45%);
   }
 }
 @media (max-width: 1360px) {
@@ -9391,17 +9369,12 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
   }
-  .step-side-stack {
-    flex-basis: 280px;
-    height: 280px;
-    padding: 0 18px 18px;
-    border-left: none;
-    border-top: 1px solid #eef1f6;
-    background: linear-gradient(180deg, #f8fbff 0%, #f3f7fd 100%);
+  .step-editor-content {
+    grid-template-rows: minmax(0, 55%) minmax(0, 45%);
   }
   .step-response-side {
-    min-height: 280px;
-    padding-top: 12px;
+    min-height: 0;
+    padding: 12px 18px 18px;
   }
   .step-response-toolbar {
     align-items: flex-start;
@@ -9410,7 +9383,7 @@ onUnmounted(() => {
     justify-content: flex-start;
   }
   .step-editor-main {
-    flex: 1 1 auto;
+    min-height: 0;
   }
   .step-req-toolbar {
     position: static;
