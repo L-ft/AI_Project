@@ -682,47 +682,6 @@
                               <n-spin :show="stepEditorLoading">
                                 <div class="step-editor-shell">
                                   <div class="step-editor-main">
-                                    <div class="step-overview-card">
-                                <div class="step-overview-head">
-                                  <div class="step-overview-title-group">
-                                    <span class="step-overview-eyebrow">步骤概览</span>
-                                    <div class="step-overview-title-line">
-                                      <span class="step-overview-title">{{ currentStepTitle }}</span>
-                                      <span class="step-overview-method" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
-                                    </div>
-                                  </div>
-                                  <div class="step-overview-env">
-                                    <span class="step-overview-env-label">运行环境</span>
-                                    <div class="step-overview-env-actions">
-                                      <n-select
-                                        v-model:value="detailEnvId"
-                                        :options="envOptions"
-                                        size="small"
-                                        placeholder="请选择环境"
-                                        style="width: 180px"
-                                        :consistent-menu-width="false"
-                                      />
-                                      <n-button quaternary circle size="small" @click="stepDetailDrawerOpened = false">
-                                        <template #icon><n-icon :component="CloseOutlined" /></template>
-                                      </n-button>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div class="step-overview-meta">
-                                  <span class="step-overview-chip">步骤 {{ (selectedStepIndex ?? 0) + 1 }} / {{ detailStepCount }}</span>
-                                  <span class="step-overview-chip">{{ currentStepSourceLabel }}</span>
-                                  <span class="step-overview-chip" v-if="stepEditorCaseId">用例 #{{ stepEditorCaseId }}</span>
-                                  <span class="step-overview-chip" v-if="stepEditorInterfaceId">接口 #{{ stepEditorInterfaceId }}</span>
-                                  <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
-                                </div>
-                                <div class="step-overview-actions">
-                                  <button type="button" class="step-overview-action" @click="openStepWizard">快速引导</button>
-                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('current')">从当前执行</button>
-                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('all')">全部执行</button>
-                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('failed')">从失败处执行</button>
-                                </div>
-                              </div>
-
                               <div class="step-req-toolbar">
                                 <span v-if="!isCurrentStepCustom" class="step-req-method-tag" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
                                 <n-select
@@ -1120,8 +1079,49 @@
                               <n-tab-pane name="settings" tab="设置">
                                 <div class="step-tab-pane-inner"><n-empty description="暂无额外设置" size="small" /></div>
                               </n-tab-pane>
-                            </n-tabs>
+                              </n-tabs>
                             </div>
+                            <aside class="step-side-stack">
+                              <div class="step-overview-card step-overview-card--side">
+                                <div class="step-overview-head">
+                                  <div class="step-overview-title-group">
+                                    <span class="step-overview-eyebrow">步骤概览</span>
+                                    <div class="step-overview-title-line">
+                                      <span class="step-overview-title">{{ currentStepTitle }}</span>
+                                      <span class="step-overview-method" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
+                                    </div>
+                                  </div>
+                                  <div class="step-overview-env">
+                                    <span class="step-overview-env-label">运行环境</span>
+                                    <div class="step-overview-env-actions">
+                                      <n-select
+                                        v-model:value="detailEnvId"
+                                        :options="envOptions"
+                                        size="small"
+                                        placeholder="请选择环境"
+                                        style="width: 180px"
+                                        :consistent-menu-width="false"
+                                      />
+                                      <n-button quaternary circle size="small" @click="stepDetailDrawerOpened = false">
+                                        <template #icon><n-icon :component="CloseOutlined" /></template>
+                                      </n-button>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div class="step-overview-meta">
+                                  <span class="step-overview-chip">步骤 {{ (selectedStepIndex ?? 0) + 1 }} / {{ detailStepCount }}</span>
+                                  <span class="step-overview-chip">{{ currentStepSourceLabel }}</span>
+                                  <span class="step-overview-chip" v-if="stepEditorCaseId">用例 #{{ stepEditorCaseId }}</span>
+                                  <span class="step-overview-chip" v-if="stepEditorInterfaceId">接口 #{{ stepEditorInterfaceId }}</span>
+                                  <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
+                                </div>
+                                <div class="step-overview-actions">
+                                  <button type="button" class="step-overview-action" @click="openStepWizard">快速引导</button>
+                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('current')">从当前执行</button>
+                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('all')">全部执行</button>
+                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('failed')">从失败处执行</button>
+                                </div>
+                              </div>
                             <aside class="step-response-side">
                               <div class="step-response-panel always-visible">
                                 <div class="step-response-head">
@@ -1158,15 +1158,36 @@
                                 </div>
                                 <div class="step-response-body-shell">
                                   <template v-if="!stepEditorLastResponse">
-                                    <div class="step-response-empty">
-                                      发送当前步骤后，这里会展示完整响应结果
+                                    <div class="step-response-empty step-response-empty--idle">
+                                      <span class="step-response-empty-badge">Response</span>
+                                      <div class="step-response-empty-title">当前步骤尚未执行</div>
+                                      <div class="step-response-empty-desc">
+                                        发送当前步骤后，这里会展示状态码、耗时、响应体、断言结果以及变量提取结果。
+                                      </div>
+                                      <div class="step-response-empty-metrics">
+                                        <div class="step-response-empty-metric">
+                                          <span>请求方法</span>
+                                          <strong>{{ stepEditorMethod || '--' }}</strong>
+                                        </div>
+                                        <div class="step-response-empty-metric">
+                                          <span>后置动作</span>
+                                          <strong>{{ stepEditorPostOps.length }}</strong>
+                                        </div>
+                                      </div>
+                                      <div class="step-response-empty-tip">
+                                        左侧继续完善参数、鉴权和前后置配置，右侧会实时承接本步骤的执行结果。
+                                      </div>
                                     </div>
                                   </template>
                                   <template v-else-if="stepResponsePanelTab === 'body'">
                                     <pre class="step-response-pre">{{ stepResponseViewMode === 'pretty' ? stepResponseBodyPrettyText : stepResponseBodyRawText }}</pre>
                                   </template>
                                   <template v-else-if="stepResponsePanelTab === 'headers'">
-                                    <div v-if="stepResponseHeaderEntries.length === 0" class="step-response-empty">暂无响应头信息</div>
+                                    <div v-if="stepResponseHeaderEntries.length === 0" class="step-response-empty step-response-empty--compact">
+                                      <span class="step-response-empty-badge">Headers</span>
+                                      <div class="step-response-empty-title">暂无响应头信息</div>
+                                      <div class="step-response-empty-desc">本次返回中没有可展示的 Header 字段。</div>
+                                    </div>
                                     <div v-else class="step-response-kv-list">
                                       <div v-for="([k, v], idx) in stepResponseHeaderEntries" :key="`${k}-${idx}`" class="step-response-kv-row">
                                         <span class="step-response-k">{{ k }}</span>
@@ -1188,10 +1209,19 @@
                                           <span class="step-assert-item-msg">{{ item.message }}</span>
                                         </div>
                                       </div>
+                                      <div v-else class="step-assert-empty">
+                                        <span class="step-response-empty-badge">Assert</span>
+                                        <div class="step-response-empty-title">暂无断言明细</div>
+                                        <div class="step-response-empty-desc">当前步骤尚未生成断言结果，执行后会在这里展示每一条校验结论。</div>
+                                      </div>
                                     </div>
                                   </template>
                                   <template v-else>
-                                    <div v-if="stepResponseExtractItems.length === 0" class="step-response-empty">暂无可提取字段</div>
+                                    <div v-if="stepResponseExtractItems.length === 0" class="step-response-empty step-response-empty--compact">
+                                      <span class="step-response-empty-badge">Extract</span>
+                                      <div class="step-response-empty-title">暂无可提取字段</div>
+                                      <div class="step-response-empty-desc">执行后若命中提取规则，这里会列出可复用的变量和值。</div>
+                                    </div>
                                     <div v-else class="step-response-kv-list">
                                       <div v-for="item in stepResponseExtractItems" :key="item.key" class="step-response-kv-row">
                                         <span class="step-response-k">{{ item.key }}</span>
@@ -1201,6 +1231,7 @@
                                   </template>
                                 </div>
                               </div>
+                            </aside>
                             </aside>
                           </div>
                               </n-spin>
@@ -7817,7 +7848,7 @@ onUnmounted(() => {
   align-self: stretch;
   margin: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
   border: none;
   border-radius: 0;
   background:
@@ -7834,18 +7865,27 @@ onUnmounted(() => {
   min-width: 0;
   min-height: 0;
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 12px;
   padding: 18px 18px 16px;
+  overflow: hidden;
+}
+.step-side-stack {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 18px 18px 16px 0;
+  border-left: 1px solid #eef1f6;
+  background: linear-gradient(180deg, #f8fbff 0%, #f4f7fc 100%);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
   overflow: hidden;
 }
 .step-response-side {
   min-width: 0;
   min-height: 0;
-  height: 100%;
-  border-left: 1px solid #eef1f6;
-  background: linear-gradient(180deg, #f8fbff 0%, #f4f7fc 100%);
   display: flex;
   overflow: hidden;
 }
@@ -7884,6 +7924,9 @@ onUnmounted(() => {
     radial-gradient(circle at top right, rgba(125, 51, 255, 0.12), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 54%);
   pointer-events: none;
+}
+.step-overview-card--side {
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
 }
 .step-overview-head {
   display: flex;
@@ -8036,15 +8079,17 @@ onUnmounted(() => {
   border-radius: 0;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.98) 100%);
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   height: 100%;
 }
 .step-response-panel.always-visible {
-  border: none;
-  background: transparent;
+  border: 1px solid #e6ebf5;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 249, 253, 0.98) 100%);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
 .step-response-head {
   display: flex;
@@ -8124,6 +8169,11 @@ onUnmounted(() => {
   padding: 14px 16px 16px;
   display: flex;
   flex-direction: column;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(244, 247, 252, 0.92) 100%);
+}
+.step-response-body-shell > * {
+  min-height: 0;
 }
 .step-response-pre {
   margin: 0;
@@ -8145,23 +8195,28 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  gap: 10px;
-  text-align: center;
-  padding: 32px 24px;
+  gap: 12px;
+  text-align: left;
+  padding: 22px;
   border: 1px dashed #dbe4f3;
-  border-radius: 16px;
+  border-radius: 18px;
   color: #94a3b8;
   background:
-    radial-gradient(circle at top, rgba(125, 51, 255, 0.08), transparent 42%),
-    rgba(255, 255, 255, 0.82);
+    radial-gradient(circle at top right, rgba(125, 51, 255, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 250, 255, 0.96) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
-.step-response-empty::before {
-  content: 'Response';
+.step-response-empty--compact {
+  padding-top: 28px;
+  padding-bottom: 28px;
+}
+.step-response-empty-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: fit-content;
   min-width: 84px;
   height: 30px;
   padding: 0 14px;
@@ -8172,9 +8227,53 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 700;
 }
+.step-response-empty-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.step-response-empty-desc {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #64748b;
+}
+.step-response-empty-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.step-response-empty-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #e6ebf5;
+  background: rgba(255, 255, 255, 0.9);
+}
+.step-response-empty-metric span {
+  font-size: 12px;
+  color: #64748b;
+}
+.step-response-empty-metric strong {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2a44;
+}
+.step-response-empty-tip {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  font-size: 12px;
+  line-height: 1.7;
+  color: #47607d;
+}
 .step-response-kv-list {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   gap: 8px;
   overflow: auto;
 }
@@ -8199,6 +8298,10 @@ onUnmounted(() => {
   word-break: break-word;
 }
 .step-assert-card {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
   padding: 14px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.9);
@@ -8240,8 +8343,24 @@ onUnmounted(() => {
 .step-assert-list {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   gap: 8px;
   margin-top: 12px;
+  overflow: auto;
+}
+.step-assert-empty {
+  flex: 1;
+  min-height: 0;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px dashed #dbe4f3;
+  background: linear-gradient(180deg, #fbfdff 0%, #f7faff 100%);
 }
 .step-assert-list-item {
   display: grid;
@@ -8332,9 +8451,34 @@ onUnmounted(() => {
   height: 100%;
   min-height: 0;
   padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
   overflow: auto;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(250, 252, 255, 0.96) 100%);
+}
+.step-tab-pane-inner :deep(.n-empty) {
+  margin: 0;
+  flex: 1;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 24px 20px;
+  border: 1px dashed #dbe4f3;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfcff 0%, #f7faff 100%);
+}
+.step-tab-pane-inner :deep(.n-empty .n-empty__description) {
+  color: #64748b;
+  line-height: 1.7;
+}
+.step-tab-pane-inner > .step-mini-table,
+.step-tab-pane-inner > .step-auth-pane,
+.step-tab-pane-inner > .step-inline-op-list,
+.step-tab-pane-inner > .step-post-other-table,
+.step-tab-pane-inner > .step-utility-panel {
+  width: 100%;
 }
 .step-auth-pane {
   border: 1px solid #e6ebf5;
@@ -8677,7 +8821,7 @@ onUnmounted(() => {
 }
 @media (max-width: 1680px) {
   .step-editor-shell {
-    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr) 340px;
   }
 }
 @media (max-width: 1360px) {
@@ -8721,11 +8865,17 @@ onUnmounted(() => {
   .step-editor-shell {
     margin: 0;
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .step-side-stack {
+    order: -1;
+    padding: 18px 18px 0;
+    border-left: none;
+    border-bottom: 1px solid #eef1f6;
+    grid-template-rows: auto minmax(280px, 42vh);
   }
   .step-response-side {
-    border-left: none;
-    border-top: 1px solid #eef1f6;
-    min-height: 360px;
+    min-height: 280px;
   }
   .step-overview-head {
     flex-direction: column;
