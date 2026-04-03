@@ -681,6 +681,40 @@
                             <div class="step-editor-panel is-drawer">
                               <n-spin :show="stepEditorLoading">
                                 <div class="step-editor-shell">
+                                  <div class="step-overview-card step-overview-card--top">
+                                    <div class="step-overview-head">
+                                      <div class="step-overview-title-group">
+                                        <span class="step-overview-eyebrow">步骤概览</span>
+                                        <div class="step-overview-title-line">
+                                          <span class="step-overview-title">{{ currentStepTitle }}</span>
+                                          <span class="step-overview-method" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
+                                        </div>
+                                      </div>
+                                      <div class="step-overview-env">
+                                        <span class="step-overview-env-label">运行环境</span>
+                                        <div class="step-overview-env-actions">
+                                          <n-select
+                                            v-model:value="detailEnvId"
+                                            :options="envOptions"
+                                            size="small"
+                                            placeholder="请选择环境"
+                                            style="width: 180px"
+                                            :consistent-menu-width="false"
+                                          />
+                                          <n-button quaternary circle size="small" @click="stepDetailDrawerOpened = false">
+                                            <template #icon><n-icon :component="CloseOutlined" /></template>
+                                          </n-button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div class="step-overview-meta">
+                                      <span class="step-overview-chip">步骤 {{ (selectedStepIndex ?? 0) + 1 }} / {{ detailStepCount }}</span>
+                                      <span class="step-overview-chip">{{ currentStepSourceLabel }}</span>
+                                      <span class="step-overview-chip" v-if="stepEditorCaseId">用例 #{{ stepEditorCaseId }}</span>
+                                      <span class="step-overview-chip" v-if="stepEditorInterfaceId">接口 #{{ stepEditorInterfaceId }}</span>
+                                      <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
+                                    </div>
+                                  </div>
                                   <div class="step-editor-main">
                               <div class="step-req-toolbar">
                                 <span v-if="!isCurrentStepCustom" class="step-req-method-tag" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
@@ -1114,12 +1148,6 @@
                                   <span class="step-overview-chip" v-if="stepEditorCaseId">用例 #{{ stepEditorCaseId }}</span>
                                   <span class="step-overview-chip" v-if="stepEditorInterfaceId">接口 #{{ stepEditorInterfaceId }}</span>
                                   <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
-                                </div>
-                                <div class="step-overview-actions">
-                                  <button type="button" class="step-overview-action" @click="openStepWizard">快速引导</button>
-                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('current')">从当前执行</button>
-                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('all')">全部执行</button>
-                                  <button type="button" class="step-overview-action" @click="runScenarioSteps('failed')">从失败处执行</button>
                                 </div>
                               </div>
                             <aside class="step-response-side">
@@ -6615,6 +6643,7 @@ onUnmounted(() => {
 .scenario-detail-main.detail-main-flex {
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -7254,17 +7283,20 @@ onUnmounted(() => {
 .detail-steps-workspace {
   flex: 1;
   display: flex;
+  height: 100%;
   min-height: 0;
+  min-height: clamp(620px, calc(100vh - 220px), 860px);
   margin-top: 0;
-  border: 1px solid #eaecf4;
-  border-radius: 12px;
-  background: #fff;
+  border: 1px solid #e8edf6;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.05);
   overflow: hidden;
   position: relative;
 }
 /* 空状态：sidebar 固定宽度 + 右侧展示引导 */
 .detail-steps-workspace.workspace-empty .step-editor-panel {
-  background: #fafbfc;
+  background: linear-gradient(180deg, #fafcff 0%, #f5f8fd 100%);
 }
 .step-list-sidebar {
   flex: 1;
@@ -7274,8 +7306,9 @@ onUnmounted(() => {
   column-gap: 12px;
   row-gap: 10px;
   align-items: start;
-  background: #fff;
-  min-height: 520px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 251, 255, 0.98) 100%);
+  min-height: 0;
+  height: 100%;
 }
 /* 空状态下 sidebar 固定 286px */
 .detail-steps-workspace.workspace-empty .step-list-sidebar {
@@ -7616,8 +7649,9 @@ onUnmounted(() => {
   color: #8792a2;
 }
 .step-list-scrollbar {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 220px;
+  padding-bottom: 8px;
   grid-column: 1 / -1;
 }
 .step-list-zero {
@@ -7771,7 +7805,7 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #f5f7fb;
+  background: linear-gradient(180deg, #f7faff 0%, #f2f6fc 100%);
   position: relative;
   overflow: hidden;
 }
@@ -7812,20 +7846,20 @@ onUnmounted(() => {
 }
 .step-detail-fixed-drawer {
   position: fixed;
-  top: var(--header-height, 56px);
-  right: 0;
-  bottom: 0;
+  top: calc(var(--header-height, 56px) + 8px);
+  right: 16px;
+  bottom: 16px;
   /* 只占视口右侧一条，不用 100vw，避免盖住中间步骤列表 */
-  width: min(920px, 55vw);
-  max-width: calc(100vw - 200px);
-  min-width: 360px;
+  width: min(980px, 58vw);
+  max-width: calc(100vw - 220px);
+  min-width: 420px;
   z-index: 2000;
   display: flex;
   flex-direction: column;
   pointer-events: none;
   box-sizing: border-box;
   padding: 0;
-  filter: drop-shadow(-8px 0 24px rgba(15, 23, 42, 0.12));
+  filter: drop-shadow(-12px 0 32px rgba(15, 23, 42, 0.14));
 }
 .step-detail-fixed-drawer > .step-editor-panel {
   pointer-events: auto;
@@ -7834,10 +7868,10 @@ onUnmounted(() => {
 }
 .step-editor-panel.is-drawer {
   height: 100%;
-  background: var(--color-bg-surface, #fff);
+  background: linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%);
   overflow: hidden;
-  border: 1px solid var(--color-border-subtle, #eaecf4);
-  border-radius: 16px 0 0 16px;
+  border: 1px solid var(--color-border-subtle, #e7edf6);
+  border-radius: 20px;
 }
 /* 步骤编辑内容卡片：填满右侧抽屉 */
 .step-editor-shell {
@@ -7848,11 +7882,12 @@ onUnmounted(() => {
   align-self: stretch;
   margin: 0;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
   border: none;
   border-radius: 0;
   background:
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
   box-shadow: none;
   overflow: hidden;
 }
@@ -7865,28 +7900,33 @@ onUnmounted(() => {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  grid-column: 1;
+  grid-row: 2;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 12px;
-  padding: 18px 18px 16px;
+  padding: 18px 18px 18px;
   overflow: hidden;
 }
 .step-side-stack {
   min-width: 0;
   min-height: 0;
   height: 100%;
-  padding: 18px 18px 16px 0;
-  border-left: 1px solid #eef1f6;
-  background: linear-gradient(180deg, #f8fbff 0%, #f4f7fc 100%);
+  grid-column: 2;
+  grid-row: 2;
+  padding: 18px 18px 18px 0;
+  border-left: 1px solid #e9eef7;
+  background: linear-gradient(180deg, #f8fbff 0%, #f3f7fd 100%);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 14px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
   overflow: hidden;
 }
 .step-response-side {
   min-width: 0;
   min-height: 0;
   display: flex;
+  height: 100%;
   overflow: hidden;
 }
 .step-editor-placeholder {
@@ -7926,6 +7966,12 @@ onUnmounted(() => {
   pointer-events: none;
 }
 .step-overview-card--side {
+  display: none;
+}
+.step-overview-card--top {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  margin: 18px 18px 0;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
 }
 .step-overview-head {
@@ -8000,31 +8046,6 @@ onUnmounted(() => {
   background: rgba(236, 253, 245, 0.9);
   border-color: #bbf7d0;
 }
-.step-overview-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-  position: relative;
-  z-index: 1;
-}
-.step-overview-action {
-  border: 1px solid #d9e0ec;
-  background: rgba(255, 255, 255, 0.85);
-  color: #475569;
-  min-height: 34px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-.step-overview-action:hover {
-  border-color: rgba(125, 51, 255, 0.3);
-  color: #7d33ff;
-  background: rgba(125, 51, 255, 0.06);
-}
 .step-link-summary {
   border: 1px solid #e6ebf5;
   border-radius: 14px;
@@ -8090,6 +8111,7 @@ onUnmounted(() => {
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 249, 253, 0.98) 100%);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  min-height: 100%;
 }
 .step-response-head {
   display: flex;
@@ -8851,8 +8873,8 @@ onUnmounted(() => {
   }
   .step-detail-fixed-drawer {
     top: var(--header-height, 56px);
-    left: 0;
-    right: 0;
+    left: auto;
+    right: 8px;
     bottom: 0;
     width: min(100%, 520px);
     max-width: calc(100vw - 16px);
@@ -8865,17 +8887,25 @@ onUnmounted(() => {
   .step-editor-shell {
     margin: 0;
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) minmax(280px, 42vh);
   }
   .step-side-stack {
-    order: -1;
-    padding: 18px 18px 0;
+    grid-column: 1;
+    grid-row: 3;
+    padding: 0 18px 18px;
     border-left: none;
-    border-bottom: 1px solid #eef1f6;
-    grid-template-rows: auto minmax(280px, 42vh);
+    border-top: 1px solid #eef1f6;
+    background: linear-gradient(180deg, #f8fbff 0%, #f3f7fd 100%);
   }
   .step-response-side {
     min-height: 280px;
+  }
+  .step-editor-main {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .step-overview-card--top {
+    margin: 18px 18px 12px;
   }
   .step-overview-head {
     flex-direction: column;
