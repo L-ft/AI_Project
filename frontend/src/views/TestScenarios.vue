@@ -757,17 +757,6 @@
                                 </n-button-group>
                               </div>
 
-                              <div class="step-link-summary">
-                                <div class="step-link-summary-title">快速引用</div>
-                                <div class="step-link-summary-row">
-                                  <span class="step-link-summary-label">可引用变量</span>
-                                  <div class="step-link-summary-tags">
-                                    <span v-if="stepOutputTags.length === 0" class="step-link-summary-empty">暂无可引用变量</span>
-                                    <span v-for="tag in stepOutputTags" :key="tag" class="step-link-tag">{{ tag }}</span>
-                                  </div>
-                                </div>
-                              </div>
-
                               <div v-if="isUtilityStep" class="step-utility-panel">
                                 <div class="step-utility-head">
                                   <div class="step-utility-title">{{ currentStepSourceLabel }}</div>
