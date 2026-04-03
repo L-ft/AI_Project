@@ -929,17 +929,13 @@
                                 <div class="step-tab-pane-inner step-pre-pane">
                                   <div class="step-panel-section-head">
                                     <div>
-                                      <div class="step-panel-section-title">请求前准备</div>
-                                      <div class="step-panel-section-desc">在请求发出前统一设置 Header、Query、变量、等待与脚本。</div>
+                                      <div class="step-panel-section-title">请求前置编排</div>
+                                      <div class="step-panel-section-desc">与单接口调试保持一致，支持数据库操作、脚本、公共脚本和等待时间。</div>
                                     </div>
                                     <span class="step-panel-section-count">{{ stepEditorPreOps.length }} 项</span>
                                   </div>
                                   <div class="step-pre-quick-add">
-                                    <n-button size="tiny" quaternary @click="addStepPreOp('set_header')">新增 Header</n-button>
-                                    <n-button size="tiny" quaternary @click="addStepPreOp('set_query')">新增 Query</n-button>
-                                    <n-button size="tiny" quaternary @click="addStepPreOp('set_var')">设置变量</n-button>
-                                    <n-button size="tiny" quaternary @click="addStepPreOp('wait')">等待时间</n-button>
-                                    <n-button size="tiny" quaternary @click="addStepPreOp('script')">前置脚本</n-button>
+                                    <n-button v-for="item in stepUnifiedPreOpCreateOptions" :key="item.value" size="tiny" quaternary @click="addStepPreOpUnified(item.value)">{{ item.label }}</n-button>
                                   </div>
                                   <n-empty v-if="stepEditorPreOps.length === 0" description="暂无前置操作" size="small" />
                                   <div v-else class="step-inline-op-list">
@@ -947,31 +943,52 @@
                                       <div class="step-inline-op-head">
                                         <div class="step-inline-op-title-group">
                                           <span class="step-inline-op-index">前置 {{ pi + 1 }}</span>
-                                          <strong>{{ stepPreOpTypeLabel(op.type) }}</strong>
+                                          <strong>{{ stepUnifiedPreOpTypeLabels[op.type] || '前置操作' }}</strong>
                                         </div>
-                                        <n-button text type="error" size="tiny" @click="removeStepPreOp(pi)">删除</n-button>
+                                        <n-button text type="error" size="tiny" @click="removeStepPreOpUnified(pi)">删除</n-button>
                                       </div>
-                                      <div v-if="op.type === 'wait'" class="step-inline-op-grid two-cols">
-                                        <n-input v-model:value="op.config.duration" size="small" placeholder="等待时长(ms)" @blur="persistStepPreOperations" />
-                                        <n-input v-model:value="op.config.note" size="small" placeholder="备注" @blur="persistStepPreOperations" />
+                                      <div class="step-inline-op-grid two-cols">
+                                        <n-input v-model:value="op.name" size="small" placeholder="操作名称" @blur="persistStepPreOperationsUnified" />
+                                        <n-radio-group :value="op.enabled === false ? 'off' : 'on'" size="small" @update:value="(v: string) => { op.enabled = v === 'on'; persistStepPreOperationsUnified() }">
+                                          <n-radio-button value="on">启用</n-radio-button>
+                                          <n-radio-button value="off">停用</n-radio-button>
+                                        </n-radio-group>
+                                      </div>
+                                      <div v-if="op.type === 'db'" class="step-inline-op-stack">
+                                        <div class="step-inline-op-grid two-cols">
+                                          <n-input v-model:value="op.config.datasource" size="small" placeholder="数据源，例如 default/mysql-main" @blur="persistStepPreOperationsUnified" />
+                                          <n-select v-model:value="op.config.action" size="small" :options="stepUnifiedDbActionOptions" @update:value="persistStepPreOperationsUnified" />
+                                        </div>
+                                        <n-input v-model:value="op.config.sql" type="textarea" size="small" :autosize="{ minRows: 4, maxRows: 8 }" placeholder="SELECT * FROM user WHERE id = {{userId}}" @blur="persistStepPreOperationsUnified" />
+                                        <div class="step-inline-op-grid two-cols">
+                                          <n-input v-model:value="op.config.result_var" size="small" placeholder="结果变量，可选" @blur="persistStepPreOperationsUnified" />
+                                          <n-input v-model:value="op.config.timeout_ms" size="small" placeholder="超时(ms)" @blur="persistStepPreOperationsUnified" />
+                                        </div>
                                       </div>
                                       <div v-else-if="op.type === 'script'" class="step-inline-op-stack">
+                                        <div class="step-inline-op-grid two-cols">
+                                          <n-select v-model:value="op.config.language" size="small" :options="stepUnifiedScriptLanguageOptions" @update:value="persistStepPreOperationsUnified" />
+                                          <div class="step-inline-op-hint">当前步骤详情执行链路以 JavaScript 为主，和调试接口保持一致。</div>
+                                        </div>
                                         <div class="step-inline-op-actions">
                                           <n-button size="tiny" quaternary @click="applyStepPreScriptPreset(op, 'token')">插入 Token 脚本</n-button>
                                           <n-button size="tiny" quaternary @click="applyStepPreScriptPreset(op, 'trace')">插入 TraceId</n-button>
                                         </div>
-                                        <n-input
-                                          v-model:value="op.config.script"
-                                          type="textarea"
-                                          size="small"
-                                          :autosize="{ minRows: 6, maxRows: 12 }"
-                                          placeholder="context.setHeader('Authorization', 'Bearer demo-token')"
-                                          @blur="persistStepPreOperations"
-                                        />
+                                        <n-input v-model:value="op.config.script" type="textarea" size="small" :autosize="{ minRows: 6, maxRows: 12 }" placeholder="context.setHeader('Authorization', 'Bearer {{token}}')" @blur="persistStepPreOperationsUnified" />
                                       </div>
-                                      <div v-else class="step-inline-op-grid">
-                                        <n-input v-model:value="op.config.name" size="small" placeholder="参数名" @blur="persistStepPreOperations" />
-                                        <n-input v-model:value="op.config.value" size="small" placeholder="参数值" @blur="persistStepPreOperations" />
+                                      <div v-else-if="op.type === 'public_script'" class="step-inline-op-stack">
+                                        <div class="step-inline-op-grid two-cols">
+                                          <n-select v-model:value="op.config.script_key" size="small" :options="stepUnifiedPublicScriptOptions" @update:value="persistStepPreOperationsUnified" />
+                                          <div class="step-inline-op-hint">{{ stepUnifiedPublicScriptRegistry[op.config.script_key]?.description || '选择公共脚本模板后，这里会显示说明。' }}</div>
+                                        </div>
+                                        <n-input v-model:value="op.config.params" type="textarea" size="small" :autosize="{ minRows: 4, maxRows: 8 }" placeholder='{"varName":"timestamp","mode":"ms"}' @blur="persistStepPreOperationsUnified" />
+                                      </div>
+                                      <div v-else class="step-inline-op-stack">
+                                        <div class="step-inline-op-grid two-cols">
+                                          <n-input v-model:value="op.config.duration" size="small" placeholder="等待时长" @blur="persistStepPreOperationsUnified" />
+                                          <n-select v-model:value="op.config.unit" size="small" :options="stepUnifiedWaitUnitOptions" @update:value="persistStepPreOperationsUnified" />
+                                        </div>
+                                        <n-input v-model:value="op.config.note" size="small" placeholder="备注" @blur="persistStepPreOperationsUnified" />
                                       </div>
                                     </div>
                                   </div>
@@ -982,132 +999,71 @@
                                   <template v-if="stepEditorCaseId || isCurrentStepCustom || selectedStep?.source === 'interface'">
                                     <div class="step-panel-section-head">
                                       <div>
-                                        <div class="step-panel-section-title">响应校验与变量提取</div>
-                                        <div class="step-panel-section-desc">声明契约校验、断言与提取规则，让步骤执行结果更像真实测试面板。</div>
+                                        <div class="step-panel-section-title">响应后置编排</div>
+                                        <div class="step-panel-section-desc">与单接口调试保持一致，支持校验响应、断言、变量提取、数据库操作、脚本、公共脚本和等待时间。</div>
                                       </div>
                                       <div class="step-panel-section-tags">
+                                        <span class="step-panel-mini-tag">总计 {{ stepVisiblePostOps.length }}</span>
                                         <span class="step-panel-mini-tag">断言 {{ stepEditorAssertionOps.length }}</span>
                                         <span class="step-panel-mini-tag">提取 {{ stepEditorExtractOps.length }}</span>
-                                        <span class="step-panel-mini-tag">其他 {{ stepEditorPostOpsOther.length }}</span>
                                       </div>
                                     </div>
                                     <div class="step-validate-response-bar">
                                       <div class="step-vr-left">
                                         <span class="step-vr-title">校验响应（契约测试）</span>
-                                        <n-tooltip trigger="hover">
-                                          <template #trigger>
-                                            <span class="step-vr-help-wrap">
-                                              <n-icon :component="QuestionCircleOutlined" class="step-vr-help" />
-                                            </span>
-                                          </template>
-                                          开启后：实际状态码须与所选期望值完全一致。关闭后：仍按 2xx 判断为通过。
-                                        </n-tooltip>
+                                        <n-tooltip trigger="hover"><template #trigger><span class="step-vr-help-wrap"><n-icon :component="QuestionCircleOutlined" class="step-vr-help" /></span></template>开启后会校验期望状态码，必要时继续检查响应体中的业务成功标记。</n-tooltip>
                                       </div>
                                       <div class="step-vr-right">
-                                        <n-select
-                                          :value="stepValidateEnabledUi"
-                                          :options="validateEnableSelectOptions"
-                                          size="small"
-                                          class="step-vr-select-enable"
-                                          :consistent-menu-width="false"
-                                          @update:value="onStepValidateEnabledChange"
-                                        />
-                                        <n-select
-                                          :value="stepValidateExpectStatusUi"
-                                          :options="validateStatusCodeOptions"
-                                          size="small"
-                                          class="step-vr-select-status"
-                                          :disabled="stepValidateEnabledUi !== 'on'"
-                                          :consistent-menu-width="false"
-                                          @update:value="onStepValidateExpectStatusChange"
-                                        />
+                                        <n-select :value="stepValidateEnabledUi" :options="validateEnableSelectOptions" size="small" class="step-vr-select-enable" :consistent-menu-width="false" @update:value="onStepValidateEnabledChange" />
+                                        <n-select :value="stepValidateExpectStatusUi" :options="validateStatusCodeOptions" size="small" class="step-vr-select-status" :disabled="stepValidateEnabledUi !== 'on'" :consistent-menu-width="false" @update:value="onStepValidateExpectStatusChange" />
                                       </div>
                                     </div>
                                     <div class="step-post-add-row">
-                                      <n-button size="tiny" quaternary @click="addStepAssertionOp">新增断言</n-button>
-                                      <n-button size="tiny" quaternary @click="addStepExtractOp">新增提取变量</n-button>
+                                      <n-button v-for="item in stepUnifiedPostOpCreateOptions" :key="item.value" size="tiny" quaternary @click="addStepPostOpUnified(item.value)">{{ item.label }}</n-button>
                                     </div>
-                                    <div v-if="stepEditorAssertionOps.length > 0" class="step-inline-op-list">
-                                      <div v-for="(op, pi) in stepEditorAssertionOps" :key="op.id || `assert-${pi}`" class="step-inline-op-card">
+                                    <n-empty v-if="stepVisiblePostOps.length === 0" description="暂无后置操作" size="small" />
+                                    <div v-else class="step-inline-op-list">
+                                      <div v-for="(op, pi) in stepVisiblePostOps" :key="op.id || `post-${pi}`" class="step-inline-op-card">
                                         <div class="step-inline-op-head">
                                           <div class="step-inline-op-title-group">
-                                            <span class="step-inline-op-index">断言 {{ pi + 1 }}</span>
-                                            <strong>响应断言</strong>
+                                            <span class="step-inline-op-index">后置 {{ pi + 1 }}</span>
+                                            <strong>{{ stepUnifiedPostOpTypeLabels[op.type] || '后置操作' }}</strong>
                                           </div>
-                                          <n-button text type="error" size="tiny" @click="removeStepAssertionOp(pi)">删除</n-button>
+                                          <n-button text type="error" size="tiny" @click="removeStepPostOpUnified(pi)">删除</n-button>
                                         </div>
-                                        <div class="step-inline-op-grid three-cols">
-                                          <n-input v-model:value="op.config.name" size="small" placeholder="断言名称" @blur="persistStepPostOperations" />
-                                          <n-select
-                                            v-model:value="op.config.target"
-                                            size="small"
-                                            :options="stepAssertionTargetOptions"
-                                            :consistent-menu-width="false"
-                                            @update:value="persistStepPostOperations"
-                                          />
-                                          <n-input v-model:value="op.config.expression" size="small" placeholder="表达式，如 data.code / content-type" @blur="persistStepPostOperations" />
+                                        <div class="step-inline-op-grid two-cols">
+                                          <n-input v-model:value="op.name" size="small" placeholder="操作名称" @blur="persistStepPostOperationsUnified" />
+                                          <n-radio-group :value="op.enabled === false ? 'off' : 'on'" size="small" @update:value="(v: string) => { op.enabled = v === 'on'; persistStepPostOperationsUnified() }"><n-radio-button value="on">启用</n-radio-button><n-radio-button value="off">停用</n-radio-button></n-radio-group>
                                         </div>
-                                        <div class="step-inline-op-grid three-cols">
-                                          <n-select
-                                            v-model:value="op.config.operator"
-                                            size="small"
-                                            :options="stepAssertionOperatorOptions"
-                                            :consistent-menu-width="false"
-                                            @update:value="persistStepPostOperations"
-                                          />
-                                          <n-input v-model:value="op.config.value" size="small" placeholder="期望值 / 正则" @blur="persistStepPostOperations" />
-                                          <div class="step-inline-op-hint">{{ stepAssertionOpPreview(op) }}</div>
+                                        <div v-if="op.type === 'assertion'" class="step-inline-op-stack">
+                                          <div class="step-inline-op-grid two-cols"><n-select v-model:value="op.config.target" size="small" :options="stepUnifiedAssertionTargetOptions" @update:value="persistStepPostOperationsUnified" /><n-select v-model:value="op.config.operator" size="small" :options="stepUnifiedAssertionOperatorOptions" @update:value="persistStepPostOperationsUnified" /></div>
+                                          <div class="step-inline-op-grid two-cols"><n-input v-model:value="op.config.expression" size="small" placeholder="表达式，如 $.data.code / content-type" @blur="persistStepPostOperationsUnified" /><n-input v-model:value="op.config.value" size="small" placeholder="期望值 / 正则" @blur="persistStepPostOperationsUnified" /></div>
+                                        </div>
+                                        <div v-else-if="op.type === 'extract'" class="step-inline-op-stack">
+                                          <div class="step-inline-op-grid two-cols"><n-input v-model:value="op.config.name" size="small" placeholder="变量名" @blur="persistStepPostOperationsUnified" /><n-select v-model:value="op.config.source" size="small" :options="stepUnifiedExtractSourceOptions" @update:value="persistStepPostOperationsUnified" /></div>
+                                          <div class="step-inline-op-grid two-cols"><n-input v-model:value="op.config.expression" size="small" placeholder="表达式，如 $.data.token / content-type" @blur="persistStepPostOperationsUnified" /><n-select v-model:value="op.config.target" size="small" :options="[{ label: '环境变量', value: 'environment' }, { label: '临时变量', value: 'temporary' }]" @update:value="persistStepPostOperationsUnified" /></div>
+                                        </div>
+                                        <div v-else-if="op.type === 'db'" class="step-inline-op-stack">
+                                          <div class="step-inline-op-grid two-cols"><n-input v-model:value="op.config.datasource" size="small" placeholder="数据源，例如 default/mysql-main" @blur="persistStepPostOperationsUnified" /><n-select v-model:value="op.config.action" size="small" :options="stepUnifiedDbActionOptions" @update:value="persistStepPostOperationsUnified" /></div>
+                                          <n-input v-model:value="op.config.sql" type="textarea" size="small" :autosize="{ minRows: 4, maxRows: 8 }" placeholder="SELECT status FROM orders WHERE order_no = {{orderNo}}" @blur="persistStepPostOperationsUnified" />
+                                          <div class="step-inline-op-grid two-cols"><n-input v-model:value="op.config.result_var" size="small" placeholder="结果变量，可选" @blur="persistStepPostOperationsUnified" /><n-input v-model:value="op.config.timeout_ms" size="small" placeholder="超时(ms)" @blur="persistStepPostOperationsUnified" /></div>
+                                        </div>
+                                        <div v-else-if="op.type === 'script'" class="step-inline-op-stack">
+                                          <div class="step-inline-op-grid two-cols"><n-select v-model:value="op.config.language" size="small" :options="stepUnifiedScriptLanguageOptions" @update:value="persistStepPostOperationsUnified" /><div class="step-inline-op-hint">脚本会收到 response、responseData、statusCode 以及 context API。</div></div>
+                                          <n-input v-model:value="op.config.script" type="textarea" size="small" :autosize="{ minRows: 6, maxRows: 12 }" placeholder="if (statusCode !== 200) { throw new Error('response failed') }" @blur="persistStepPostOperationsUnified" />
+                                        </div>
+                                        <div v-else-if="op.type === 'public_script'" class="step-inline-op-stack">
+                                          <div class="step-inline-op-grid two-cols"><n-select v-model:value="op.config.script_key" size="small" :options="stepUnifiedPublicScriptOptions" @update:value="persistStepPostOperationsUnified" /><div class="step-inline-op-hint">{{ stepUnifiedPublicScriptRegistry[op.config.script_key]?.description || '选择公共脚本模板后，这里会显示说明。' }}</div></div>
+                                          <n-input v-model:value="op.config.params" type="textarea" size="small" :autosize="{ minRows: 4, maxRows: 8 }" placeholder='{"varName":"postExecutedAt","mode":"ms"}' @blur="persistStepPostOperationsUnified" />
+                                        </div>
+                                        <div v-else class="step-inline-op-stack">
+                                          <div class="step-inline-op-grid two-cols"><n-input v-model:value="op.config.duration" size="small" placeholder="等待时长" @blur="persistStepPostOperationsUnified" /><n-select v-model:value="op.config.unit" size="small" :options="stepUnifiedWaitUnitOptions" @update:value="persistStepPostOperationsUnified" /></div>
+                                          <n-input v-model:value="op.config.note" size="small" placeholder="备注" @blur="persistStepPostOperationsUnified" />
                                         </div>
                                       </div>
                                     </div>
-                                    <div v-if="stepEditorExtractOps.length > 0" class="step-inline-op-list">
-                                      <div v-for="(op, pi) in stepEditorExtractOps" :key="op.id || `post-${pi}`" class="step-inline-op-card">
-                                        <div class="step-inline-op-head">
-                                          <div class="step-inline-op-title-group">
-                                            <span class="step-inline-op-index">提取 {{ pi + 1 }}</span>
-                                            <strong>提取变量</strong>
-                                          </div>
-                                          <n-button text type="error" size="tiny" @click="removeStepExtractOp(pi)">删除</n-button>
-                                        </div>
-                                        <div class="step-inline-op-grid three-cols">
-                                          <n-input v-model:value="op.config.name" size="small" placeholder="变量名" @blur="persistStepPostOperations" />
-                                          <n-select
-                                            v-model:value="op.config.source"
-                                            size="small"
-                                            :options="stepExtractSourceOptions"
-                                            :consistent-menu-width="false"
-                                            @update:value="persistStepPostOperations"
-                                          />
-                                          <n-input v-model:value="op.config.expression" size="small" placeholder="表达式，如 data.token / content-type" @blur="persistStepPostOperations" />
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <n-empty
-                                      v-if="stepEditorPostOpsOther.length === 0"
-                                      description="暂无其他后置操作"
-                                      size="small"
-                                      class="step-post-other-empty"
-                                    />
-                                    <n-table
-                                      v-else
-                                      :single-line="false"
-                                      size="small"
-                                      class="step-mini-table step-post-other-table"
-                                    >
-                                      <thead>
-                                        <tr><th>类型</th><th>说明</th></tr>
-                                      </thead>
-                                      <tbody>
-                                        <tr v-for="(row, pi) in stepEditorPostOpsOther" :key="'p-' + pi">
-                                          <td><n-input v-model:value="row.type" size="small" readonly /></td>
-                                          <td><span class="step-cell-muted">{{ JSON.stringify(row) }}</span></td>
-                                        </tr>
-                                      </tbody>
-                                    </n-table>
                                   </template>
-                                  <template v-else>
-                                    <n-empty description="导入接口用例后可配置后置操作" size="small" />
-                                  </template>
+                                  <template v-else><n-empty description="导入接口用例后可配置后置操作" size="small" /></template>
                                 </div>
                               </n-tab-pane>
                               <n-tab-pane name="settings" tab="设置">
@@ -3153,6 +3109,334 @@ const stepAssertionOperatorOptions = [
   { label: '正则匹配', value: 'regex' }
 ]
 
+const stepUnifiedDbActionOptions = [
+  { label: '查询', value: 'query' },
+  { label: '执行', value: 'execute' }
+]
+
+const stepUnifiedScriptLanguageOptions = [
+  { label: 'JavaScript', value: 'javascript' },
+  { label: 'Java', value: 'java' },
+  { label: 'Python', value: 'python' },
+  { label: 'Groovy', value: 'groovy' },
+  { label: 'Shell', value: 'shell' },
+  { label: 'Lua', value: 'lua' }
+]
+
+const stepUnifiedWaitUnitOptions = [
+  { label: '毫秒', value: 'ms' },
+  { label: '秒', value: 's' },
+  { label: '分钟', value: 'm' }
+]
+
+const stepUnifiedPublicScriptRegistry: Record<string, { label: string; description: string; script: string }> = {
+  inject_timestamp: {
+    label: '注入时间戳',
+    description: '写入时间戳变量，可用于请求签名或防重放参数。',
+    script: `
+const varName = params.varName || 'timestamp'
+const mode = params.mode || 'ms'
+const value = mode === 's' ? Math.floor(Date.now() / 1000) : Date.now()
+context.setVar(varName, value)
+`,
+  },
+  bearer_from_env: {
+    label: '环境 Bearer 注入',
+    description: '从环境变量读取 token，并自动写入指定请求头。',
+    script: `
+const tokenVar = params.tokenVar || 'token'
+const headerName = params.headerName || 'Authorization'
+const prefix = params.prefix || 'Bearer '
+const token = context.getVar(tokenVar)
+if (!token) {
+  throw new Error(\`未找到环境变量 \${tokenVar}\`)
+}
+context.setHeader(headerName, \`\${prefix}\${token}\`)
+`,
+  },
+  sign_demo: {
+    label: '签名示例',
+    description: '使用时间戳和密钥拼接生成简单签名，适合联调演示。',
+    script: `
+const secretVar = params.secretVar || 'secret'
+const headerName = params.headerName || 'X-Debug-Sign'
+const timestampVar = params.timestampVar || 'timestamp'
+const secret = context.getVar(secretVar) || ''
+const timestamp = context.getVar(timestampVar) || Date.now()
+const raw = \`\${context.method}|\${context.path}|\${timestamp}|\${secret}\`
+const signature = btoa(unescape(encodeURIComponent(raw)))
+context.setHeader(headerName, signature)
+context.setVar('signature', signature)
+`,
+  }
+}
+
+const stepUnifiedPublicScriptOptions = Object.entries(stepUnifiedPublicScriptRegistry).map(([value, item]) => ({
+  label: item.label,
+  value
+}))
+
+const stepUnifiedPreOpCreateOptions = [
+  { label: '数据库操作', value: 'db' },
+  { label: '脚本', value: 'script' },
+  { label: '公共脚本', value: 'public_script' },
+  { label: '等待时间', value: 'wait' }
+]
+
+const stepUnifiedPostOpCreateOptions = [
+  { label: '断言', value: 'assertion' },
+  { label: '提取变量', value: 'extract' },
+  { label: '数据库操作', value: 'db' },
+  { label: '脚本', value: 'script' },
+  { label: '公共脚本', value: 'public_script' },
+  { label: '等待时间', value: 'wait' }
+]
+
+const stepUnifiedExtractSourceOptions = [
+  { label: '响应 JSON', value: 'json' },
+  { label: '响应 Header', value: 'header' },
+  { label: '响应文本', value: 'text' }
+]
+
+const stepUnifiedAssertionTargetOptions = [
+  { label: 'HTTP Code', value: 'status_code' },
+  { label: 'Response JSON', value: 'response_json' },
+  { label: 'Response Header', value: 'response_header' },
+  { label: 'Response Text', value: 'response_text' },
+  { label: 'Response Cookie', value: 'response_cookie' },
+  { label: '环境变量', value: 'env_var' },
+  { label: '全局变量', value: 'global_var' }
+]
+
+const stepUnifiedAssertionOperatorOptions = [
+  { label: '等于', value: 'equals' },
+  { label: '不等于', value: 'not_equals' },
+  { label: '包含', value: 'contains' },
+  { label: '存在', value: 'exists' },
+  { label: '不存在', value: 'not_exists' },
+  { label: '小于', value: 'less_than' },
+  { label: '小于等于', value: 'less_than_or_equals' },
+  { label: '大于', value: 'greater_than' },
+  { label: '大于等于', value: 'greater_than_or_equals' },
+  { label: '正则匹配', value: 'regex' }
+]
+
+const stepUnifiedPreOpTypeLabels: Record<string, string> = {
+  db: '数据库操作',
+  script: '脚本',
+  public_script: '公共脚本',
+  wait: '等待时间'
+}
+
+const stepUnifiedPostOpTypeLabels: Record<string, string> = {
+  assertion: '断言',
+  extract: '提取变量',
+  db: '数据库操作',
+  script: '脚本',
+  public_script: '公共脚本',
+  wait: '等待时间'
+}
+
+const createStepUnifiedOpId = (prefix: 'pre' | 'post' | 'assert' | 'extract') =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+const createStepUnifiedPreOp = (type: 'db' | 'script' | 'public_script' | 'wait') => {
+  const base = {
+    id: createStepUnifiedOpId('pre'),
+    type,
+    enabled: true,
+    name: stepUnifiedPreOpTypeLabels[type] || '前置操作'
+  }
+  if (type === 'db') {
+    return {
+      ...base,
+      config: { datasource: '', action: 'query', sql: '', result_var: '', timeout_ms: '5000' }
+    }
+  }
+  if (type === 'script') {
+    return {
+      ...base,
+      config: {
+        language: 'javascript',
+        script: "context.setVar('requestId', Date.now())\ncontext.setHeader('X-Request-Id', String(context.getVar('requestId')))"
+      }
+    }
+  }
+  if (type === 'public_script') {
+    return {
+      ...base,
+      config: { script_key: 'inject_timestamp', params: '{\n  \"varName\": \"timestamp\",\n  \"mode\": \"ms\"\n}' }
+    }
+  }
+  return {
+    ...base,
+    config: { duration: '500', unit: 'ms', note: '' }
+  }
+}
+
+const createStepUnifiedPostOp = (type: 'assertion' | 'extract' | 'db' | 'script' | 'public_script' | 'wait') => {
+  const base = {
+    id: createStepUnifiedOpId(type === 'assertion' ? 'assert' : type === 'extract' ? 'extract' : 'post'),
+    type,
+    enabled: true,
+    name: stepUnifiedPostOpTypeLabels[type] || '后置操作'
+  }
+  if (type === 'assertion') {
+    return {
+      ...base,
+      config: { name: '', target: 'response_json', target_label: 'Response JSON', expression: '$.data.id', operator: 'equals', value: '' }
+    }
+  }
+  if (type === 'extract') {
+    return {
+      ...base,
+      config: { name: 'new_variable', source: 'json', expression: '$.data.id', target: 'environment' }
+    }
+  }
+  if (type === 'db') {
+    return {
+      ...base,
+      config: { datasource: '', action: 'query', sql: '', result_var: '', timeout_ms: '5000' }
+    }
+  }
+  if (type === 'script') {
+    return {
+      ...base,
+      config: {
+        language: 'javascript',
+        script: "if (statusCode !== 200) {\n  throw new Error('期望 HTTP 状态码为 200')\n}\n\ncontext.setTempVar('latestResponse', responseData)\ncontext.setTempVar('latestStatusCode', statusCode)"
+      }
+    }
+  }
+  if (type === 'public_script') {
+    return {
+      ...base,
+      config: { script_key: 'inject_timestamp', params: '{\n  \"varName\": \"postExecutedAt\",\n  \"mode\": \"ms\"\n}' }
+    }
+  }
+  return {
+    ...base,
+    config: { duration: '500', unit: 'ms', note: '' }
+  }
+}
+
+const legacyStepValueScript = (method: 'setHeader' | 'setQuery' | 'setVar', name: string, value: string) =>
+  `context.${method}(${JSON.stringify(name)}, ${JSON.stringify(value)})`
+
+const normalizeStepUnifiedAssertionOperator = (operator: string) => {
+  if (operator === 'eq') return 'equals'
+  if (operator === 'neq') return 'not_equals'
+  if (operator === 'gt') return 'greater_than'
+  if (operator === 'gte') return 'greater_than_or_equals'
+  if (operator === 'lt') return 'less_than'
+  if (operator === 'lte') return 'less_than_or_equals'
+  return operator || 'equals'
+}
+
+const normalizeStepUnifiedAssertionTarget = (target: string) => {
+  if (target === 'status') return 'status_code'
+  if (target === 'header') return 'response_header'
+  if (target === 'text') return 'response_text'
+  return target || 'response_json'
+}
+
+const normalizeStepUnifiedPreOperation = (op: any) => {
+  if (!op || typeof op !== 'object') return createStepUnifiedPreOp('script')
+  if (op.type === 'set_header') {
+    return {
+      ...createStepUnifiedPreOp('script'),
+      id: op?.id || createStepUnifiedOpId('pre'),
+      enabled: op?.enabled ?? true,
+      name: op?.name || '兼容：设置 Header',
+      config: {
+        language: 'javascript',
+        script: legacyStepValueScript('setHeader', String(op?.config?.name || ''), String(op?.config?.value || ''))
+      }
+    }
+  }
+  if (op.type === 'set_query') {
+    return {
+      ...createStepUnifiedPreOp('script'),
+      id: op?.id || createStepUnifiedOpId('pre'),
+      enabled: op?.enabled ?? true,
+      name: op?.name || '兼容：设置 Query',
+      config: {
+        language: 'javascript',
+        script: legacyStepValueScript('setQuery', String(op?.config?.name || ''), String(op?.config?.value || ''))
+      }
+    }
+  }
+  if (op.type === 'set_var') {
+    return {
+      ...createStepUnifiedPreOp('script'),
+      id: op?.id || createStepUnifiedOpId('pre'),
+      enabled: op?.enabled ?? true,
+      name: op?.name || '兼容：设置变量',
+      config: {
+        language: 'javascript',
+        script: legacyStepValueScript('setVar', String(op?.config?.name || ''), String(op?.config?.value || ''))
+      }
+    }
+  }
+  const normalizedType = op.type === 'db' || op.type === 'script' || op.type === 'public_script' || op.type === 'wait' ? op.type : 'script'
+  const defaults = createStepUnifiedPreOp(normalizedType)
+  return {
+    ...defaults,
+    ...op,
+    id: op?.id || createStepUnifiedOpId('pre'),
+    enabled: op?.enabled ?? true,
+    name: op?.name || defaults.name,
+    config: {
+      ...defaults.config,
+      ...(op?.config || {}),
+      language: String(op?.config?.language || defaults.config.language || 'javascript'),
+      unit: String(op?.config?.unit || defaults.config.unit || 'ms')
+    }
+  }
+}
+
+const normalizeStepUnifiedPostOperation = (op: any) => {
+  if (!op || typeof op !== 'object') return createStepUnifiedPostOp('assertion')
+  if (op.type === VALIDATE_RESPONSE_TYPE) {
+    const n = Number(op?.expect_status ?? op?.expected_status ?? 200)
+    return {
+      type: VALIDATE_RESPONSE_TYPE,
+      enabled: op?.enabled !== false,
+      expect_status: Number.isFinite(n) ? n : 200,
+      check_json_code: op?.check_json_code !== false
+    }
+  }
+  const normalizedType = op.type === 'assertion' || op.type === 'extract' || op.type === 'db' || op.type === 'script' || op.type === 'public_script' || op.type === 'wait' ? op.type : 'assertion'
+  const defaults = createStepUnifiedPostOp(normalizedType)
+  const next = {
+    ...defaults,
+    ...op,
+    id: op?.id || createStepUnifiedOpId(normalizedType === 'assertion' ? 'assert' : normalizedType === 'extract' ? 'extract' : 'post'),
+    enabled: op?.enabled ?? true,
+    name: op?.name || op?.config?.name || defaults.name,
+    config: { ...defaults.config, ...(op?.config || {}) }
+  }
+  if (normalizedType === 'assertion') {
+    next.config.target = normalizeStepUnifiedAssertionTarget(String(next.config.target || 'response_json'))
+    next.config.operator = normalizeStepUnifiedAssertionOperator(String(next.config.operator || 'equals'))
+    next.config.target_label = stepUnifiedAssertionTargetOptions.find((item) => item.value === next.config.target)?.label || next.config.target_label
+  }
+  if (normalizedType === 'extract') {
+    const source = String(next.config.source || 'json')
+    next.config.source = source === 'body' ? 'json' : source
+    if (!next.config.target) next.config.target = 'environment'
+  }
+  if (normalizedType === 'script') next.config.language = String(next.config.language || 'javascript')
+  if (normalizedType === 'wait') next.config.unit = String(next.config.unit || 'ms')
+  return next
+}
+
+const normalizeStepUnifiedPreOperations = (raw: any) =>
+  Array.isArray(raw) ? raw.map((item) => normalizeStepUnifiedPreOperation(item)) : []
+
+const normalizeStepUnifiedPostOperations = (raw: any) =>
+  mergePostOpsWithValidateResponse(Array.isArray(raw) ? raw.map((item) => normalizeStepUnifiedPostOperation(item)) : [])
+
 const stepSendActionOptions = [
   { label: '保存并发送', key: 'save-and-send' },
   { label: '复制 cURL', key: 'copy-curl' },
@@ -3486,6 +3770,62 @@ const applyStepPreScriptPreset = (op: any, preset: 'token' | 'trace') => {
     op.config.script = "context.setHeader('X-Trace-Id', `trace-${Date.now()}`)"
   }
   void persistStepPreOperations()
+}
+
+const stepVisiblePostOps = computed(() =>
+  stepEditorPostOps.value.filter((op) => op?.type !== VALIDATE_RESPONSE_TYPE)
+)
+
+const persistStepPreOperationsUnified = async () => {
+  const normalized = normalizeStepUnifiedPreOperations(stepEditorPreOps.value)
+  stepEditorPreOps.value = normalized
+  const cid = stepEditorCaseId.value
+  if (!cid) {
+    await persistCurrentStepDraftToScenarioStep({ pre_operations: normalized })
+    return
+  }
+  try {
+    await execRequest.patch(`/test-cases/${cid}`, { pre_operations: normalized })
+  } catch {
+    message.error('保存前置操作失败')
+  }
+}
+
+const persistStepPostOperationsUnified = async () => {
+  const normalized = normalizeStepUnifiedPostOperations(stepEditorPostOps.value)
+  stepEditorPostOps.value = normalized
+  const cid = stepEditorCaseId.value
+  if (!cid) {
+    await persistCurrentStepDraftToScenarioStep({ post_operations: normalized })
+    return
+  }
+  try {
+    await execRequest.patch(`/test-cases/${cid}`, { post_operations: normalized })
+  } catch {
+    message.error('保存后置操作失败')
+  }
+}
+
+const addStepPreOpUnified = async (type: 'db' | 'script' | 'public_script' | 'wait') => {
+  stepEditorPreOps.value = [...stepEditorPreOps.value, createStepUnifiedPreOp(type)]
+  await persistStepPreOperationsUnified()
+}
+
+const addStepPostOpUnified = async (type: 'assertion' | 'extract' | 'db' | 'script' | 'public_script' | 'wait') => {
+  stepEditorPostOps.value = [...stepEditorPostOps.value, createStepUnifiedPostOp(type)]
+  await persistStepPostOperationsUnified()
+}
+
+const removeStepPreOpUnified = async (idx: number) => {
+  stepEditorPreOps.value = stepEditorPreOps.value.filter((_, i) => i !== idx)
+  await persistStepPreOperationsUnified()
+}
+
+const removeStepPostOpUnified = async (idx: number) => {
+  const target = stepVisiblePostOps.value[idx]
+  if (!target) return
+  stepEditorPostOps.value = stepEditorPostOps.value.filter((op) => op !== target)
+  await persistStepPostOperationsUnified()
 }
 
 const createUtilityStep = (type: 'wait_step' | 'script_step' | 'group_step' | 'db_step') => {

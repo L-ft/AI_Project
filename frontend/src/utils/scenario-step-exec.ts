@@ -188,11 +188,11 @@ const compareAssertionValue = (actual: unknown, operator: string, expected: unkn
       return false
     }
   }
-  if (operator === 'gt') return Number(actual) > Number(expected)
-  if (operator === 'gte') return Number(actual) >= Number(expected)
-  if (operator === 'lt') return Number(actual) < Number(expected)
-  if (operator === 'lte') return Number(actual) <= Number(expected)
-  if (operator === 'neq') return actualText !== expectedText
+  if (operator === 'gt' || operator === 'greater_than') return Number(actual) > Number(expected)
+  if (operator === 'gte' || operator === 'greater_than_or_equals') return Number(actual) >= Number(expected)
+  if (operator === 'lt' || operator === 'less_than') return Number(actual) < Number(expected)
+  if (operator === 'lte' || operator === 'less_than_or_equals') return Number(actual) <= Number(expected)
+  if (operator === 'neq' || operator === 'not_equals') return actualText !== expectedText
   return actualText === expectedText
 }
 
@@ -395,12 +395,31 @@ function resolveTemplateText(text: string, vars: Record<string, string>) {
   return String(text || '').replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, key) => vars[key] ?? '')
 }
 
+function toWaitMilliseconds(duration: unknown, unit: string) {
+  const value = Math.max(0, Number(duration || 0))
+  if (unit === 'm') return value * 60 * 1000
+  if (unit === 's') return value * 1000
+  return value
+}
+
+function parseOperationJson(text: unknown, fallback: Record<string, any> = {}) {
+  const raw = String(text || '').trim()
+  if (!raw) return fallback
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : fallback
+  } catch {
+    return fallback
+  }
+}
+
 async function runPreScript(
   script: string,
   ctx: {
     headers: Record<string, string>
     queryParams: any[]
     vars: Record<string, string>
+    tempVars?: Record<string, any>
     setBody: (value: string) => void
     setUrl: (value: string) => void
     setMethod: (value: string) => void
@@ -408,6 +427,12 @@ async function runPreScript(
 ) {
   if (!String(script || '').trim()) return
   const context = {
+    get method() {
+      return ctx.tempVars?.__method ?? ''
+    },
+    get path() {
+      return ctx.tempVars?.__path ?? ''
+    },
     setHeader: (name: string, value: string) => {
       if (!name) return
       ctx.headers[String(name)] = String(value)
@@ -422,6 +447,13 @@ async function runPreScript(
       if (!name) return
       ctx.vars[String(name)] = String(value)
     },
+    getVar: (name: string) => ctx.vars[String(name)],
+    setTempVar: (name: string, value: any) => {
+      if (!name) return
+      if (!ctx.tempVars) ctx.tempVars = {}
+      ctx.tempVars[String(name)] = value
+    },
+    getTempVar: (name: string) => ctx.tempVars?.[String(name)],
     setBody: ctx.setBody,
     setUrl: ctx.setUrl,
     setMethod: ctx.setMethod
@@ -431,14 +463,20 @@ async function runPreScript(
 
 async function applyPreOpsToRequest(queryParams: any[], headers: Record<string, string>, preOps: any[]) {
   const vars: Record<string, string> = {}
+  const tempVars: Record<string, any> = {}
   let bodyText = ''
   let urlText = ''
   let methodText = ''
   for (const op of Array.isArray(preOps) ? preOps : []) {
     if (op?.enabled === false) continue
     if (op?.type === 'wait') {
-      const duration = Math.max(0, Number(op?.config?.duration || 0))
+      const duration = toWaitMilliseconds(op?.config?.duration, String(op?.config?.unit || 'ms'))
       if (duration > 0) await new Promise((resolve) => setTimeout(resolve, duration))
+      continue
+    }
+    if (op?.type === 'db') {
+      const key = String(op?.config?.result_var || '').trim()
+      if (key) vars[key] = '__db_pending__'
       continue
     }
     if (op?.type === 'set_var') {
@@ -447,11 +485,82 @@ async function applyPreOpsToRequest(queryParams: any[], headers: Record<string, 
       vars[key] = String(op?.config?.value || '')
       continue
     }
+    if (op?.type === 'public_script') {
+      const registry: Record<string, string> = {
+        inject_timestamp: `
+const varName = params.varName || 'timestamp'
+const mode = params.mode || 'ms'
+const value = mode === 's' ? Math.floor(Date.now() / 1000) : Date.now()
+context.setVar(varName, value)
+`,
+        bearer_from_env: `
+const tokenVar = params.tokenVar || 'token'
+const headerName = params.headerName || 'Authorization'
+const prefix = params.prefix || 'Bearer '
+const token = context.getVar(tokenVar)
+if (!token) throw new Error(\`未找到环境变量 \${tokenVar}\`)
+context.setHeader(headerName, \`\${prefix}\${token}\`)
+`,
+        sign_demo: `
+const secretVar = params.secretVar || 'secret'
+const headerName = params.headerName || 'X-Debug-Sign'
+const timestampVar = params.timestampVar || 'timestamp'
+const secret = context.getVar(secretVar) || ''
+const timestamp = context.getVar(timestampVar) || Date.now()
+const raw = \`\${context.method}|\${context.path}|\${timestamp}|\${secret}\`
+const signature = btoa(unescape(encodeURIComponent(raw)))
+context.setHeader(headerName, signature)
+context.setVar('signature', signature)
+`,
+      }
+      const script = registry[String(op?.config?.script_key || '')]
+      if (!script) continue
+      const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
+      const runner = new AsyncFunction('context', 'params', script)
+      await runner(
+        {
+          get method() {
+            return methodText || ''
+          },
+          get path() {
+            return urlText || ''
+          },
+          setHeader: (name: string, value: string) => {
+            if (!name) return
+            headers[String(name)] = String(value)
+          },
+          setQuery: (name: string, value: string) => {
+            if (!name) return
+            const existing = queryParams.find((row) => String(row?.name || '').trim() === String(name).trim())
+            if (existing) existing.example = String(value)
+            else queryParams.push({ name: String(name), example: String(value) })
+          },
+          setVar: (name: string, value: any) => {
+            if (!name) return
+            vars[String(name)] = String(value ?? '')
+          },
+          getVar: (name: string) => vars[String(name)],
+          setTempVar: (name: string, value: any) => {
+            if (!name) return
+            tempVars[String(name)] = value
+          },
+          getTempVar: (name: string) => tempVars[String(name)],
+        },
+        parseOperationJson(op?.config?.params, {})
+      )
+      continue
+    }
     if (op?.type === 'script') {
+      if (String(op?.config?.language || 'javascript') !== 'javascript') continue
       await runPreScript(String(op?.config?.script || ''), {
         headers,
         queryParams,
         vars,
+        tempVars: {
+          ...tempVars,
+          __method: methodText || '',
+          __path: urlText || ''
+        },
         setBody: (value) => { bodyText = String(value) },
         setUrl: (value) => { urlText = String(value) },
         setMethod: (value) => { methodText = String(value || '') }
