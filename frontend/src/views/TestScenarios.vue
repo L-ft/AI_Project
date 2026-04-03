@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="page-layout">
 
     <!-- ── 左侧边栏 ── -->
@@ -8322,12 +8322,12 @@ onUnmounted(() => {
   border-radius: 0;
   box-shadow: none;
 }
+/* 上/下区：flex 分栏 + min-height，避免百分比 grid 在高度未解析时随内容撑开导致响应区被裁切 */
 .step-editor-content {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
-  display: grid;
-  height: 100%;
-  grid-template-rows: minmax(0, 55%) minmax(0, 45%);
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   padding: 0 18px 18px;
   overflow: hidden;
@@ -8335,7 +8335,7 @@ onUnmounted(() => {
 .step-editor-main {
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  flex: 1 1 0%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
@@ -8346,8 +8346,8 @@ onUnmounted(() => {
 }
 .step-editor-bottom {
   min-width: 0;
-  min-height: 0;
-  height: 100%;
+  min-height: 200px;
+  flex: 0 0 40%;
   padding: 0;
   background: linear-gradient(180deg, #f8fbff 0%, #f3f7fd 100%);
   display: flex;
@@ -8944,7 +8944,7 @@ onUnmounted(() => {
 .step-tab-pane-inner :deep(.n-empty) {
   margin: 0;
   flex: 1;
-  min-height: 220px;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -9319,8 +9319,8 @@ onUnmounted(() => {
   word-break: break-all;
 }
 @media (max-width: 1680px) {
-  .step-editor-content {
-    grid-template-rows: minmax(0, 55%) minmax(0, 45%);
+  .step-editor-bottom {
+    flex-basis: 38%;
   }
 }
 @media (max-width: 1360px) {
@@ -9369,8 +9369,9 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
   }
-  .step-editor-content {
-    grid-template-rows: minmax(0, 55%) minmax(0, 45%);
+  .step-editor-bottom {
+    flex-basis: 42%;
+    min-height: 180px;
   }
   .step-response-side {
     min-height: 0;
