@@ -8291,7 +8291,8 @@ onUnmounted(() => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  height: auto;
+  height: 100%;
+  overflow: hidden;
 }
 .step-detail-panel-enter-active,
 .step-detail-panel-leave-active {
@@ -8339,9 +8340,8 @@ onUnmounted(() => {
   height: 100%;
   align-self: stretch;
   margin: 0;
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: auto minmax(0, 1.08fr) minmax(320px, 0.92fr);
+  display: flex;
+  flex-direction: column;
   border: none;
   border-radius: 0;
   background:
@@ -8357,9 +8357,8 @@ onUnmounted(() => {
 .step-editor-main {
   min-width: 0;
   min-height: 0;
+  flex: 1 1 auto;
   height: auto;
-  grid-column: 1;
-  grid-row: 2;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 12px;
@@ -8372,9 +8371,8 @@ onUnmounted(() => {
 .step-side-stack {
   min-width: 0;
   min-height: 0;
-  height: auto;
-  grid-column: 1;
-  grid-row: 3;
+  flex: 0 0 340px;
+  height: 340px;
   padding: 0 18px 18px;
   border-left: none;
   border-top: 1px solid #eef1f6;
@@ -8401,7 +8399,7 @@ onUnmounted(() => {
   min-width: 0;
   min-height: 0;
   display: flex;
-  height: auto;
+  height: 100%;
   max-height: 100%;
   overflow: hidden;
   align-items: stretch;
@@ -8955,10 +8953,14 @@ onUnmounted(() => {
   overflow: hidden;
 }
 .step-config-tabs :deep(.n-tab-pane) {
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  min-height: 0;
 }
 .step-config-tabs :deep(.n-tabs-content) {
   height: 100%;
+  min-height: 0;
 }
 .step-tab-pane-inner {
   height: 100%;
@@ -9059,6 +9061,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow: hidden;
 }
 .step-panel-section-head {
   display: flex;
@@ -9112,6 +9116,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 .step-inline-op-card {
   border: 1px solid #e6ebf5;
@@ -9380,12 +9388,12 @@ onUnmounted(() => {
   }
   .step-editor-shell {
     margin: 0;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr) minmax(280px, 42vh);
+    display: flex;
+    flex-direction: column;
   }
   .step-side-stack {
-    grid-column: 1;
-    grid-row: 3;
+    flex-basis: 280px;
+    height: 280px;
     padding: 0 18px 18px;
     border-left: none;
     border-top: 1px solid #eef1f6;
@@ -9402,8 +9410,7 @@ onUnmounted(() => {
     justify-content: flex-start;
   }
   .step-editor-main {
-    grid-column: 1;
-    grid-row: 2;
+    flex: 1 1 auto;
   }
   .step-req-toolbar {
     position: static;
