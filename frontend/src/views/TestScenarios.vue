@@ -702,7 +702,7 @@
                                         style="width: 180px"
                                         :consistent-menu-width="false"
                                       />
-                                      <n-button quaternary circle size="small" @click="stepDetailDrawerVisible = false">
+                                      <n-button quaternary circle size="small" @click="stepDetailDrawerOpened = false">
                                         <template #icon><n-icon :component="CloseOutlined" /></template>
                                       </n-button>
                                     </div>
@@ -3018,7 +3018,13 @@ watch(
 )
 
 const selectedStepIndex = ref<number | null>(null)
-const stepDetailDrawerVisible = ref(false)
+const stepDetailDrawerOpened = ref(false)
+const stepDetailDrawerVisible = computed(() =>
+  detailMainTab.value === 'steps'
+  && detailStepCount.value > 0
+  && selectedStepIndex.value != null
+  && stepDetailDrawerOpened.value
+)
 const stepBulkCheckedIndices = ref<number[]>([])
 const stepBulkSelectedCount = computed(() => stepBulkCheckedIndices.value.length)
 const stepSidebarMethods = ref<Record<number, string>>({})
@@ -3725,7 +3731,9 @@ const focusSelectedStep = () => {
     return
   }
   if (selectedStepIndex.value != null) {
-    selectScenarioStep(selectedStepIndex.value)
+    stepDetailDrawerOpened.value = true
+    stepResponsePanelTab.value = 'body'
+    loadScenarioStepEditor()
   }
 }
 
@@ -4105,7 +4113,7 @@ const stopScenarioStepRun = () => {
 
 const selectScenarioStep = (idx: number) => {
   selectedStepIndex.value = idx
-  stepDetailDrawerVisible.value = true
+  stepDetailDrawerOpened.value = true
   stepResponsePanelTab.value = 'body'
   loadScenarioStepEditor()
 }
@@ -4944,7 +4952,7 @@ watch(
     const n = detailStepCount.value
     if (n === 0) {
       selectedStepIndex.value = null
-      stepDetailDrawerVisible.value = false
+      stepDetailDrawerOpened.value = false
       stepBulkCheckedIndices.value = []
       stepSidebarMethods.value = {}
       stepEditorPreOps.value = []
@@ -4955,8 +4963,8 @@ watch(
     if (selectedStepIndex.value == null || selectedStepIndex.value >= n) {
       selectedStepIndex.value = 0
     }
-    /* 切换场景后不自动弹出详情抽屉，避免整屏灰板挡操作；仅点击步骤时打开 */
-    stepDetailDrawerVisible.value = false
+    /* 场景和步骤状态变化后重置为可见，避免左侧已选中但右侧详情缺失 */
+    stepDetailDrawerOpened.value = false
     loadScenarioStepEditor()
   },
   { deep: true }
@@ -4970,7 +4978,7 @@ watch(detailEnvId, () => {
 
 watch(detailMainTab, (tab) => {
   if (tab !== 'steps') {
-    stepDetailDrawerVisible.value = false
+    stepDetailDrawerOpened.value = false
   }
 })
 
@@ -5426,7 +5434,7 @@ const enterScenarioList = () => {
   activeView.value = 'all'
   scenarioPanelMode.value = 'list'
   selectedScenarioForDetail.value = null
-  stepDetailDrawerVisible.value = false
+  stepDetailDrawerOpened.value = false
   selectedSidebarKeys.value = [ROOT_KEY]
 }
 
@@ -5434,7 +5442,7 @@ const openScenarioDetail = (row: any) => {
   activeView.value = 'all'
   scenarioPanelMode.value = 'detail'
   selectedScenarioForDetail.value = row
-  stepDetailDrawerVisible.value = false
+  stepDetailDrawerOpened.value = false
   selectedSidebarKeys.value = [`scenario-${row.id}`]
 }
 
@@ -7577,7 +7585,7 @@ onUnmounted(() => {
   color: #8792a2;
 }
 .step-list-scrollbar {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 220px;
   grid-column: 1 / -1;
 }
@@ -7741,6 +7749,27 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
 }
+.step-editor-panel.is-drawer :deep(.n-spin-body) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.step-editor-panel.is-drawer :deep(.n-spin) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  max-height: inherit;
+}
+.step-editor-panel.is-drawer :deep(.n-spin-content) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
 .step-detail-panel-enter-active,
 .step-detail-panel-leave-active {
   transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.28s ease;
@@ -7764,7 +7793,7 @@ onUnmounted(() => {
   flex-direction: column;
   pointer-events: none;
   box-sizing: border-box;
-  padding: 12px 12px 12px 0;
+  padding: 0;
   filter: drop-shadow(-8px 0 24px rgba(15, 23, 42, 0.12));
 }
 .step-detail-fixed-drawer > .step-editor-panel {
@@ -7777,40 +7806,48 @@ onUnmounted(() => {
   background: var(--color-bg-surface, #fff);
   overflow: hidden;
   border: 1px solid var(--color-border-subtle, #eaecf4);
-  border-radius: 12px 0 0 12px;
+  border-radius: 16px 0 0 16px;
 }
 /* 步骤编辑内容卡片：填满右侧抽屉 */
 .step-editor-shell {
-  position: absolute;
-  inset: 12px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  position: relative;
+  flex: 1;
   min-height: 0;
-  border: 1px solid #e2e8f2;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08), 0 1px 4px rgba(15, 23, 42, 0.04);
+  height: 100%;
+  align-self: stretch;
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+  border: none;
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: none;
   overflow: hidden;
 }
 .step-editor-panel.is-drawer .step-editor-shell {
-  inset: 12px;
-  border-radius: 20px;
-  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.06);
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 .step-editor-main {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 14px 16px 16px;
-  border-left: 1px solid #eef1f6;
+  gap: 12px;
+  padding: 18px 18px 16px;
+  overflow: hidden;
 }
 .step-response-side {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   border-left: 1px solid #eef1f6;
-  background: linear-gradient(180deg, #fbfcff 0%, #f7f9fc 100%);
+  background: linear-gradient(180deg, #f8fbff 0%, #f4f7fc 100%);
   display: flex;
+  overflow: hidden;
 }
 .step-editor-placeholder {
   flex: 1;
@@ -7833,14 +7870,28 @@ onUnmounted(() => {
   border: 1px solid #e6ebf5;
   background: linear-gradient(135deg, #f6f8ff 0%, #eff4ff 100%);
   border-radius: 16px;
-  padding: 14px 16px;
-  margin-bottom: 12px;
+  padding: 16px 18px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+.step-overview-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(125, 51, 255, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 54%);
+  pointer-events: none;
 }
 .step-overview-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 .step-overview-title-group {
   min-width: 0;
@@ -7889,14 +7940,17 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+  position: relative;
+  z-index: 1;
 }
 .step-overview-chip {
-  padding: 5px 10px;
+  padding: 6px 11px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.84);
   border: 1px solid #dbe4f3;
   font-size: 12px;
   color: #475569;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .step-overview-chip--ok {
   color: #0f766e;
@@ -7908,13 +7962,15 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+  position: relative;
+  z-index: 1;
 }
 .step-overview-action {
   border: 1px solid #d9e0ec;
   background: rgba(255, 255, 255, 0.85);
   color: #475569;
-  height: 32px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 6px 12px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
@@ -7930,8 +7986,9 @@ onUnmounted(() => {
   border: 1px solid #e6ebf5;
   border-radius: 14px;
   padding: 14px 16px;
-  background: #fbfcff;
-  margin-bottom: 12px;
+  background: linear-gradient(180deg, #fcfdff 0%, #f7faff 100%);
+  margin-bottom: 0;
+  flex-shrink: 0;
 }
 .step-link-summary-title {
   font-size: 13px;
@@ -7977,11 +8034,13 @@ onUnmounted(() => {
   margin: 0;
   border: 1px solid #eaecf4;
   border-radius: 0;
-  background: #fafbfc;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.98) 100%);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 .step-response-panel.always-visible {
   border: none;
@@ -7992,14 +8051,16 @@ onUnmounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
-  padding: 10px 14px;
+  padding: 14px 16px 12px;
   border-bottom: 1px solid #eaecf4;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 .step-response-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #334155;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2a44;
   margin-right: 4px;
 }
 .step-response-meta {
@@ -8014,7 +8075,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 14px 0;
+  padding: 12px 16px 0;
+  flex-shrink: 0;
 }
 .step-response-view-switch {
   display: inline-flex;
@@ -8059,13 +8121,13 @@ onUnmounted(() => {
 .step-response-body-shell {
   flex: 1;
   min-height: 0;
-  padding: 12px 14px 14px;
+  padding: 14px 16px 16px;
   display: flex;
   flex-direction: column;
 }
 .step-response-pre {
   margin: 0;
-  padding: 12px 14px;
+  padding: 14px 16px;
   flex: 1;
   overflow: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -8074,21 +8136,41 @@ onUnmounted(() => {
   white-space: pre-wrap;
   word-break: break-word;
   color: #1e293b;
-  background: #f8fafc;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 .step-response-empty {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   text-align: center;
-  padding: 24px;
+  padding: 32px 24px;
   border: 1px dashed #dbe4f3;
-  border-radius: 12px;
+  border-radius: 16px;
   color: #94a3b8;
-  background: rgba(255, 255, 255, 0.78);
+  background:
+    radial-gradient(circle at top, rgba(125, 51, 255, 0.08), transparent 42%),
+    rgba(255, 255, 255, 0.82);
+}
+.step-response-empty::before {
+  content: 'Response';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 51, 255, 0.18);
+  background: rgba(125, 51, 255, 0.08);
+  color: #7d33ff;
+  font-size: 12px;
+  font-weight: 700;
 }
 .step-response-kv-list {
   display: flex;
@@ -8189,8 +8271,14 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
   flex-wrap: wrap;
+  margin-bottom: 0;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid #e6ebf5;
+  background: rgba(255, 255, 255, 0.92);
+  flex-shrink: 0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 .step-req-method-tag {
   font-size: 11px;
@@ -8206,13 +8294,47 @@ onUnmounted(() => {
 .step-config-tabs {
   flex: 1;
   min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e6ebf5;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.04);
+}
+.step-config-tabs :deep(.n-tabs-nav) {
+  margin-bottom: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid #eef2f7;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(251, 252, 255, 0.96) 0%, rgba(247, 250, 255, 0.9) 100%);
+}
+.step-config-tabs :deep(.n-tabs-nav-scroll-wrapper) {
+  min-width: 0;
+}
+.step-config-tabs :deep(.n-tabs-wrapper) {
+  flex: 1;
+  min-height: 0;
 }
 .step-config-tabs :deep(.n-tabs-pane-wrapper) {
-  overflow: auto;
-  max-height: min(520px, calc(100vh - 300px));
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.step-config-tabs :deep(.n-tab-pane) {
+  height: 100%;
+}
+.step-config-tabs :deep(.n-tabs-content) {
+  height: 100%;
 }
 .step-tab-pane-inner {
-  padding-top: 10px;
+  height: 100%;
+  min-height: 0;
+  padding: 14px 16px 16px;
+  overflow: auto;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(250, 252, 255, 0.96) 100%);
 }
 .step-auth-pane {
   border: 1px solid #e6ebf5;
@@ -8585,18 +8707,19 @@ onUnmounted(() => {
   }
   .step-detail-fixed-drawer {
     top: var(--header-height, 56px);
+    left: 0;
     right: 0;
     bottom: 0;
     width: min(100%, 520px);
     max-width: calc(100vw - 16px);
     min-width: 0;
-    padding: 8px 8px 8px 0;
+    padding: 0;
   }
   .step-toolbar-spotlight {
     grid-template-columns: 1fr;
   }
   .step-editor-shell {
-    inset: 8px;
+    margin: 0;
     grid-template-columns: 1fr;
   }
   .step-response-side {
