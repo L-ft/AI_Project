@@ -681,6 +681,7 @@
                             <div class="step-editor-panel is-drawer">
                               <n-spin :show="stepEditorLoading">
                                 <div class="step-editor-shell">
+                                  <div class="step-drawer-region step-drawer-region--top">
                                   <div class="step-overview-card step-overview-card--top">
                                     <div class="step-overview-head">
                                       <div class="step-overview-title-group">
@@ -715,7 +716,15 @@
                                       <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
                                     </div>
                                   </div>
-                                  <div class="step-editor-content">
+                                  </div>
+                                  <div class="step-drawer-split" ref="stepDrawerSplitRef">
+                                    <div
+                                      class="step-drawer-region step-drawer-region--upper"
+                                      :style="stepDrawerUpperFlexStyle"
+                                    >
+                                      <div class="step-drawer-region-heading">
+                                        <span class="step-drawer-region-label">请求参数</span>
+                                      </div>
                                     <div class="step-editor-main">
                               <div class="step-req-toolbar">
                                 <span v-if="!isCurrentStepCustom" class="step-req-method-tag" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
@@ -1061,6 +1070,20 @@
                               </n-tab-pane>
                               </n-tabs>
                                     </div>
+                                    </div>
+                                    <div
+                                      class="step-drawer-resize-handle"
+                                      role="separator"
+                                      aria-orientation="horizontal"
+                                      aria-label="拖动调整请求区与响应区高度"
+                                      @mousedown="onStepDrawerResizeStart"
+                                    >
+                                      <span class="step-drawer-resize-grip" />
+                                    </div>
+                                    <div
+                                      class="step-drawer-region step-drawer-region--lower"
+                                      :style="stepDrawerLowerFlexStyle"
+                                    >
                                     <div class="step-editor-bottom">
                             <div class="step-response-side">
                               <div class="step-response-panel always-visible">
@@ -1172,6 +1195,7 @@
                                 </div>
                               </div>
                             </div>
+                                    </div>
                                     </div>
                                   </div>
                           </div>
@@ -2997,6 +3021,54 @@ const stepDetailDrawerVisible = computed(() =>
   && selectedStepIndex.value != null
   && stepDetailDrawerOpened.value
 )
+
+/** 右侧步骤详情：上/下区高度比例（可拖拽分隔条调整，与下区之和恒为 100） */
+const stepDrawerSplitRef = ref<HTMLElement | null>(null)
+const stepDrawerSplitUpper = ref(58)
+const stepDrawerSplitLower = computed(() => 100 - stepDrawerSplitUpper.value)
+const stepDrawerUpperFlexStyle = computed(() => ({
+  flexGrow: stepDrawerSplitUpper.value,
+  flexShrink: 1,
+  flexBasis: '0px',
+  minHeight: 0
+}))
+const stepDrawerLowerFlexStyle = computed(() => ({
+  flexGrow: stepDrawerSplitLower.value,
+  flexShrink: 1,
+  flexBasis: '0px',
+  minHeight: 0
+}))
+
+function onStepDrawerResizeStart(e: MouseEvent) {
+  e.preventDefault()
+  const el = stepDrawerSplitRef.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  const startY = e.clientY
+  const startUpper = stepDrawerSplitUpper.value
+  const H = rect.height
+  if (H < 48) return
+
+  const onMove = (ev: MouseEvent) => {
+    ev.preventDefault()
+    const dy = ev.clientY - startY
+    const dPercent = (dy / H) * 100
+    let next = startUpper + dPercent
+    next = Math.round(Math.max(28, Math.min(72, next)))
+    stepDrawerSplitUpper.value = next
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+  document.body.style.cursor = 'ns-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
 const stepBulkCheckedIndices = ref<number[]>([])
 const stepBulkSelectedCount = computed(() => stepBulkCheckedIndices.value.length)
 const stepSidebarMethods = ref<Record<number, string>>({})
@@ -8240,20 +8312,23 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
 }
+/* 有默认插槽时 NSpin 根节点是 n-spin-container（不是 n-spin-body），必须参与 flex 伸展，否则子节点 height:100% / grid 1fr 无法解析，上下区会变成 0 高度 */
+.step-editor-panel.is-drawer :deep(.n-spin-container) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+}
 .step-editor-panel.is-drawer :deep(.n-spin-body) {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
 }
-.step-editor-panel.is-drawer :deep(.n-spin) {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-  max-height: inherit;
-}
+/* 勿对 :deep(.n-spin) 泛匹配：加载中会命中内部 Loading 图标，误设 flex:1 破坏布局 */
 .step-editor-panel.is-drawer :deep(.n-spin-content) {
   display: flex;
   flex-direction: column;
@@ -8300,7 +8375,7 @@ onUnmounted(() => {
   border: 1px solid var(--color-border-subtle, #e7edf6);
   border-radius: 20px;
 }
-/* 步骤编辑内容卡片：填满右侧抽屉 */
+/* 步骤编辑内容卡片：填满右侧抽屉（grid 第二行 minmax 保证下方分栏必有高度，避免 flex 链上高度为 0） */
 .step-editor-shell {
   position: relative;
   flex: 1;
@@ -8308,8 +8383,8 @@ onUnmounted(() => {
   height: 100%;
   align-self: stretch;
   margin: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   border: none;
   border-radius: 0;
   background:
@@ -8322,14 +8397,66 @@ onUnmounted(() => {
   border-radius: 0;
   box-shadow: none;
 }
-/* 上/下区：flex 分栏 + min-height，避免百分比 grid 在高度未解析时随内容撑开导致响应区被裁切 */
-.step-editor-content {
-  flex: 1 1 0%;
+/* 右侧抽屉：请求区 / 响应区 分栏 + 可拖拽比例 */
+.step-drawer-region--top {
+  flex-shrink: 0;
+}
+.step-drawer-split {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 0 18px 18px;
+  gap: 0;
+  padding: 12px 18px 18px;
+  overflow: hidden;
+}
+.step-drawer-region--upper {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.step-drawer-region-heading {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 2px 10px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid #eef2f7;
+}
+.step-drawer-region-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.02em;
+}
+.step-drawer-resize-handle {
+  flex: 0 0 10px;
+  margin: 6px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+  border: 1px solid #dbe4f3;
+  user-select: none;
+  touch-action: none;
+}
+.step-drawer-resize-handle:hover {
+  background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
+}
+.step-drawer-resize-grip {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.5);
+}
+.step-drawer-region--lower {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 .step-editor-main {
@@ -8346,15 +8473,15 @@ onUnmounted(() => {
 }
 .step-editor-bottom {
   min-width: 0;
-  min-height: 200px;
-  flex: 0 0 40%;
+  min-height: 0;
+  flex: 1 1 auto;
+  height: 100%;
   padding: 0;
   background: linear-gradient(180deg, #f8fbff 0%, #f3f7fd 100%);
   display: flex;
   overflow: hidden;
   align-content: stretch;
   position: relative;
-  border-top: 1px solid #eef1f6;
 }
 .step-editor-bottom::before {
   content: '';
@@ -9319,8 +9446,8 @@ onUnmounted(() => {
   word-break: break-all;
 }
 @media (max-width: 1680px) {
-  .step-editor-bottom {
-    flex-basis: 38%;
+  .step-drawer-split {
+    padding-top: 10px;
   }
 }
 @media (max-width: 1360px) {
@@ -9366,12 +9493,11 @@ onUnmounted(() => {
   }
   .step-editor-shell {
     margin: 0;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
   }
   .step-editor-bottom {
-    flex-basis: 42%;
-    min-height: 180px;
+    min-height: 0;
   }
   .step-response-side {
     min-height: 0;
