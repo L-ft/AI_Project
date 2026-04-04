@@ -682,6 +682,17 @@
                               <n-spin :show="stepEditorLoading">
                                 <div class="step-editor-shell">
                                   <div class="step-drawer-region step-drawer-region--top">
+                                  <div class="step-detail-drawer-backbar">
+                                    <button
+                                      type="button"
+                                      class="step-drawer-back-btn"
+                                      aria-label="返回步骤列表"
+                                      @click="closeStepDetailDrawer"
+                                    >
+                                      <n-icon :component="ArrowLeftOutlined" :size="18" />
+                                      <span>返回</span>
+                                    </button>
+                                  </div>
                                   <div class="step-overview-card step-overview-card--top">
                                     <div class="step-overview-head">
                                       <div class="step-overview-title-group">
@@ -702,9 +713,6 @@
                                             style="width: 180px"
                                             :consistent-menu-width="false"
                                           />
-                                          <n-button quaternary circle size="small" @click="stepDetailDrawerOpened = false">
-                                            <template #icon><n-icon :component="CloseOutlined" /></template>
-                                          </n-button>
                                         </div>
                                       </div>
                                     </div>
@@ -2205,6 +2213,7 @@ import {
   FilterOutlined, GlobalOutlined, EditOutlined, DeleteOutlined,
   CheckCircleOutlined, CloseCircleOutlined, SyncOutlined,
   FileOutlined, FolderOpenOutlined, MenuOutlined, TagsOutlined, CloseOutlined,
+  ArrowLeftOutlined,
   LinkOutlined, SettingOutlined, DownOutlined,
   ApiOutlined, CloudUploadOutlined, ImportOutlined, CodeOutlined,
   DatabaseOutlined, ApartmentOutlined, ThunderboltOutlined,
@@ -3177,6 +3186,25 @@ const stepDetailDrawerVisible = computed(() =>
   && selectedStepIndex.value != null
   && stepDetailDrawerOpened.value
 )
+
+const closeStepDetailDrawer = () => {
+  stepDetailDrawerOpened.value = false
+}
+
+const handleStepDetailDrawerEscape = (e: KeyboardEvent) => {
+  if (e.key !== 'Escape') return
+  if (!stepDetailDrawerVisible.value) return
+  e.preventDefault()
+  stepDetailDrawerOpened.value = false
+}
+
+watch(stepDetailDrawerVisible, (visible) => {
+  if (visible) {
+    window.addEventListener('keydown', handleStepDetailDrawerEscape)
+  } else {
+    window.removeEventListener('keydown', handleStepDetailDrawerEscape)
+  }
+})
 
 /** 右侧步骤详情：上/下区高度比例（可拖拽分隔条调整，与下区之和恒为 100） */
 const stepDrawerSplitRef = ref<HTMLElement | null>(null)
@@ -6652,6 +6680,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', onReportWindowResize)
+  window.removeEventListener('keydown', handleStepDetailDrawerEscape)
   disposeReportDonut()
 })
 </script>
@@ -8817,8 +8846,40 @@ onUnmounted(() => {
     linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 54%);
   pointer-events: none;
 }
+.step-detail-drawer-backbar {
+  flex-shrink: 0;
+  padding: 14px 18px 0;
+}
+.step-drawer-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 8px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
+}
+.step-drawer-back-btn:hover {
+  background: #ffffff;
+  border-color: #c4b5fd;
+  color: #5b21b6;
+  box-shadow: 0 4px 16px rgba(125, 51, 255, 0.15);
+}
+.step-drawer-back-btn:active {
+  transform: translateY(0.5px);
+}
 .step-overview-card--top {
-  margin: 18px 18px 0;
+  margin: 10px 18px 0;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
 }
 .step-overview-head {
@@ -9790,8 +9851,11 @@ onUnmounted(() => {
     position: static;
     backdrop-filter: none;
   }
+  .step-detail-drawer-backbar {
+    padding: 12px 14px 0;
+  }
   .step-overview-card--top {
-    margin: 18px 18px 12px;
+    margin: 8px 14px 12px;
   }
   .step-overview-head {
     flex-direction: column;
