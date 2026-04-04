@@ -191,34 +191,60 @@ async def generate_requirement_test_plan(text: str) -> dict:
 - 每个 case 的 id 唯一；sourceKeyPointId 必须对应某条 keyPoints 的 id。
 """
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(
-            f"{DEEPSEEK_BASE_URL}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": DEEPSEEK_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.2,
-                "max_tokens": 4096,
-            },
-        )
-        resp.raise_for_status()
-        result = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                f"{DEEPSEEK_BASE_URL}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": DEEPSEEK_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": 4096,
+                },
+            )
+            resp.raise_for_status()
+            result = resp.json()
+    except httpx.HTTPStatusError as e:
+        body = ""
+        if e.response is not None:
+            body = (e.response.text or "")[:800]
+        raise ValueError(
+            f"DeepSeek 接口 HTTP {e.response.status_code}。"
+            f"请检查 DEEPSEEK_API_KEY 是否有效、账户是否有余额、是否可访问 api.deepseek.com。"
+            f" 响应片段：{body}"
+        ) from e
+    except httpx.RequestError as e:
+        raise ValueError(
+            f"无法连接 DeepSeek（网络/防火墙/代理/DNS）：{e}"
+        ) from e
 
-    raw_content = result["choices"][0]["message"]["content"].strip()
+    try:
+        raw_content = result["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError, TypeError) as e:
+        raise ValueError(
+            f"DeepSeek 返回格式异常（缺少 choices/message/content）：{str(result)[:600]}"
+        ) from e
+
     if raw_content.startswith("```"):
         raw_content = raw_content.split("```")[1]
         if raw_content.startswith("json"):
             raw_content = raw_content[4:]
         raw_content = raw_content.strip()
 
-    data = json.loads(raw_content)
+    try:
+        data = json.loads(raw_content)
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"模型输出不是合法 JSON（可重试或缩短文档）。解析错误：{e}；"
+            f"内容前 400 字：{raw_content[:400]!r}"
+        ) from e
     if not isinstance(data, dict):
         return _mock_requirement_plan(text)
 
