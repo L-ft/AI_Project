@@ -15,7 +15,7 @@ load_dotenv()  # 加载 exec-engine/.env 中的环境变量
 from app.database import get_db, init_db
 from app.models.api_mgmt import Folder, Interface, TestCase, Environment, TestScenario
 from app.schemas.api_mgmt import ResponseModel
-from app.routers import folders, interfaces, test_cases, executor, environments, test_scenarios, dashboard
+from app.routers import folders, interfaces, test_cases, executor, environments, test_scenarios, dashboard, requirement_cases
 
 # 经 Nginx 挂在子路径（如 /engine）时设置 ROOT_PATH=/engine，Swagger/OpenAPI 链接才正确；直连 8010 不要设置
 _root_path = os.getenv("ROOT_PATH", "").strip()
@@ -61,6 +61,7 @@ app.include_router(executor.router)
 app.include_router(environments.router)
 app.include_router(test_scenarios.router)
 app.include_router(dashboard.router)
+app.include_router(requirement_cases.router)
 
 _DEFAULT_PROXY_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

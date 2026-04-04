@@ -74,7 +74,8 @@ import {
 import { aiSenseTheme } from './theme/theme'
 import {
   DashboardOutlined, CloudServerOutlined, LineChartOutlined,
-  UserOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined
+  UserOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  FileTextOutlined
 } from '@vicons/antd'
 import { useUserStore } from './store/user'
 import { message } from './utils/naive-api'
@@ -100,6 +101,12 @@ const menuOptions = computed(() => [
       { label: '自动化测试', key: 'test-scenarios' },
       { label: '环境管理', key: 'env-mgmt' }
     ]
+  },
+  {
+    label: '需求用例',
+    key: 'requirement',
+    icon: renderIcon(FileTextOutlined),
+    children: [{ label: '需求生成用例', key: 'requirement-cases' }]
   },
   { label: '执行报告', key: 'reports', icon: renderIcon(LineChartOutlined) },
   {

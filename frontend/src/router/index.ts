@@ -34,6 +34,15 @@ const router = createRouter({
       meta: { requiresAuth: true, role: 'TESTER' }
     },
     {
+      path: '/requirement',
+      redirect: '/requirement-cases'
+    },
+    {
+      path: '/requirement-cases',
+      component: () => import('@/views/RequirementCaseGen.vue'),
+      meta: { requiresAuth: true, role: 'TESTER' }
+    },
+    {
       path: '/env-mgmt',
       component: () => import('@/views/EnvManagement.vue'),
       meta: { requiresAuth: true, role: 'TESTER' }
