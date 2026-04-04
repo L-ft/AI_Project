@@ -1066,7 +1066,155 @@
                                 </div>
                               </n-tab-pane>
                               <n-tab-pane name="settings" tab="设置">
-                                <div class="step-tab-pane-inner"><n-empty description="暂无额外设置" size="small" /></div>
+                                <div class="step-tab-pane-inner step-settings-pane">
+                                  <div class="settings-section">
+                                    <div class="settings-section-title">
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d33ff" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                                      基本请求设置
+                                    </div>
+                                    <div class="settings-row">
+                                      <div class="settings-item">
+                                        <div class="settings-label">
+                                          请求超时（ms）
+                                          <span class="settings-hint">0 表示不限制</span>
+                                        </div>
+                                        <n-input-number
+                                          v-model:value="stepReqSettings.timeout"
+                                          :min="0"
+                                          :max="300000"
+                                          :step="1000"
+                                          placeholder="30000"
+                                          style="width: 160px"
+                                        />
+                                      </div>
+                                      <div class="settings-item">
+                                        <div class="settings-label">
+                                          最大重定向次数
+                                          <span class="settings-hint">0 表示不跟随</span>
+                                        </div>
+                                        <n-input-number
+                                          v-model:value="stepReqSettings.maxRedirects"
+                                          :min="0"
+                                          :max="20"
+                                          placeholder="5"
+                                          style="width: 120px"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div class="settings-row">
+                                      <div class="settings-item settings-item--switch">
+                                        <div class="settings-switch-info">
+                                          <div class="settings-label">自动跟随重定向</div>
+                                          <div class="settings-desc">接收到 3xx 响应时自动跟随 Location 跳转</div>
+                                        </div>
+                                        <n-switch v-model:value="stepReqSettings.followRedirects" size="medium" />
+                                      </div>
+                                      <div class="settings-item settings-item--switch">
+                                        <div class="settings-switch-info">
+                                          <div class="settings-label">验证 SSL 证书</div>
+                                          <div class="settings-desc">关闭后忽略自签名或过期证书错误</div>
+                                        </div>
+                                        <n-switch v-model:value="stepReqSettings.sslVerify" size="medium" />
+                                      </div>
+                                    </div>
+                                    <div class="settings-row">
+                                      <div class="settings-item settings-item--switch">
+                                        <div class="settings-switch-info">
+                                          <div class="settings-label">保持 Cookie</div>
+                                          <div class="settings-desc">自动存储并携带响应中的 Set-Cookie</div>
+                                        </div>
+                                        <n-switch v-model:value="stepReqSettings.keepCookies" size="medium" />
+                                      </div>
+                                      <div class="settings-item settings-item--switch">
+                                        <div class="settings-switch-info">
+                                          <div class="settings-label">自动设置 Content-Type</div>
+                                          <div class="settings-desc">根据 Body 类型自动设置 Content-Type Header</div>
+                                        </div>
+                                        <n-switch v-model:value="stepReqSettings.autoContentType" size="medium" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div class="settings-section">
+                                    <div class="settings-section-title">
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d33ff" stroke-width="2" stroke-linecap="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                                      代理设置
+                                    </div>
+                                    <div class="settings-row">
+                                      <div class="settings-item settings-item--switch">
+                                        <div class="settings-switch-info">
+                                          <div class="settings-label">使用代理</div>
+                                          <div class="settings-desc">通过指定代理服务器转发请求</div>
+                                        </div>
+                                        <n-switch v-model:value="stepReqSettings.useProxy" size="medium" />
+                                      </div>
+                                    </div>
+                                    <div v-if="stepReqSettings.useProxy" class="settings-row settings-proxy-fields">
+                                      <div class="settings-item settings-item--wide">
+                                        <div class="settings-label">代理地址</div>
+                                        <n-input v-model:value="stepReqSettings.proxyUrl" placeholder="http://proxy.example.com:8080" />
+                                      </div>
+                                      <div class="settings-item">
+                                        <div class="settings-label">代理用户名（可选）</div>
+                                        <n-input v-model:value="stepReqSettings.proxyUser" placeholder="用户名" />
+                                      </div>
+                                      <div class="settings-item">
+                                        <div class="settings-label">代理密码（可选）</div>
+                                        <n-input v-model:value="stepReqSettings.proxyPass" type="password" placeholder="密码" show-password-on="click" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div class="settings-section">
+                                    <div class="settings-section-title">
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d33ff" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                                      响应处理
+                                    </div>
+                                    <div class="settings-row">
+                                      <div class="settings-item">
+                                        <div class="settings-label">响应体编码</div>
+                                        <n-select
+                                          v-model:value="stepReqSettings.responseEncoding"
+                                          :options="stepEncodingOptions"
+                                          style="width: 180px"
+                                          :consistent-menu-width="false"
+                                        />
+                                      </div>
+                                      <div class="settings-item">
+                                        <div class="settings-label">
+                                          最大响应体大小（KB）
+                                          <span class="settings-hint">0 不限制</span>
+                                        </div>
+                                        <n-input-number
+                                          v-model:value="stepReqSettings.maxResponseSize"
+                                          :min="0"
+                                          :max="102400"
+                                          :step="512"
+                                          placeholder="10240"
+                                          style="width: 160px"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div class="settings-row">
+                                      <div class="settings-item settings-item--switch">
+                                        <div class="settings-switch-info">
+                                          <div class="settings-label">自动解析 JSON 响应</div>
+                                          <div class="settings-desc">响应体为 JSON 时自动格式化显示</div>
+                                        </div>
+                                        <n-switch v-model:value="stepReqSettings.autoParseJson" size="medium" />
+                                      </div>
+                                      <div class="settings-item settings-item--switch">
+                                        <div class="settings-switch-info">
+                                          <div class="settings-label">显示响应耗时</div>
+                                          <div class="settings-desc">在响应头部显示请求耗时和响应大小</div>
+                                        </div>
+                                        <n-switch v-model:value="stepReqSettings.showTiming" size="medium" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div class="settings-footer">
+                                    <n-button size="small" quaternary @click="resetStepReqSettings">恢复默认设置</n-button>
+                                    <n-button size="small" type="primary" class="step-purple-btn" @click="saveStepReqSettings">保存设置</n-button>
+                                  </div>
+                                </div>
                               </n-tab-pane>
                               </n-tabs>
                                     </div>
@@ -1101,7 +1249,7 @@
                                       HTTP {{ stepEditorLastResponse.status_code }}
                                     </n-tag>
                                     <span
-                                      v-if="stepEditorLastResponse.elapsed != null"
+                                      v-if="stepReqSettings.showTiming && stepEditorLastResponse.elapsed != null"
                                       class="step-response-meta"
                                     >{{ Math.round(Number(stepEditorLastResponse.elapsed)) }} ms</span>
                                   </template>
@@ -2088,9 +2236,17 @@ import {
   NRadioGroup,
   NTag,
   NTooltip,
-  NProgress
+  NProgress,
+  NInputNumber,
+  NSwitch
 } from 'naive-ui'
 import execRequest from '@/api/exec-request'
+import {
+  normalizeStepReqSettings,
+  defaultStepReqSettings,
+  buildProxyExtraFields,
+  type StepReqSettings
+} from '@/utils/req-settings'
 import {
   loadStepExecContext,
   runStepExecContext,
@@ -3105,6 +3261,16 @@ const stepAuthApiKey = ref<{ position: 'header' | 'query'; key: string; value: s
   value: ''
 })
 
+/** 与单接口调试「设置」Tab 一致（存于场景步骤 req_settings） */
+const stepReqSettings = ref<StepReqSettings>({ ...defaultStepReqSettings })
+const stepEncodingOptions = [
+  { label: 'UTF-8', value: 'utf-8' },
+  { label: 'GBK', value: 'gbk' },
+  { label: 'GB2312', value: 'gb2312' },
+  { label: 'ISO-8859-1', value: 'iso-8859-1' },
+  { label: 'ASCII', value: 'ascii' }
+]
+
 const stepBodyTypeOptions = [
   { label: 'none', value: 'none' },
   { label: 'x-www-form-urlencoded', value: 'x-www-form-urlencoded' },
@@ -3696,6 +3862,21 @@ const persistCurrentStepDraftToScenarioStep = async (patch: Record<string, any>)
     await fetchScenarios()
   } catch {
     message.error('保存步骤配置失败')
+  }
+}
+
+const resetStepReqSettings = () => {
+  stepReqSettings.value = { ...defaultStepReqSettings }
+}
+
+const saveStepReqSettings = async () => {
+  if (isUtilityStep.value) return
+  if (selectedStepIndex.value == null) return
+  try {
+    await persistCurrentStepDraftToScenarioStep({ req_settings: { ...stepReqSettings.value } })
+    message.success('请求设置已保存')
+  } catch {
+    message.error('保存失败')
   }
 }
 
@@ -4574,6 +4755,7 @@ const loadScenarioStepEditor = async () => {
   if (idx == null) return
   const step = detailStepsOrdered.value[idx]
   if (!step) return
+  stepReqSettings.value = normalizeStepReqSettings(step.req_settings)
   stepEditorLastResponse.value = null
   stepEditorCaseId.value = step.case_id ?? null
   stepEditorInterfaceId.value = step.interface_id ?? null
@@ -4796,7 +4978,8 @@ const saveHttpStepConfig = async () => {
     post_operations: stepEditorPostOps.value,
     auth_config: currentStepAuthConfig.value,
     body_type: stepEditorBodyType.value,
-    body_content: stepEditorBodyContent.value
+    body_content: stepEditorBodyContent.value,
+    req_settings: { ...stepReqSettings.value }
   }
   httpStepSaving.value = true
   try {
@@ -5098,7 +5281,7 @@ const buildProxyHeaders = (): Record<string, string> => {
     if (!k) continue
     h[k] = String(row.example ?? row.value ?? '')
   }
-  if (stepEditorBodyType.value === 'json') {
+  if (stepReqSettings.value.autoContentType && stepEditorBodyType.value === 'json') {
     if (!h['Content-Type'] && !h['content-type']) h['Content-Type'] = 'application/json'
   }
   return h
@@ -5261,15 +5444,17 @@ const sendScenarioStepRequest = async () => {
   stepEditorSending.value = true
   stepEditorLastResponse.value = null
   try {
+    const rs = stepReqSettings.value
     const res: any = await execRequest.post(
       '/proxy',
       {
         url: finalUrl,
         method: upper,
         headers,
-        body
+        body,
+        ...buildProxyExtraFields(rs)
       },
-      { timeout: 35000 }
+      { timeout: rs.timeout > 0 ? rs.timeout + 5000 : 35000 }
     )
     const env = normalizeExecProxyResponse(res)
     stepEditorLastResponse.value = env.error
@@ -8451,6 +8636,95 @@ onUnmounted(() => {
   height: 4px;
   border-radius: 999px;
   background: rgba(100, 116, 139, 0.5);
+}
+/* 步骤「设置」Tab：与单接口调试 ApiDebugView 一致 */
+.step-settings-pane {
+  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-height: 100%;
+  overflow: auto;
+}
+.step-settings-pane .settings-section {
+  background: #fafbff;
+  border: 1px solid #eef1f8;
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+.step-settings-pane .settings-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eef1f8;
+}
+.step-settings-pane .settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+.step-settings-pane .settings-row:last-child {
+  margin-bottom: 0;
+}
+.step-settings-pane .settings-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.step-settings-pane .settings-item--switch {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  min-width: 260px;
+  background: #fff;
+  border: 1px solid #e8eaef;
+  border-radius: 8px;
+  padding: 10px 14px;
+  gap: 14px;
+}
+.step-settings-pane .settings-item--wide {
+  flex: 1;
+  min-width: 300px;
+}
+.step-settings-pane .settings-switch-info {
+  flex: 1;
+}
+.step-settings-pane .settings-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.step-settings-pane .settings-hint {
+  font-size: 11px;
+  color: #b0b7c3;
+  font-weight: 400;
+}
+.step-settings-pane .settings-desc {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+.step-settings-pane .settings-proxy-fields {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.step-settings-pane .settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
 }
 .step-drawer-region--lower {
   display: flex;

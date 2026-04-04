@@ -2,6 +2,12 @@
  * 场景步骤 HTTP 执行（供单步发送与批量运行复用）
  */
 import execRequest from '@/api/exec-request'
+import {
+  buildProxyExtraFields,
+  defaultStepReqSettings,
+  normalizeStepReqSettings,
+  type StepReqSettings
+} from '@/utils/req-settings'
 
 export type ScenarioSendLogEntry = {
   id: string
@@ -346,14 +352,18 @@ async function fetchEnvBaseUrl(envId: number | null): Promise<string> {
   }
 }
 
-function buildProxyHeadersFromRows(rows: any[], bodyType: string): Record<string, string> {
+function buildProxyHeadersFromRows(
+  rows: any[],
+  bodyType: string,
+  autoContentType = true
+): Record<string, string> {
   const h: Record<string, string> = {}
   for (const row of rows) {
     const k = String(row.name || '').trim()
     if (!k) continue
     h[k] = String(row.example ?? row.value ?? '')
   }
-  if (bodyType === 'json') {
+  if (autoContentType && bodyType === 'json') {
     if (!h['Content-Type'] && !h['content-type']) h['Content-Type'] = 'application/json'
   }
   return h
@@ -600,6 +610,8 @@ export type StepExecContext = {
   bodyContent: string
   postOps: any[]
   authConfig?: any
+  /** 与单接口调试「设置」一致；缺省为 defaultStepReqSettings */
+  reqSettings?: StepReqSettings
 }
 
 /**
@@ -620,7 +632,8 @@ export async function loadStepExecContext(
       bodyType: String(step?.body_type || 'none'),
       bodyContent: String(step?.body_content || ''),
       postOps: mergePostOpsWithValidateResponse(cloneParamRows(step?.post_operations)),
-      authConfig: step?.auth_config
+      authConfig: step?.auth_config,
+      reqSettings: normalizeStepReqSettings(step?.req_settings)
     }
   }
   if (step?.source === 'interface' && step?.interface_id) {
@@ -642,7 +655,8 @@ export async function loadStepExecContext(
         bodyType: String(step?.body_type || iface?.body_definition?.type || 'none'),
         bodyContent: typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent, null, 2),
         postOps: mergePostOpsWithValidateResponse(cloneParamRows(step?.post_operations)),
-        authConfig: step?.auth_config
+        authConfig: step?.auth_config,
+        reqSettings: normalizeStepReqSettings(step?.req_settings)
       }
     } catch {
       return null
@@ -689,7 +703,8 @@ export async function loadStepExecContext(
       bodyType,
       bodyContent,
       postOps,
-      authConfig: step?.auth_config
+      authConfig: step?.auth_config,
+      reqSettings: normalizeStepReqSettings(step?.req_settings)
     }
   } catch {
     return null
@@ -706,7 +721,10 @@ export async function runStepExecContext(ctx: StepExecContext): Promise<Scenario
   let runtimeUrl = String(ctx.rawUrl || '').trim()
   let runtimeBody = String(ctx.bodyContent || '')
   const queryParams = cloneParamRows(ctx.queryParams)
-  const headers: Record<string, string> = { ...buildProxyHeadersFromRows(ctx.headerParams, ctx.bodyType) }
+  const rs = ctx.reqSettings ?? defaultStepReqSettings
+  const headers: Record<string, string> = {
+    ...buildProxyHeadersFromRows(ctx.headerParams, ctx.bodyType, rs.autoContentType)
+  }
   const preRuntime = await applyPreOpsToRequest(queryParams, headers, ctx.preOps)
   if (preRuntime.methodText) methodValue = String(preRuntime.methodText).toUpperCase()
   if (preRuntime.urlText) runtimeUrl = resolveTemplateText(preRuntime.urlText, preRuntime.vars)
@@ -799,8 +817,14 @@ export async function runStepExecContext(ctx: StepExecContext): Promise<Scenario
   try {
     const res: any = await execRequest.post(
       '/proxy',
-      { url: finalUrl, method: upper, headers, body },
-      { timeout: 35000 }
+      {
+        url: finalUrl,
+        method: upper,
+        headers,
+        body,
+        ...buildProxyExtraFields(rs)
+      },
+      { timeout: rs.timeout > 0 ? rs.timeout + 5000 : 35000 }
     )
     const env = normalizeExecProxyResponse(res)
     if (env.error) {
