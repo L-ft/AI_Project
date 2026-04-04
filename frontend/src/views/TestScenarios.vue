@@ -616,51 +616,23 @@
                           <span class="step-recent-label">最近失败步骤</span>
                           <span class="step-recent-value">{{ latestFailedStepLabel }}</span>
                         </div>
-                        <n-scrollbar class="step-list-scrollbar">
-                          <div v-if="filteredStepCards.length === 0" class="step-list-zero">无匹配步骤，请调整筛选或搜索</div>
-                          <div
-                            v-for="item in filteredStepCards"
-                            v-else
-                            :key="'stp-' + item.idx + '-' + String(item.step.case_id ?? '') + '-' + String(item.step.order ?? '')"
-                            :class="['step-list-item', { active: selectedStepIndex === item.idx, 'drag-over': dragStepOverIndex === item.idx, 'dragging': dragStepFromIndex === item.idx }]"
-                            draggable="true"
-                            @click="selectScenarioStep(item.idx)"
-                            @dragstart.stop="handleStepDragStart(item.idx)"
-                            @dragover.prevent.stop="handleStepDragOver($event, item.idx)"
-                            @dragleave.stop="handleStepDragLeave($event)"
-                            @drop.prevent.stop="handleStepDrop(item.idx)"
-                            @dragend.stop="handleStepDragEnd()"
-                          >
-                            <span class="step-drag-handle" title="拖动调整顺序" @mousedown.stop>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="19" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>
-                            </span>
-                            <n-checkbox
-                              :checked="stepBulkCheckedIndices.includes(item.idx)"
-                              @click.stop
-                              @update:checked="(v: boolean) => toggleStepBulkCheck(item.idx, v)"
-                            />
-                            <div class="step-li-order">#{{ item.idx + 1 }}</div>
-                            <span class="step-li-method" :style="methodBadgeStyle(stepSidebarMethod(item.idx))">{{ stepSidebarMethod(item.idx) }}</span>
-                            <div class="step-li-main">
-                              <div class="step-li-topline">
-                                <div class="step-li-name">{{ item.step.name || '未命名步骤' }}</div>
-                                <span :class="['step-li-status', item.statusClass]">{{ item.statusText }}</span>
-                              </div>
-                              <div v-if="item.step.case_id" class="step-li-meta">{{ stepCaseMetaLabel(item.step) }}</div>
-                              <div v-else-if="item.step.source === 'interface' && item.step.interface_id" class="step-li-meta step-li-meta--iface">接口 #{{ item.step.interface_id }}</div>
-                              <div v-else-if="item.step.source === 'http' || item.step.source === 'curl'" class="step-li-meta step-li-meta--http">{{ item.step.source === 'curl' ? 'cURL 请求' : 'HTTP 请求' }}</div>
-                              <div v-else-if="item.step.source === 'wait_step'" class="step-li-meta step-li-meta--http">等待</div>
-                              <div v-else-if="item.step.source === 'script_step'" class="step-li-meta step-li-meta--http">脚本</div>
-                              <div v-else-if="item.step.source === 'group_step'" class="step-li-meta step-li-meta--iface">步骤组</div>
-                              <div v-else-if="item.step.source === 'db_step'" class="step-li-meta step-li-meta--http">数据库</div>
-                              <div class="step-li-submeta">
-                                <span>{{ item.lastCode }}</span>
-                                <span>{{ item.lastElapsed }}</span>
-                                <span>{{ item.lastRunAt }}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </n-scrollbar>
+                        <ScenarioStepList
+                          :items="filteredStepCards"
+                          :selected-step-index="selectedStepIndex"
+                          :bulk-checked-indices="stepBulkCheckedIndices"
+                          :drag-over-index="dragStepOverIndex"
+                          :drag-from-index="dragStepFromIndex"
+                          :bulk-selected-count="stepBulkSelectedCount"
+                          @select="selectScenarioStep"
+                          @toggle-bulk="toggleStepBulkCheck"
+                          @drag-start="handleStepDragStart"
+                          @drag-over="handleStepDragOver"
+                          @drag-leave="handleStepDragLeave"
+                          @drop="handleStepDrop"
+                          @drag-end="handleStepDragEnd"
+                          @clear-bulk="clearStepBulkSelection"
+                          @remove-checked="removeCheckedScenarioSteps"
+                        />
                       </aside>
                       <div v-if="detailStepCount === 0" class="step-editor-panel">
                         <n-spin :show="stepEditorLoading">
@@ -2238,6 +2210,13 @@ import {
   type StepReqSettings
 } from '@/utils/req-settings'
 import {
+  buildStepMetaDisplay,
+  computeScenarioStepFailureSummary,
+  getMethodBadgeStyle as methodBadgeStyle,
+  type ScenarioStepListItem
+} from '@/utils/scenario-step-list'
+import ScenarioStepList from '@/components/ScenarioStepList.vue'
+import {
   loadStepExecContext,
   runStepExecContext,
   computeSummaryForLogEntries,
@@ -3734,23 +3713,29 @@ const stepLogsByName = computed(() => {
   return map
 })
 
-const filteredStepCards = computed(() => {
+const filteredStepCards = computed((): ScenarioStepListItem[] => {
   const q = stepListSearch.value.trim().toLowerCase()
   return detailStepsOrdered.value
     .map((step: any, idx: number) => {
       const method = stepSidebarMethod(idx)
       const log = stepLogsByName.value.get(String(step?.name || '').trim())
       const statusText = !log ? '待执行' : log.pass ? '已通过' : '失败'
-      const statusClass = !log ? 'pending' : log.pass ? 'passed' : 'failed'
+      const statusClass: ScenarioStepListItem['statusClass'] = !log ? 'pending' : log.pass ? 'passed' : 'failed'
+      const meta = buildStepMetaDisplay(step)
       return {
+        listKey: `stp-${idx}-${String(step.case_id ?? '')}-${String(step.order ?? '')}`,
         idx,
         step,
+        stepName: String(step?.name || '未命名步骤'),
         method,
         statusText,
         statusClass,
         lastCode: log?.statusCode != null ? `HTTP ${log.statusCode}` : '未响应',
         lastElapsed: log?.elapsedMs != null ? `${Math.round(Number(log.elapsedMs))} ms` : '未执行',
-        lastRunAt: log ? new Date(log.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '刚刚'
+        lastRunAt: log ? new Date(log.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
+        metaLine: meta.line,
+        metaClass: meta.metaClass,
+        failureSummary: computeScenarioStepFailureSummary(log)
       }
     })
     .filter((item) => {
@@ -4743,6 +4728,10 @@ const toggleStepBulkCheck = (idx: number, checked: boolean) => {
   stepBulkCheckedIndices.value = [...s].sort((a, b) => a - b)
 }
 
+const clearStepBulkSelection = () => {
+  stepBulkCheckedIndices.value = []
+}
+
 const rebuildStepEditorUrl = async () => {
   let base = ''
   if (detailEnvId.value) {
@@ -5689,17 +5678,6 @@ const addStepScenarioItems: AddStepMenuItem[] = [
 
 const utilityStepKinds = ['wait_step', 'script_step', 'group_step', 'db_step'] as const
 
-const methodBadgeStyle = (method: string) => {
-  const map: Record<string, string> = {
-    GET: 'color:#389e0d;background:#f6ffed;border:1px solid #b7eb8f;',
-    POST: 'color:#d46b08;background:#fff7e6;border:1px solid #ffd591;',
-    PUT: 'color:#096dd9;background:#e6f7ff;border:1px solid #91d5ff;',
-    DELETE: 'color:#cf1322;background:#fff1f0;border:1px solid #ffa39e;',
-    PATCH: 'color:#531dab;background:#f9f0ff;border:1px solid #d3adf7;'
-  }
-  return map[method] || 'color:#595959;background:#f5f5f5;border:1px solid #d9d9d9;'
-}
-
 const normalizeCaseType = (raw: unknown) => String(raw ?? '').trim().toLowerCase()
 
 const inferCaseGroup = (caseType: string | undefined): { group: string; groupLabel: string } => {
@@ -5936,11 +5914,6 @@ const onImportCaseModalLeave = () => {
   importSelectedCaseRows.value = {}
   importCaseListSearch.value = ''
   importModalCategory.value = 'all'
-}
-
-const stepCaseMetaLabel = (step: { case_id?: number; source?: string }) => {
-  if (step.source === 'interface_case') return `接口用例 #${step.case_id}`
-  return `调试用例 #${step.case_id}`
 }
 
 const confirmImportCases = async () => {
@@ -7882,9 +7855,6 @@ onUnmounted(() => {
   width: 286px;
   border-right: 1px solid #eaecf4;
 }
-.step-list-sidebar .step-list-scrollbar {
-  min-height: 360px;
-}
 .step-list-toolbar {
   display: none;
 }
@@ -8338,23 +8308,21 @@ onUnmounted(() => {
   font-weight: 500;
   color: #8792a2;
 }
-.step-list-scrollbar {
-  min-height: 0;
-  height: 100%;
-  padding-bottom: 8px;
+:deep(.step-list-scroll-area) {
   grid-column: 1 / -1;
   grid-row: 5;
   align-self: stretch;
+  min-height: 0;
   overflow: hidden;
 }
-.step-list-zero {
+:deep(.step-list-zero) {
   padding: 24px 12px;
   text-align: center;
   color: #a0aab8;
   font-size: 12px;
   line-height: 1.5;
 }
-.step-list-item {
+:deep(.step-list-item) {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -8367,25 +8335,33 @@ onUnmounted(() => {
   position: relative;
   background: #fff;
 }
-.step-list-item:hover {
+:deep(.step-list-item:hover) {
   background: #f3f0ff;
 }
-.step-list-item.active {
-  background: #f5f0ff;
-  border-color: rgba(125, 51, 255, 0.28);
+:deep(.step-list-item.active) {
+  background: rgba(245, 240, 255, 0.96);
+  border-color: rgba(125, 51, 255, 0.32);
   box-shadow: inset 3px 0 0 #7d33ff;
 }
+:deep(.step-list-item--passed:not(.active)) {
+  background: rgba(248, 250, 249, 0.95);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+:deep(.step-list-item--passed:not(.active):hover) {
+  background: rgba(240, 253, 244, 0.98);
+  border-color: rgba(34, 197, 94, 0.28);
+}
 /* 拖拽排序样式 */
-.step-list-item.drag-over {
+:deep(.step-list-item.drag-over) {
   border-color: #7d33ff;
   background: #f0ebff;
-  box-shadow: inset 3px 0 0 #7d33ff, 0 0 0 2px rgba(125,51,255,0.15);
+  box-shadow: inset 3px 0 0 #7d33ff, 0 0 0 2px rgba(125, 51, 255, 0.15);
 }
-.step-list-item.dragging {
+:deep(.step-list-item.dragging) {
   opacity: 0.45;
   background: #f8f0ff;
 }
-.step-drag-handle {
+:deep(.step-drag-handle) {
   display: flex;
   align-items: center;
   flex-shrink: 0;
@@ -8396,13 +8372,13 @@ onUnmounted(() => {
   transition: opacity 0.15s;
   padding: 0 2px;
 }
-.step-list-item:hover .step-drag-handle {
+:deep(.step-list-item:hover .step-drag-handle) {
   opacity: 1;
 }
-.step-drag-handle:active {
+:deep(.step-drag-handle:active) {
   cursor: grabbing;
 }
-.step-li-method {
+:deep(.step-li-method) {
   font-size: 10px;
   font-weight: 700;
   padding: 2px 5px;
@@ -8411,36 +8387,36 @@ onUnmounted(() => {
   line-height: 1.35;
   margin-top: 2px;
 }
-.step-li-order {
+:deep(.step-li-order) {
   min-width: 24px;
   font-size: 12px;
   font-weight: 700;
   color: #6b4eff;
   line-height: 24px;
 }
-.step-li-main {
+:deep(.step-li-main) {
   flex: 1;
   min-width: 0;
 }
-.step-li-topline {
+:deep(.step-li-topline) {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
-.step-li-name {
+:deep(.step-li-name) {
   font-size: 13px;
   font-weight: 500;
   color: #1a1f36;
   line-height: 1.35;
   word-break: break-word;
 }
-.step-li-meta {
+:deep(.step-li-meta) {
   font-size: 11px;
   color: #a0aab8;
   margin-top: 4px;
 }
-.step-li-submeta {
+:deep(.step-li-submeta) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -8448,7 +8424,7 @@ onUnmounted(() => {
   font-size: 11px;
   color: #94a3b8;
 }
-.step-li-status {
+:deep(.step-li-status) {
   display: inline-flex;
   align-items: center;
   height: 22px;
@@ -8458,22 +8434,22 @@ onUnmounted(() => {
   font-weight: 700;
   flex-shrink: 0;
 }
-.step-li-status.passed {
+:deep(.step-li-status.passed) {
   background: rgba(34, 197, 94, 0.1);
   color: #15803d;
 }
-.step-li-status.failed {
+:deep(.step-li-status.failed) {
   background: rgba(239, 68, 68, 0.1);
   color: #dc2626;
 }
-.step-li-status.pending {
+:deep(.step-li-status.pending) {
   background: rgba(148, 163, 184, 0.12);
   color: #475569;
 }
-.step-li-meta--iface {
+:deep(.step-li-meta--iface) {
   color: #7d33ff;
 }
-.step-li-meta--http {
+:deep(.step-li-meta--http) {
   color: #0ea5e9;
 }
 .step-list-footer {
@@ -9794,7 +9770,7 @@ onUnmounted(() => {
   .step-recent-fail {
     grid-row: 5;
   }
-  .step-list-scrollbar {
+  :deep(.step-list-scroll-area) {
     grid-row: 6;
   }
   .step-stat-card {
