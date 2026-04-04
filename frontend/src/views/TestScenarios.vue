@@ -284,14 +284,10 @@
           <template v-if="scenarioPanelMode === 'list'">
           <header class="main-header">
         <div class="header-tabs">
-          <button :class="['htab', { active: mainTab === 'scenarios' }]" @click="mainTab = 'scenarios'">
+          <span class="htab active">
             全部场景
-            <span v-if="mainTab === 'scenarios'" class="htab-underline" />
-          </button>
-          <button :class="['htab', { active: mainTab === 'reports' }]" @click="mainTab = 'reports'">
-            测试报告
-            <span v-if="mainTab === 'reports'" class="htab-underline" />
-          </button>
+            <span class="htab-underline" />
+          </span>
         </div>
         <div class="header-actions">
           <n-input v-model:value="tableSearch" placeholder="搜索场景名称..." size="small" clearable style="width:200px">
@@ -2232,7 +2228,6 @@ const userStore = useUserStore()
 
 // ── 基础状态 ──
 const activeView = ref('welcome')
-const mainTab = ref('scenarios')
 const scheduledTab = ref('tasks')
 const sidebarSearch = ref('')
 const sidebarSearch2 = ref('')
