@@ -696,32 +696,24 @@
                                   <div class="step-overview-card step-overview-card--top">
                                     <div class="step-overview-head">
                                       <div class="step-overview-title-group">
-                                        <span class="step-overview-eyebrow">步骤概览</span>
                                         <div class="step-overview-title-line">
                                           <span class="step-overview-title">{{ currentStepTitle }}</span>
                                           <span class="step-overview-method" :style="methodBadgeStyle(stepEditorMethod)">{{ stepEditorMethod }}</span>
+                                          <span v-if="stepEditorCaseId" class="step-overview-chip">用例 #{{ stepEditorCaseId }}</span>
+                                          <span v-if="stepEditorInterfaceId" class="step-overview-chip">接口 #{{ stepEditorInterfaceId }}</span>
+                                          <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
                                         </div>
                                       </div>
-                                      <div class="step-overview-env">
-                                        <span class="step-overview-env-label">运行环境</span>
-                                        <div class="step-overview-env-actions">
-                                          <n-select
-                                            v-model:value="detailEnvId"
-                                            :options="envOptions"
-                                            size="small"
-                                            placeholder="请选择环境"
-                                            style="width: 180px"
-                                            :consistent-menu-width="false"
-                                          />
-                                        </div>
+                                      <div class="step-overview-env-picker">
+                                        <n-select
+                                          v-model:value="detailEnvId"
+                                          :options="envOptions"
+                                          size="small"
+                                          placeholder="请选择环境"
+                                          class="step-overview-env-select"
+                                          :consistent-menu-width="false"
+                                        />
                                       </div>
-                                    </div>
-                                    <div class="step-overview-meta">
-                                      <span class="step-overview-chip">步骤 {{ (selectedStepIndex ?? 0) + 1 }} / {{ detailStepCount }}</span>
-                                      <span class="step-overview-chip">{{ currentStepSourceLabel }}</span>
-                                      <span class="step-overview-chip" v-if="stepEditorCaseId">用例 #{{ stepEditorCaseId }}</span>
-                                      <span class="step-overview-chip" v-if="stepEditorInterfaceId">接口 #{{ stepEditorInterfaceId }}</span>
-                                      <span class="step-overview-chip step-overview-chip--ok">后置 {{ stepEditorPostOps.length }}</span>
                                     </div>
                                   </div>
                                   </div>
@@ -1278,20 +1270,9 @@
                                 <div class="step-response-body-shell">
                                   <template v-if="!stepEditorLastResponse">
                                     <div class="step-response-empty step-response-empty--idle">
-                                      <span class="step-response-empty-badge">Response</span>
                                       <div class="step-response-empty-title">当前步骤尚未执行</div>
                                       <div class="step-response-empty-desc">
                                         发送当前步骤后，这里会展示状态码、耗时、响应体、断言结果以及变量提取结果。
-                                      </div>
-                                      <div class="step-response-empty-metrics">
-                                        <div class="step-response-empty-metric">
-                                          <span>请求方法</span>
-                                          <strong>{{ stepEditorMethod || '--' }}</strong>
-                                        </div>
-                                        <div class="step-response-empty-metric">
-                                          <span>后置动作</span>
-                                          <strong>{{ stepEditorPostOps.length }}</strong>
-                                        </div>
                                       </div>
                                       <div class="step-response-empty-tip">
                                         左侧继续完善参数、鉴权和前后置配置，右侧会实时承接本步骤的执行结果。
@@ -8886,25 +8867,31 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   position: relative;
   z-index: 1;
 }
 .step-overview-title-group {
   min-width: 0;
+  flex: 1 1 auto;
 }
-.step-overview-eyebrow {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
-  color: #7d33ff;
-  margin-bottom: 6px;
+.step-overview-env-picker {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.step-overview-env-select {
+  width: 200px;
 }
 .step-overview-title-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  row-gap: 10px;
+}
+.step-overview-title-line .step-overview-title {
+  min-width: 0;
+  line-height: 1.35;
 }
 .step-overview-title {
   font-size: 18px;
@@ -9861,14 +9848,12 @@ onUnmounted(() => {
     flex-direction: column;
     align-items: stretch;
   }
-  .step-overview-env {
-    align-items: stretch;
-  }
-  .step-overview-env-actions {
+  .step-overview-env-picker {
+    padding-top: 0;
     width: 100%;
   }
-  .step-overview-env-actions :deep(.n-base-selection) {
-    flex: 1;
+  .step-overview-env-select {
+    width: 100%;
   }
   .step-panel-section-head {
     flex-direction: column;
