@@ -98,7 +98,7 @@
                   <n-icon :component="CheckCircleOutlined" :size="22" />
                 </div>
                 <div class="it-stat-body">
-                  <div class="it-stat-num">{{ scenarios.filter(s => s.last_result?.status === 'passed').length }}</div>
+                  <div class="it-stat-num">{{ scenarioLastStat.passed }}</div>
                   <div class="it-stat-label">最近通过</div>
                 </div>
                 <div class="it-stat-trend it-stat-trend--up">↑</div>
@@ -108,7 +108,7 @@
                   <n-icon :component="CloseCircleOutlined" :size="22" />
                 </div>
                 <div class="it-stat-body">
-                  <div class="it-stat-num">{{ scenarios.filter(s => s.last_result?.status === 'failed').length }}</div>
+                  <div class="it-stat-num">{{ scenarioLastStat.failed }}</div>
                   <div class="it-stat-label">最近失败</div>
                 </div>
                 <div class="it-stat-trend it-stat-trend--down">↓</div>
@@ -118,7 +118,7 @@
                   <n-icon :component="ClockCircleOutlined" :size="22" />
                 </div>
                 <div class="it-stat-body">
-                  <div class="it-stat-num">{{ scenarios.filter(s => s.last_result?.status === 'running').length }}</div>
+                  <div class="it-stat-num">{{ scenarioLastStat.running }}</div>
                   <div class="it-stat-label">运行中</div>
                 </div>
                 <div class="it-stat-trend it-stat-trend--up">↑</div>
@@ -311,15 +311,15 @@
           <div class="stat-label">全部场景</div>
         </div>
         <div class="stat-card green">
-          <div class="stat-value">{{ scenarios.filter(s => s.last_result?.status === 'passed').length }}</div>
+          <div class="stat-value">{{ scenarioLastStat.passed }}</div>
           <div class="stat-label">最近通过</div>
         </div>
         <div class="stat-card red">
-          <div class="stat-value">{{ scenarios.filter(s => s.last_result?.status === 'failed').length }}</div>
+          <div class="stat-value">{{ scenarioLastStat.failed }}</div>
           <div class="stat-label">最近失败</div>
         </div>
         <div class="stat-card blue">
-          <div class="stat-value">{{ scenarios.filter(s => s.last_result?.status === 'running').length }}</div>
+          <div class="stat-value">{{ scenarioLastStat.running }}</div>
           <div class="stat-label">运行中</div>
         </div>
       </div>
@@ -427,13 +427,13 @@
             <span v-else class="dash">—</span>
           </div>
           <div class="tc-result">
-            <span v-if="row.last_result?.status === 'passed'" class="r-badge passed">
+            <span v-if="getScenarioLastDisplayStatus(row) === 'passed'" class="r-badge passed">
               <n-icon :component="CheckCircleOutlined" />通过
             </span>
-            <span v-else-if="row.last_result?.status === 'failed'" class="r-badge failed">
+            <span v-else-if="getScenarioLastDisplayStatus(row) === 'failed'" class="r-badge failed">
               <n-icon :component="CloseCircleOutlined" />失败
             </span>
-            <span v-else-if="row.last_result?.status === 'running'" class="r-badge running">
+            <span v-else-if="getScenarioLastDisplayStatus(row) === 'running'" class="r-badge running">
               <n-icon :component="SyncOutlined" />运行中
             </span>
             <span v-else class="dash">—</span>
@@ -2224,6 +2224,7 @@ import {
   normalizeProxyHeaderMap,
   type ScenarioSendLogEntry as ExecScenarioLogEntry
 } from '@/utils/scenario-step-exec'
+import { getScenarioLastDisplayStatus } from '@/utils/scenario-last-display'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -2354,6 +2355,19 @@ const closeReportArchiveModal = () => {
 const loading = ref(false)
 const saving = ref(false)
 const scenarios = ref<any[]>([])
+/** 与 last_report / last_result 对齐的列表统计（最近通过 / 失败 / 运行中） */
+const scenarioLastStat = computed(() => {
+  let passed = 0
+  let failed = 0
+  let running = 0
+  for (const s of scenarios.value) {
+    const st = getScenarioLastDisplayStatus(s)
+    if (st === 'passed') passed++
+    else if (st === 'failed') failed++
+    else if (st === 'running') running++
+  }
+  return { passed, failed, running }
+})
 const environments = ref<any[]>([])
 const checkedIds = ref<Set<number>>(new Set())
 
@@ -4616,6 +4630,7 @@ const runScenarioSteps = async (mode: 'all' | 'current' | 'failed') => {
   stopStepScenarioRunFlag.value = false
   let pass = 0
   let fail = 0
+  let sumMs = 0
   try {
     for (const step of steps) {
       if (stopStepScenarioRunFlag.value) break
@@ -4628,6 +4643,7 @@ const runScenarioSteps = async (mode: 'all' | 'current' | 'failed') => {
         const entry = await executeUtilityScenarioStep(step)
         if (entry.pass) pass++
         else fail++
+        sumMs += entry.elapsedMs != null ? Number(entry.elapsedMs) || 0 : 0
         appendScenarioSendLog({
           pass: entry.pass,
           name: entry.name,
@@ -4669,6 +4685,7 @@ const runScenarioSteps = async (mode: 'all' | 'current' | 'failed') => {
       const entry = await runStepExecContext(ctx)
       if (entry.pass) pass++
       else fail++
+      sumMs += entry.elapsedMs != null ? Number(entry.elapsedMs) || 0 : 0
       appendScenarioSendLog({
         pass: entry.pass,
         name: entry.name,
@@ -4696,6 +4713,22 @@ const runScenarioSteps = async (mode: 'all' | 'current' | 'failed') => {
             elapsed: entry.elapsedMs
           }
     }
+    const finishedAt = new Date().toISOString()
+    const lrStatus = fail > 0 ? 'failed' : 'passed'
+    try {
+      await execRequest.patch(`/test-scenarios/${scenario.id}`, {
+        last_result: {
+          status: lrStatus,
+          passed: pass,
+          failed: fail,
+          duration: sumMs / 1000,
+          finished_at: finishedAt
+        }
+      })
+    } catch {
+      /* 与列表最近结果同步失败不阻断 */
+    }
+    await fetchScenarios()
     if (stopStepScenarioRunFlag.value) {
       message.warning('步骤执行已停止')
     } else {
@@ -6585,7 +6618,8 @@ const runAll = async () => {
             status: summary.fail > 0 ? 'failed' : 'passed',
             passed: summary.pass,
             failed: summary.fail,
-            duration: (summary.sumMs || 0) / 1000
+            duration: (summary.sumMs || 0) / 1000,
+            finished_at: new Date().toISOString()
           }
         })
       } catch {
