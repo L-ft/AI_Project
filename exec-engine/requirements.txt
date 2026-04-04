@@ -1,6 +1,7 @@
 fastapi
 uvicorn
-playwright
+python-multipart
+playwright==1.49.0
 openai
 python-dotenv
 pyjwt

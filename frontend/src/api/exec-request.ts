@@ -33,7 +33,13 @@ execRequest.interceptors.response.use(
     } else {
       const status = error.response?.status
       const detail = error.response?.data?.detail || error.response?.data?.message || ''
-      message.error(`请求失败 (${status})${detail ? '：' + detail : ''}`)
+      if (status === 502) {
+        message.error(
+          '执行引擎不可用（502）。请确认 Docker 中 exec_engine 已启动：docker compose ps；本机可访问 http://127.0.0.1:8010/health 后再试。'
+        )
+      } else {
+        message.error(`请求失败 (${status})${detail ? '：' + detail : ''}`)
+      }
     }
     return Promise.reject(error)
   }

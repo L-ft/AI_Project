@@ -67,6 +67,13 @@ services:
         condition: service_healthy
       redis_final:
         condition: service_started
+    healthcheck:
+      # 避免 Nginx 反代 /engine 时出现 502（上游尚未监听或 DB 未连上）
+      test: ["CMD", "python", "/app/docker_healthcheck.py"]
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 90s
     networks:
       - ai_platform_net
 
@@ -80,8 +87,10 @@ services:
     ports:
       - "3010:80"
     depends_on:
-      - mgmt_api_final
-      - exec_engine_final
+      mgmt_api_final:
+        condition: service_started
+      exec_engine_final:
+        condition: service_healthy
     networks:
       - ai_platform_net
 
