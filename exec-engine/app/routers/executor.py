@@ -37,7 +37,12 @@ async def run_test_case(case_id: int, env_id: Optional[int] = None, db: Session 
     test_case = db.query(TestCase).filter(TestCase.id == case_id).first()
     if not test_case:
         raise HTTPException(status_code=404, detail="Test case not found")
-    
+    if test_case.interface_id is None or test_case.interface is None:
+        raise HTTPException(
+            status_code=400,
+            detail="该用例来自需求文档生成，无关联接口，无法通过执行器按 HTTP 接口运行",
+        )
+
     interface = test_case.interface
     env_base_url = ""
     if env_id:

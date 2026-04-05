@@ -67,6 +67,31 @@ def init_db():
             except Exception:
                 pass
 
+        # 需求文档分组：interface_id 可空、requirement_group_id 外键（requirement_groups 由 create_all 创建）
+        try:
+            conn.execute(text("SELECT requirement_group_id FROM api_test_cases LIMIT 1"))
+        except Exception:
+            try:
+                print("正在更新 api_test_cases 以支持需求文档用例…")
+                conn.execute(text("ALTER TABLE api_test_cases MODIFY COLUMN interface_id INT NULL"))
+                conn.execute(
+                    text(
+                        "ALTER TABLE api_test_cases ADD COLUMN requirement_group_id INT NULL, "
+                        "ADD INDEX ix_api_test_cases_requirement_group_id (requirement_group_id)"
+                    )
+                )
+                conn.commit()
+                conn.execute(
+                    text(
+                        "ALTER TABLE api_test_cases ADD CONSTRAINT fk_api_test_cases_requirement_group "
+                        "FOREIGN KEY (requirement_group_id) REFERENCES requirement_groups(id) ON DELETE CASCADE"
+                    )
+                )
+                conn.commit()
+                print("api_test_cases 需求文档关联列更新成功")
+            except Exception as e:
+                print(f"api_test_cases requirement_group 更新失败（可能已执行过）: {e}")
+
 def get_db():
     db = SessionLocal()
     try:

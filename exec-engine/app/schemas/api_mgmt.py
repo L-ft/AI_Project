@@ -111,7 +111,8 @@ class InterfaceListResponse(ResponseModel):
 # Test Cases
 class TestCaseSchema(BaseModel):
     id: int
-    interface_id: int
+    interface_id: Optional[int] = None
+    requirement_group_id: Optional[int] = None
     name: str
     case_type: str = "test"
     query_params: Optional[List[Dict]] = None
@@ -145,3 +146,69 @@ class TestCaseResponse(ResponseModel):
 
 class TestCaseListResponse(ResponseModel):
     data: List[TestCaseSchema] = []
+
+# --- 功能测试用例（需求菜单下独立库） ---
+class FunctionalTestCaseStep(BaseModel):
+    order: int = 1
+    action: str = ""
+    expected: str = ""
+
+
+class FunctionalTestCaseSchema(BaseModel):
+    id: int
+    module: str = ""
+    case_code: Optional[str] = None
+    title: str
+    priority: str = "P2"
+    category: str = "functional"
+    preconditions: Optional[str] = None
+    steps: Optional[List[Dict[str, Any]]] = None
+    expected_result: Optional[str] = None
+    remark: Optional[str] = None
+    status: str = "draft"
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FunctionalTestCaseCreate(BaseModel):
+    module: str = ""
+    case_code: Optional[str] = None
+    title: str
+    priority: str = "P2"
+    category: str = "functional"
+    preconditions: Optional[str] = None
+    steps: Optional[List[Dict[str, Any]]] = None
+    expected_result: Optional[str] = None
+    remark: Optional[str] = None
+    status: str = "draft"
+
+
+class FunctionalTestCaseUpdate(BaseModel):
+    module: Optional[str] = None
+    case_code: Optional[str] = None
+    title: Optional[str] = None
+    priority: Optional[str] = None
+    category: Optional[str] = None
+    preconditions: Optional[str] = None
+    steps: Optional[List[Dict[str, Any]]] = None
+    expected_result: Optional[str] = None
+    remark: Optional[str] = None
+    status: Optional[str] = None
+
+
+class FunctionalTestCaseListPayload(BaseModel):
+    items: List[FunctionalTestCaseSchema]
+    total: int
+
+
+class FunctionalTestCaseResponse(ResponseModel):
+    data: Optional[FunctionalTestCaseSchema] = None
+
+
+class FunctionalTestCaseListResponse(ResponseModel):
+    data: Optional[FunctionalTestCaseListPayload] = None
+
+
+class ImportResultPayload(BaseModel):
+    imported: int
+    skipped: int
+    errors: List[str] = Field(default_factory=list)

@@ -43,6 +43,16 @@ const router = createRouter({
       meta: { requiresAuth: true, role: 'TESTER' }
     },
     {
+      path: '/requirement-test-cases',
+      component: () => import('@/views/RequirementTestCases.vue'),
+      meta: { requiresAuth: true, role: 'TESTER' }
+    },
+    {
+      path: '/test-cases/:groupId',
+      component: () => import('@/views/RequirementCaseDocView.vue'),
+      meta: { requiresAuth: true, role: 'TESTER' }
+    },
+    {
       path: '/env-mgmt',
       component: () => import('@/views/EnvManagement.vue'),
       meta: { requiresAuth: true, role: 'TESTER' }

@@ -211,7 +211,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import type { UploadCustomRequestOptions, UploadFileInfo } from 'naive-ui'
 import {
   NUpload,
@@ -235,7 +235,8 @@ import {
   NInput,
   NSelect,
   NRadioGroup,
-  NRadio
+  NRadio,
+  useDialog
 } from 'naive-ui'
 import {
   CloudUploadOutlined,
@@ -245,9 +246,19 @@ import {
 } from '@vicons/antd'
 import { message } from '@/utils/naive-api'
 import { useCaseGenerationStore, type JobPhase } from '@/store/caseGeneration'
-import type { GeneratedCase } from '@/api/case-generation'
+import { useRequirementGroupsStore } from '@/store/requirementGroups'
+import type { GeneratedCase, ConflictPayload } from '@/api/case-generation'
 
 const store = useCaseGenerationStore()
+const reqGroups = useRequirementGroupsStore()
+const dialog = useDialog()
+
+watch(
+  () => store.phase,
+  (p) => {
+    if (p === 'done') void reqGroups.load()
+  }
+)
 
 const expanded = reactive<Record<string, boolean>>({})
 const editVisible = ref(false)
@@ -298,14 +309,39 @@ async function customRequest({
     onError()
     return
   }
-  try {
-    await store.runUpload(raw, (pct) => onProgress({ percent: pct }))
-    onProgress({ percent: 100 })
-    onFinish()
-  } catch {
-    message.error('上传或创建任务失败')
-    onError()
+
+  const tryOnce = async (dup?: {
+    duplicateAction?: 'overwrite' | 'new_version'
+    overwriteGroupId?: number
+  }) => {
+    try {
+      await store.runUpload(raw, (pct) => onProgress({ percent: pct }), dup)
+      onProgress({ percent: 100 })
+      onFinish()
+    } catch (e: unknown) {
+      const cp = (e as { conflictPayload?: ConflictPayload }).conflictPayload
+      if (cp) {
+        dialog.warning({
+          title: '检测到相同文档',
+          content:
+            '该文件与已上传文档内容一致（哈希相同）。请选择覆盖已有版本，或生成新版本以保留历史。',
+          positiveText: '覆盖',
+          negativeText: '生成新版本',
+          onPositiveClick: async () => {
+            await tryOnce({ duplicateAction: 'overwrite' })
+          },
+          onNegativeClick: async () => {
+            await tryOnce({ duplicateAction: 'new_version' })
+          }
+        })
+        return
+      }
+      message.error('上传或创建任务失败')
+      onError()
+    }
   }
+
+  await tryOnce()
 }
 
 function onReset() {

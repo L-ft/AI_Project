@@ -98,9 +98,15 @@ def list_test_cases(
     interface_id: Optional[int] = None,
     case_type: Optional[str] = None,
     exclude_case_type: Optional[str] = None,
+    requirement_group_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(TestCase)
+    if requirement_group_id is not None:
+        query = query.filter(TestCase.requirement_group_id == requirement_group_id)
+    else:
+        # 默认仅返回接口自动化用例，避免与需求文档用例混在同一列表
+        query = query.filter(TestCase.requirement_group_id.is_(None))
     if interface_id is not None:
         query = query.filter(TestCase.interface_id == interface_id)
     if case_type:

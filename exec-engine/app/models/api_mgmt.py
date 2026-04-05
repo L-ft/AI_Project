@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict
-from sqlalchemy import String, Integer, ForeignKey, JSON, Enum as SQLEnum, Text, DateTime
+from sqlalchemy import String, Integer, ForeignKey, JSON, Enum as SQLEnum, Text, DateTime, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 class Base(DeclarativeBase):
@@ -19,6 +19,65 @@ class ApiStatus(str, Enum):
     TESTING = "testing"
     RELEASED = "released"
     DEPRECATED = "deprecated"
+
+
+class RequirementGroupStatus(str, Enum):
+    """需求文档批次状态：生成中 / 完成 / 失败"""
+    PENDING = "pending"
+    GENERATING = "generating"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class FunctionalTestCase(Base):
+    """
+    需求域下的功能测试用例（标准模板：模块、编号、标题、优先级、前置、步骤、预期等）。
+    与 api_test_cases（接口自动化）分表存储。
+    """
+    __tablename__ = "functional_test_cases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    module: Mapped[str] = mapped_column(String(512), default="")
+    case_code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(512))
+    priority: Mapped[str] = mapped_column(String(8), default="P2")
+    category: Mapped[str] = mapped_column(String(64), default="functional")
+    preconditions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    steps: Mapped[Optional[List[Dict]]] = mapped_column(JSON, nullable=True)
+    expected_result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    remark: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="draft")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class RequirementGroup(Base):
+    """按需求文档归类的测试用例分组（同一 file_hash 可有多个 version）"""
+    __tablename__ = "requirement_groups"
+    __table_args__ = (
+        UniqueConstraint("file_hash", "version", name="uq_requirement_groups_hash_version"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    doc_title: Mapped[str] = mapped_column(String(255))
+    upload_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    status: Mapped[RequirementGroupStatus] = mapped_column(
+        SQLEnum(RequirementGroupStatus),
+        default=RequirementGroupStatus.PENDING,
+    )
+    file_hash: Mapped[str] = mapped_column(String(64), index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    key_points: Mapped[Optional[List[Dict]]] = mapped_column(JSON, nullable=True)
+
+    test_cases: Mapped[List["TestCase"]] = relationship(
+        "TestCase",
+        back_populates="requirement_group",
+        cascade="all, delete-orphan",
+    )
+
 
 class Folder(Base):
     """目录树模型：支持父子级嵌套"""
@@ -58,11 +117,16 @@ class Interface(Base):
     test_cases: Mapped[List["TestCase"]] = relationship("TestCase", back_populates="interface")
 
 class TestCase(Base):
-    """接口用例模型"""
+    """接口用例模型（接口用例必填 interface_id；需求文档用例必填 requirement_group_id，interface_id 为空）"""
     __tablename__ = "api_test_cases"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    interface_id: Mapped[int] = mapped_column(ForeignKey("api_interfaces.id"))
+    interface_id: Mapped[Optional[int]] = mapped_column(ForeignKey("api_interfaces.id"), nullable=True)
+    requirement_group_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("requirement_groups.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255))
     
     # 用例特定的参数覆盖
@@ -78,7 +142,11 @@ class TestCase(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    interface: Mapped["Interface"] = relationship("Interface", back_populates="test_cases")
+    interface: Mapped[Optional["Interface"]] = relationship("Interface", back_populates="test_cases")
+    requirement_group: Mapped[Optional["RequirementGroup"]] = relationship(
+        "RequirementGroup",
+        back_populates="test_cases",
+    )
 
 class Environment(Base):
     """环境管理模型"""

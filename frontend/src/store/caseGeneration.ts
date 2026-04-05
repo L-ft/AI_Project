@@ -4,7 +4,8 @@ import {
   createRequirementJob,
   fetchJobStatus,
   type KeyPoint,
-  type GeneratedCase
+  type GeneratedCase,
+  type ConflictPayload
 } from '@/api/case-generation'
 
 export type JobPhase =
@@ -26,6 +27,7 @@ export const useCaseGenerationStore = defineStore('caseGeneration', () => {
   const errorMessage = ref<string | null>(null)
   const uploadPercent = ref(0)
   const currentFileName = ref<string | null>(null)
+  const groupId = ref<number | null>(null)
 
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -51,12 +53,14 @@ export const useCaseGenerationStore = defineStore('caseGeneration', () => {
     keyPoints: KeyPoint[]
     cases: GeneratedCase[]
     errorMessage: string | null
+    groupId?: number | null
   }) {
     progress.value = p.progress
     logs.value = [...p.logs]
     keyPoints.value = p.keyPoints ?? []
     cases.value = p.cases ?? []
     errorMessage.value = p.errorMessage
+    if (p.groupId != null) groupId.value = p.groupId
     const ph = p.phase as JobPhase
     if (
       ph === 'pending' ||
@@ -92,21 +96,35 @@ export const useCaseGenerationStore = defineStore('caseGeneration', () => {
 
   async function runUpload(
     file: File,
-    onUploadProgress?: (percent: number) => void
+    onUploadProgress?: (percent: number) => void,
+    duplicateOpts?: {
+      duplicateAction?: 'overwrite' | 'new_version'
+      overwriteGroupId?: number
+    }
   ) {
     reset()
     currentFileName.value = file.name
     phase.value = 'uploading'
     uploadPercent.value = 0
     try {
-      const tid = await createRequirementJob(file, (pct) => {
-        uploadPercent.value = pct
-        onUploadProgress?.(pct)
+      const res = await createRequirementJob(file, {
+        onProgress: (pct) => {
+          uploadPercent.value = pct
+          onUploadProgress?.(pct)
+        },
+        ...duplicateOpts
       })
-      taskId.value = tid
+      taskId.value = res.taskId
+      groupId.value = res.groupId ?? null
       phase.value = 'pending'
       startPolling()
     } catch (e) {
+      const cp = (e as { conflictPayload?: ConflictPayload }).conflictPayload
+      if (cp) {
+        phase.value = 'idle'
+        uploadPercent.value = 0
+        throw e
+      }
       phase.value = 'failed'
       errorMessage.value =
         e instanceof Error ? e.message : '上传或任务创建失败'
@@ -125,6 +143,7 @@ export const useCaseGenerationStore = defineStore('caseGeneration', () => {
     errorMessage.value = null
     uploadPercent.value = 0
     currentFileName.value = null
+    groupId.value = null
   }
 
   function removeCase(id: string) {
@@ -148,6 +167,7 @@ export const useCaseGenerationStore = defineStore('caseGeneration', () => {
     errorMessage,
     uploadPercent,
     currentFileName,
+    groupId,
     isBusy,
     reset,
     stopPolling,

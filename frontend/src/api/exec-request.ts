@@ -32,6 +32,10 @@ execRequest.interceptors.response.use(
       message.error('执行引擎连接失败')
     } else {
       const status = error.response?.status
+      // 409 由业务层处理（如需求文档去重），不弹全局错误
+      if (status === 409) {
+        return Promise.reject(error)
+      }
       const detail = error.response?.data?.detail || error.response?.data?.message || ''
       if (status === 502) {
         message.error(
