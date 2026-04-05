@@ -8,72 +8,127 @@
           </n-breadcrumb-item>
           <n-breadcrumb-item>测试用例</n-breadcrumb-item>
         </n-breadcrumb>
-        <h1 class="rtc-title">功能测试用例库</h1>
+        <h1 class="rtc-title">测试用例</h1>
         <p class="rtc-desc">
-          采用常见用例模板（模块、编号、优先级、前置条件、步骤、预期结果）；支持从 Excel 批量导入或 XMind 脑图快速同步结构。
+          <span class="rtc-desc-strong">手动测试用例</span>：标准模板维护，支持 Excel / XMind 导入；
+          <span class="rtc-desc-strong">AI 测试用例</span>：由「需求生成用例」根据文档自动生成并落库，在此统一检索与跳转。
         </p>
       </div>
     </header>
 
     <n-card class="rtc-card" :bordered="false" size="small">
-      <div class="rtc-toolbar">
-        <n-space wrap :size="12">
-          <n-input
-            v-model:value="keyword"
-            clearable
-            placeholder="搜索标题 / 编号 / 备注"
-            style="width: 220px"
-            @keyup.enter="reload"
-          />
-          <n-input
-            v-model:value="moduleFilter"
-            clearable
-            placeholder="模块关键字"
-            style="width: 160px"
-            @keyup.enter="reload"
-          />
-          <n-button type="primary" @click="reload">
-            <template #icon><n-icon :component="SearchOutlined" /></template>
-            查询
-          </n-button>
-          <n-button @click="openCreate">
-            <template #icon><n-icon :component="PlusOutlined" /></template>
-            新建用例
-          </n-button>
-          <n-dropdown trigger="click" :options="importOptions" @select="onImportSelect">
-            <n-button>
-              <template #icon><n-icon :component="CloudUploadOutlined" /></template>
-              导入
-              <n-icon :component="DownOutlined" :size="12" style="margin-left: 4px" />
-            </n-button>
-          </n-dropdown>
-        </n-space>
-        <n-text depth="3" class="rtc-hint">
-          Excel 首行需含「用例标题」列；可选：模块、用例编号、优先级、前置条件、测试步骤、预期结果、备注
-        </n-text>
-      </div>
+      <n-tabs v-model:value="activeTab" type="line" class="rtc-tabs" @update:value="onTabChange">
+        <n-tab-pane name="manual" tab="手动测试用例">
+          <div class="rtc-toolbar">
+            <n-space wrap :size="12">
+              <n-input
+                v-model:value="keyword"
+                clearable
+                placeholder="搜索标题 / 编号 / 备注"
+                style="width: 220px"
+                @keyup.enter="reload"
+              />
+              <n-input
+                v-model:value="moduleFilter"
+                clearable
+                placeholder="模块关键字"
+                style="width: 160px"
+                @keyup.enter="reload"
+              />
+              <n-button type="primary" @click="reload">
+                <template #icon><n-icon :component="SearchOutlined" /></template>
+                查询
+              </n-button>
+              <n-button @click="openCreate">
+                <template #icon><n-icon :component="PlusOutlined" /></template>
+                新建用例
+              </n-button>
+              <n-dropdown trigger="click" :options="importOptions" @select="onImportSelect">
+                <n-button>
+                  <template #icon><n-icon :component="CloudUploadOutlined" /></template>
+                  导入
+                  <n-icon :component="DownOutlined" :size="12" style="margin-left: 4px" />
+                </n-button>
+              </n-dropdown>
+            </n-space>
+            <n-text depth="3" class="rtc-hint">
+              Excel 首行需含「用例标题」列；可选：模块、用例编号、优先级、前置条件、测试步骤、预期结果、备注
+            </n-text>
+          </div>
 
-      <n-data-table
-        :columns="columns"
-        :data="rows"
-        :loading="loading"
-        :row-key="(r: FunctionalTestCaseRow) => r.id"
-        :bordered="false"
-        striped
-        class="rtc-table"
-        :scroll-x="1100"
-      />
-      <div class="rtc-pager">
-        <n-pagination
-          v-model:page="page"
-          v-model:page-size="pageSize"
-          :item-count="total"
-          :page-sizes="[10, 20, 50]"
-          show-size-picker
-          @update:page="reload"
-          @update:page-size="onPageSize"
-        />
-      </div>
+          <n-data-table
+            :columns="columns"
+            :data="rows"
+            :loading="loading"
+            :row-key="(r: FunctionalTestCaseRow) => r.id"
+            :bordered="false"
+            striped
+            class="rtc-table"
+            :scroll-x="1100"
+          />
+          <div class="rtc-pager">
+            <n-pagination
+              v-model:page="page"
+              v-model:page-size="pageSize"
+              :item-count="total"
+              :page-sizes="[10, 20, 50]"
+              show-size-picker
+              @update:page="reload"
+              @update:page-size="onPageSize"
+            />
+          </div>
+        </n-tab-pane>
+
+        <n-tab-pane name="ai" tab="AI 测试用例">
+          <div class="rtc-toolbar rtc-ai-toolbar">
+            <n-space wrap :size="12">
+              <n-input
+                v-model:value="aiKeyword"
+                clearable
+                placeholder="搜索用例标题"
+                style="width: 220px"
+                @keyup.enter="reloadAi"
+              />
+              <n-input
+                v-model:value="aiDocKeyword"
+                clearable
+                placeholder="需求文档名称"
+                style="width: 200px"
+                @keyup.enter="reloadAi"
+              />
+              <n-button type="primary" @click="reloadAi">
+                <template #icon><n-icon :component="SearchOutlined" /></template>
+                查询
+              </n-button>
+            </n-space>
+            <n-text depth="3" class="rtc-hint">
+              数据来自各需求文档批次下已生成的用例；「查看文档」进入该文档的用例详情页。
+            </n-text>
+          </div>
+          <n-data-table
+            :columns="aiColumns"
+            :data="aiRows"
+            :loading="aiLoading"
+            :row-key="(r: RequirementAiCaseRow) => r.id"
+            :bordered="false"
+            striped
+            class="rtc-table"
+            :scroll-x="1000"
+          >
+            <template #empty>
+              <div class="rtc-ai-empty-wrap">
+                <n-empty description="暂无 AI 生成用例">
+                  <template #extra>
+                    <n-button type="primary" @click="router.push('/requirement-cases')">
+                      去上传需求文档
+                    </n-button>
+                  </template>
+                </n-empty>
+              </div>
+            </template>
+          </n-data-table>
+        </n-tab-pane>
+      </n-tabs>
     </n-card>
 
     <!-- 隐藏的文件选择，供导入菜单使用 -->
@@ -196,6 +251,7 @@
 
 <script setup lang="ts">
 import { h, ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import type { DataTableColumns } from 'naive-ui'
 import {
   NCard,
@@ -215,6 +271,10 @@ import {
   NBreadcrumb,
   NBreadcrumbItem,
   NDropdown,
+  NText,
+  NTabs,
+  NTabPane,
+  NEmpty,
   type DropdownOption
 } from 'naive-ui'
 import {
@@ -235,6 +295,12 @@ import {
   type FunctionalTestCaseRow,
   type FunctionalCaseStep
 } from '@/api/functional-test-cases'
+import {
+  fetchRequirementAiCases,
+  type RequirementAiCaseRow
+} from '@/api/requirement-ai-cases'
+
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -244,6 +310,12 @@ const page = ref(1)
 const pageSize = ref(20)
 const keyword = ref('')
 const moduleFilter = ref('')
+
+const activeTab = ref<'manual' | 'ai'>('manual')
+const aiLoading = ref(false)
+const aiRows = ref<RequirementAiCaseRow[]>([])
+const aiKeyword = ref('')
+const aiDocKeyword = ref('')
 
 const drawerShow = ref(false)
 const editingId = ref<number | null>(null)
@@ -518,6 +590,86 @@ const columns: DataTableColumns<FunctionalTestCaseRow> = [
   }
 ]
 
+function goDoc(row: RequirementAiCaseRow) {
+  void router.push(`/test-cases/${row.requirementGroupId}`)
+}
+
+const aiColumns: DataTableColumns<RequirementAiCaseRow> = [
+  {
+    title: '需求文档',
+    key: 'docTitle',
+    width: 240,
+    ellipsis: { tooltip: true },
+    render(row) {
+      return `${row.docTitle} v${row.groupVersion}.0`
+    }
+  },
+  {
+    title: '用例标题',
+    key: 'name',
+    minWidth: 240,
+    ellipsis: { tooltip: true }
+  },
+  {
+    title: '优先级',
+    key: 'priority',
+    width: 88,
+    render(row) {
+      return row.priority ?? '—'
+    }
+  },
+  {
+    title: '倾向',
+    key: 'kind',
+    width: 88,
+    render(row) {
+      if (row.kind === 'positive') return '正向'
+      if (row.kind === 'negative') return '异常'
+      return '—'
+    }
+  },
+  {
+    title: '标签',
+    key: 'caseType',
+    width: 110,
+    ellipsis: { tooltip: true }
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 120,
+    fixed: 'right',
+    render(row) {
+      return h(
+        NButton,
+        {
+          size: 'small',
+          quaternary: true,
+          type: 'primary',
+          onClick: () => goDoc(row)
+        },
+        { default: () => '查看文档' }
+      )
+    }
+  }
+]
+
+function onTabChange(name: string) {
+  if (name === 'ai') void reloadAi()
+}
+
+async function reloadAi() {
+  aiLoading.value = true
+  try {
+    aiRows.value = await fetchRequirementAiCases({
+      keyword: aiKeyword.value.trim() || undefined,
+      docKeyword: aiDocKeyword.value.trim() || undefined
+    })
+  } finally {
+    aiLoading.value = false
+  }
+}
+
 async function reload() {
   loading.value = true
   try {
@@ -581,8 +733,25 @@ onMounted(() => {
 .rtc-desc {
   font-size: var(--text-sm, 13px);
   color: var(--color-text-secondary, #64748b);
-  max-width: 720px;
-  line-height: 1.6;
+  max-width: 860px;
+  line-height: 1.65;
+}
+
+.rtc-desc-strong {
+  font-weight: var(--font-semibold, 600);
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.rtc-tabs :deep(.n-tabs-nav) {
+  margin-bottom: 8px;
+}
+
+.rtc-ai-toolbar {
+  margin-top: 0;
+}
+
+.rtc-ai-empty-wrap {
+  padding: 28px 0 8px;
 }
 
 .rtc-card {

@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from ..database import get_db
-from ..models.api_mgmt import TestCase, Interface
+from ..models.api_mgmt import TestCase, Interface, RequirementGroup
 from ..schemas.api_mgmt import TestCaseCreate, TestCaseUpdate, TestCaseResponse, TestCaseListResponse, ResponseModel
 from ..ai.llm_service import generate_test_cases
 from pydantic import BaseModel
@@ -114,6 +114,48 @@ def list_test_cases(
     if exclude_case_type:
         query = query.filter(TestCase.case_type != exclude_case_type)
     return TestCaseListResponse(data=query.all())
+
+
+@router.get("/requirement-generated", response_model=ResponseModel)
+def list_requirement_generated_cases(
+    keyword: Optional[str] = None,
+    doc_keyword: Optional[str] = Query(None, alias="docKeyword"),
+    db: Session = Depends(get_db),
+):
+    """
+    需求文档 AI 生成并落库的用例（requirement_group_id 非空），附带文档标题便于在「测试用例」页分区展示。
+    """
+    q = (
+        db.query(TestCase, RequirementGroup)
+        .join(RequirementGroup, TestCase.requirement_group_id == RequirementGroup.id)
+        .order_by(RequirementGroup.upload_time.desc(), TestCase.id.asc())
+    )
+    if keyword and keyword.strip():
+        kw = f"%{keyword.strip()}%"
+        q = q.filter(TestCase.name.like(kw))
+    if doc_keyword and doc_keyword.strip():
+        dkw = f"%{doc_keyword.strip()}%"
+        q = q.filter(RequirementGroup.doc_title.like(dkw))
+
+    rows = q.all()
+    out: List[Dict[str, Any]] = []
+    for tc, g in rows:
+        body = tc.body_definition if isinstance(tc.body_definition, dict) else {}
+        out.append(
+            {
+                "id": tc.id,
+                "requirementGroupId": tc.requirement_group_id,
+                "docTitle": g.doc_title,
+                "groupVersion": g.version,
+                "name": tc.name,
+                "caseType": tc.case_type,
+                "priority": body.get("priority"),
+                "kind": body.get("kind"),
+                "steps": body.get("steps") or [],
+            }
+        )
+    return ResponseModel(data=out)
+
 
 @router.get("/{case_id}", response_model=TestCaseResponse)
 def get_test_case(case_id: int, db: Session = Depends(get_db)):
