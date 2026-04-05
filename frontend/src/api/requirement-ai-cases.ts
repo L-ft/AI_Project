@@ -13,6 +13,16 @@ export interface RequirementAiCaseRow {
   steps: unknown[]
 }
 
+/** GET /test-cases/:id 返回的接口用例详情（需求用例的字段在 body_definition） */
+export interface ApiTestCaseDetail {
+  id: number
+  interface_id: number | null
+  requirement_group_id: number | null
+  name: string
+  case_type: string
+  body_definition?: Record<string, unknown> | null
+}
+
 export async function fetchRequirementAiCases(params?: {
   keyword?: string
   docKeyword?: string
@@ -23,4 +33,23 @@ export async function fetchRequirementAiCases(params?: {
       docKeyword: params?.docKeyword || undefined
     }
   })) as RequirementAiCaseRow[]
+}
+
+export async function getApiTestCase(caseId: number): Promise<ApiTestCaseDetail> {
+  return (await execRequest.get(`/test-cases/${caseId}`)) as ApiTestCaseDetail
+}
+
+export async function updateApiTestCase(
+  caseId: number,
+  body: {
+    name?: string
+    case_type?: string
+    body_definition?: Record<string, unknown> | null
+  }
+): Promise<ApiTestCaseDetail> {
+  return (await execRequest.patch(`/test-cases/${caseId}`, body)) as ApiTestCaseDetail
+}
+
+export async function deleteApiTestCase(caseId: number): Promise<void> {
+  await execRequest.delete(`/test-cases/${caseId}`)
 }
