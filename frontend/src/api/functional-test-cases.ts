@@ -7,15 +7,18 @@ export interface FunctionalCaseStep {
 }
 
 export interface FunctionalTestCaseRow {
-  id: number
+  id: string
+  code: string
   module: string
   case_code: string | null
+  caseCode?: string | null
   title: string
   priority: string
   category: string
   preconditions: string | null
   steps: FunctionalCaseStep[] | null
   expected_result: string | null
+  expectedResult?: string | null
   remark: string | null
   status: string
 }
@@ -42,7 +45,7 @@ export async function fetchFunctionalCases(params: {
   })) as FunctionalCaseListResult
 }
 
-export async function getFunctionalCase(id: number): Promise<FunctionalTestCaseRow> {
+export async function getFunctionalCase(id: string): Promise<FunctionalTestCaseRow> {
   return (await execRequest.get(`/functional-test-cases/${id}`)) as FunctionalTestCaseRow
 }
 
@@ -53,13 +56,13 @@ export async function createFunctionalCase(
 }
 
 export async function updateFunctionalCase(
-  id: number,
+  id: string,
   body: Partial<FunctionalTestCaseRow>
 ): Promise<FunctionalTestCaseRow> {
   return (await execRequest.patch(`/functional-test-cases/${id}`, body)) as FunctionalTestCaseRow
 }
 
-export async function deleteFunctionalCase(id: number): Promise<void> {
+export async function deleteFunctionalCase(id: string): Promise<void> {
   await execRequest.delete(`/functional-test-cases/${id}`)
 }
 

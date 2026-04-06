@@ -1,52 +1,49 @@
-import axios from 'axios'
+import { createHttpClient } from './core/create-client'
 import { message } from '../utils/naive-api'
 
-/** 开发：Vite 代理 /engine；生产：可设 VITE_EXEC_ENGINE_URL（如 /engine 同域反代） */
 function getExecEngineBaseURL(): string {
   const fromEnv = import.meta.env.VITE_EXEC_ENGINE_URL as string | undefined
   if (fromEnv != null && String(fromEnv).trim() !== '') {
     return String(fromEnv).trim().replace(/\/$/, '')
   }
-  if (import.meta.env.DEV) return '/engine'
-  // 生产默认走同源 /engine（需 Nginx 反代）；本地直连调试可设 VITE_EXEC_ENGINE_URL=http://localhost:8010
-  return '/engine'
+  return import.meta.env.DEV ? '/engine' : '/engine'
 }
 
-const execRequest = axios.create({
+const execRequest = createHttpClient({
   baseURL: getExecEngineBaseURL(),
-  timeout: 30000
-})
-
-execRequest.interceptors.response.use(
-  (response) => {
-    const res = response.data
-    if (res.code === 200) {
+  timeout: 30000,
+  unwrapResponse: (response) => {
+    const res = response.data as { code?: number; data?: unknown }
+    if (res?.code === 200) {
       return res.data
     }
     return res
   },
-  (error) => {
+  onError: (error, appError) => {
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      message.error('请求超时，请稍后重试')
-    } else if (error.code === 'ERR_NETWORK' || !error.response) {
-      message.error('执行引擎连接失败')
-    } else {
-      const status = error.response?.status
-      // 409 由业务层处理（如需求文档去重），不弹全局错误
-      if (status === 409) {
-        return Promise.reject(error)
-      }
-      const detail = error.response?.data?.detail || error.response?.data?.message || ''
-      if (status === 502) {
-        message.error(
-          '执行引擎不可用（502）。请确认 Docker 中 exec_engine 已启动：docker compose ps；本机可访问 http://127.0.0.1:8010/health 后再试。'
-        )
-      } else {
-        message.error(`请求失败 (${status})${detail ? '：' + detail : ''}`)
-      }
+      message.error('Request timed out, please try again later')
+      return
     }
-    return Promise.reject(error)
+
+    if (error.code === 'ERR_NETWORK' || !error.response) {
+      message.error('Execution engine connection failed')
+      return
+    }
+
+    const status = appError.status
+    if (status === 409) {
+      return
+    }
+
+    if (status === 502) {
+      message.error(
+        'Execution engine is unavailable (502). Please confirm exec_engine is running and /health is reachable.'
+      )
+      return
+    }
+
+    message.error(`Request failed (${status})${appError.message ? `: ${appError.message}` : ''}`)
   }
-)
+})
 
 export default execRequest

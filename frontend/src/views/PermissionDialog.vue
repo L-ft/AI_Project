@@ -35,7 +35,7 @@ import { ref, watch } from 'vue'
 import { NModal, NTree, NButton, NSpace, useMessage } from 'naive-ui'
 import request from '../api/request'
 
-const props = defineProps<{ roleId: number | null }>()
+const props = defineProps<{ roleId: string | null }>()
 const emit = defineEmits(['success'])
 
 const show = ref(false)
@@ -84,7 +84,7 @@ const handleSave = async () => {
   loading.value = true
   try {
     await request.post('/rbac/assign-perms', {
-      roleId: props.roleId,
+      roleCode: props.roleId,
       menuIds: checkedKeys.value
     })
     message.success('角色权限配置已保存')

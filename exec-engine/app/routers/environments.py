@@ -1,53 +1,58 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List
+from fastapi import APIRouter, Depends
 
-from ..database import get_db
-from ..models.api_mgmt import Environment
-from ..schemas.api_mgmt import EnvironmentCreate, EnvironmentUpdate, EnvironmentResponse, EnvironmentListResponse, ResponseModel
+from ..core.auth import require_auth
+from ..dependencies import get_environment_service
+from ..schemas.api_mgmt import (
+    EnvironmentCreate,
+    EnvironmentListResponse,
+    EnvironmentResponse,
+    EnvironmentUpdate,
+    ResponseModel,
+)
+from ..services.api_mgmt import EnvironmentService
 
-router = APIRouter(prefix="/environments", tags=["Environments"])
+
+router = APIRouter(
+    prefix="/environments",
+    tags=["Environments"],
+    dependencies=[Depends(require_auth)],
+)
+
 
 @router.post("", response_model=EnvironmentResponse)
-def create_environment(env: EnvironmentCreate, db: Session = Depends(get_db)):
-    db_env = Environment(**env.model_dump())
-    db.add(db_env)
-    db.commit()
-    db.refresh(db_env)
-    return EnvironmentResponse(data=db_env)
+def create_environment(
+    env: EnvironmentCreate,
+    service: EnvironmentService = Depends(get_environment_service),
+):
+    return EnvironmentResponse(data=service.create_environment(env))
+
 
 @router.get("", response_model=EnvironmentListResponse)
-def list_environments(db: Session = Depends(get_db)):
-    environments = db.query(Environment).order_by(Environment.id.asc()).all()
-    return EnvironmentListResponse(data=environments)
+def list_environments(service: EnvironmentService = Depends(get_environment_service)):
+    return EnvironmentListResponse(data=service.list_environments())
 
-@router.get("/{env_id}", response_model=EnvironmentResponse)
-def get_environment(env_id: int, db: Session = Depends(get_db)):
-    env = db.query(Environment).filter(Environment.id == env_id).first()
-    if not env:
-        raise HTTPException(status_code=404, detail="Environment not found")
-    return EnvironmentResponse(data=env)
 
-@router.patch("/{env_id}", response_model=EnvironmentResponse)
-def update_environment(env_id: int, env: EnvironmentUpdate, db: Session = Depends(get_db)):
-    db_env = db.query(Environment).filter(Environment.id == env_id).first()
-    if not db_env:
-        raise HTTPException(status_code=404, detail="Environment not found")
-    
-    update_data = env.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_env, key, value)
-        
-    db.commit()
-    db.refresh(db_env)
-    return EnvironmentResponse(data=db_env)
+@router.get("/{env_code}", response_model=EnvironmentResponse)
+def get_environment(
+    env_code: str,
+    service: EnvironmentService = Depends(get_environment_service),
+):
+    return EnvironmentResponse(data=service.get_environment(env_code))
 
-@router.delete("/{env_id}", response_model=ResponseModel)
-def delete_environment(env_id: int, db: Session = Depends(get_db)):
-    db_env = db.query(Environment).filter(Environment.id == env_id).first()
-    if not db_env:
-        raise HTTPException(status_code=404, detail="Environment not found")
-    
-    db.delete(db_env)
-    db.commit()
+
+@router.patch("/{env_code}", response_model=EnvironmentResponse)
+def update_environment(
+    env_code: str,
+    env: EnvironmentUpdate,
+    service: EnvironmentService = Depends(get_environment_service),
+):
+    return EnvironmentResponse(data=service.update_environment(env_code, env))
+
+
+@router.delete("/{env_code}", response_model=ResponseModel)
+def delete_environment(
+    env_code: str,
+    service: EnvironmentService = Depends(get_environment_service),
+):
+    service.delete_environment(env_code)
     return ResponseModel(msg="Environment deleted")

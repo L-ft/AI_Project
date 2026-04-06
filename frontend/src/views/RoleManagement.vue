@@ -87,12 +87,12 @@ import PermissionDialog from './PermissionDialog.vue'
 const message = useMessage()
 const dialog = useDialog()
 const roles = ref<any[]>([])
-const currentRoleId = ref<number | null>(null)
+const currentRoleId = ref<string | null>(null)
 const permDialogRef = ref<any>(null)
 
 const showModal = ref(false)
 const isEdit = ref(false)
-const editingId = ref<number | null>(null)
+const editingId = ref<string | null>(null)
 const formValue = ref({ name: '', code: '', description: '' })
 const rules = {
   name: { required: true, message: '请输入角色名称', trigger: 'blur' },

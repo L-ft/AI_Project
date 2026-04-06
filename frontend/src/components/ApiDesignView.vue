@@ -405,13 +405,14 @@ const handleSave = async () => {
       const res: any = await execRequest.post('/interfaces', payload)
       message.success('接口创建成功')
       // 更新当前数据 ID 和状态，避免重复创建
-      if (res && res.data) {
-        props.data.id = res.data.id
+      if (res) {
+        props.data.id = res.id
         props.data.isNew = false
+        props.data.label = res.name
         // 同步属性
-        props.data.label = res.data.name
-        props.data.method = res.data.method
-        props.data.path = res.data.path
+        props.data.label = res.name
+        props.data.method = res.method
+        props.data.path = res.path
         props.data.query_params = queryParams.value.map(({ key, ...item }: any) => item)
         props.data.header_params = headerParams.value.map(({ key, ...item }: any) => item)
         props.data.body_definition = {

@@ -309,8 +309,8 @@ const docDrawerTitle = computed(() => {
 const aiEditDrawerShow = ref(false)
 const aiEditLoading = ref(false)
 const aiEditSaving = ref(false)
-const editingAiId = ref<number | null>(null)
-const editingAiGroupId = ref<number | null>(null)
+const editingAiId = ref<string | null>(null)
+const editingAiGroupId = ref<string | null>(null)
 const aiEditBodyDef = ref<Record<string, unknown>>({})
 const aiEditForm = ref({
   name: '',
@@ -352,7 +352,7 @@ function maybeStartDocPoll() {
   }
 }
 
-async function loadDocBundle(groupId: number, silent = false) {
+async function loadDocBundle(groupId: string, silent = false) {
   if (!silent) docLoading.value = true
   if (!silent) docLoadError.value = null
   try {

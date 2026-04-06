@@ -1,7 +1,8 @@
 import execRequest from './exec-request'
 
 export interface RequirementGroupItem {
-  id: number
+  id: string
+  code: string
   docTitle: string
   uploadTime: string | null
   status: string
@@ -11,7 +12,8 @@ export interface RequirementGroupItem {
 }
 
 export interface RequirementGroupDetail {
-  id: number
+  id: string
+  code: string
   docTitle: string
   uploadTime: string | null
   status: string
@@ -21,10 +23,13 @@ export interface RequirementGroupDetail {
 }
 
 export interface RequirementCaseRow {
-  id: number
+  id: string
+  code: string
   name: string
   caseType: string
-  requirementGroupId: number | null
+  case_type?: string
+  requirementGroupId: string | null
+  requirement_group_id?: string | null
   title: string
   priority?: string
   kind?: string
@@ -37,7 +42,7 @@ export async function fetchRequirementGroups(): Promise<RequirementGroupItem[]> 
   return (await execRequest.get('/groups')) as RequirementGroupItem[]
 }
 
-export async function fetchGroupCasesBundle(groupId: number): Promise<{
+export async function fetchGroupCasesBundle(groupId: string): Promise<{
   group: RequirementGroupDetail
   cases: RequirementCaseRow[]
 }> {
@@ -47,6 +52,6 @@ export async function fetchGroupCasesBundle(groupId: number): Promise<{
   }
 }
 
-export async function deleteRequirementGroup(groupId: number): Promise<void> {
+export async function deleteRequirementGroup(groupId: string): Promise<void> {
   await execRequest.delete(`/groups/${groupId}`)
 }

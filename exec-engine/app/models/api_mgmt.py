@@ -37,6 +37,7 @@ class FunctionalTestCase(Base):
     __tablename__ = "functional_test_cases"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
     module: Mapped[str] = mapped_column(String(512), default="")
     case_code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(512))
@@ -62,6 +63,7 @@ class RequirementGroup(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
     doc_title: Mapped[str] = mapped_column(String(255))
     upload_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     status: Mapped[RequirementGroupStatus] = mapped_column(
@@ -84,6 +86,7 @@ class Folder(Base):
     __tablename__ = "api_folders"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("api_folders.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(100))
     sort: Mapped[int] = mapped_column(default=0)
@@ -98,6 +101,7 @@ class Interface(Base):
     __tablename__ = "api_interfaces"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
     folder_id: Mapped[Optional[int]] = mapped_column(ForeignKey("api_folders.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(255))
     method: Mapped[HttpMethod] = mapped_column(SQLEnum(HttpMethod))
@@ -121,6 +125,7 @@ class TestCase(Base):
     __tablename__ = "api_test_cases"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
     interface_id: Mapped[Optional[int]] = mapped_column(ForeignKey("api_interfaces.id"), nullable=True)
     requirement_group_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("requirement_groups.id", ondelete="CASCADE"),
@@ -136,6 +141,7 @@ class TestCase(Base):
     
     # 断言规则
     assertions: Mapped[Optional[List[Dict]]] = mapped_column(JSON) # e.g. [{"type": "status_code", "value": 200}]
+    pre_operations: Mapped[Optional[List[Dict]]] = mapped_column(JSON)
     post_operations: Mapped[Optional[List[Dict]]] = mapped_column(JSON)
     case_type: Mapped[str] = mapped_column(String(20), default="test") # "test" or "debug"
     
@@ -153,6 +159,7 @@ class Environment(Base):
     __tablename__ = "api_environments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(100))
     base_url: Mapped[str] = mapped_column(String(255))
     
@@ -175,6 +182,7 @@ class TestScenario(Base):
     __tablename__ = "test_scenarios"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     priority: Mapped[ScenarioPriority] = mapped_column(
         SQLEnum(ScenarioPriority), default=ScenarioPriority.P0
@@ -205,6 +213,7 @@ class ScenarioTestReport(Base):
     __tablename__ = "scenario_test_reports"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
     scenario_id: Mapped[int] = mapped_column(
         ForeignKey("test_scenarios.id", ondelete="CASCADE"), index=True
     )

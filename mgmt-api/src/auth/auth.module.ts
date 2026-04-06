@@ -5,6 +5,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RbacGuard } from './rbac.guard';
+import { PermissionGuard } from './permission.guard';
+import { RolesGuard } from './roles.guard';
+import { AuthService } from './auth.service';
 import { User, Tenant } from '../entities/user.entity';
 import { Menu } from '../entities/menu.entity';
 import { RbacService } from '../modules/rbac.service';
@@ -19,7 +23,7 @@ import { RbacService } from '../modules/rbac.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [JwtStrategy, JwtAuthGuard, RbacService],
-  exports: [JwtAuthGuard, RbacService],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, RbacGuard, PermissionGuard, RolesGuard, RbacService],
+  exports: [JwtAuthGuard, RbacGuard, RbacService],
 })
 export class AuthModule {}

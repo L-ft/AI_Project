@@ -27,7 +27,7 @@ export const useCaseGenerationStore = defineStore('caseGeneration', () => {
   const errorMessage = ref<string | null>(null)
   const uploadPercent = ref(0)
   const currentFileName = ref<string | null>(null)
-  const groupId = ref<number | null>(null)
+  const groupId = ref<string | null>(null)
 
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -53,7 +53,7 @@ export const useCaseGenerationStore = defineStore('caseGeneration', () => {
     keyPoints: KeyPoint[]
     cases: GeneratedCase[]
     errorMessage: string | null
-    groupId?: number | null
+    groupId?: string | null
   }) {
     progress.value = p.progress
     logs.value = [...p.logs]
@@ -99,7 +99,7 @@ export const useCaseGenerationStore = defineStore('caseGeneration', () => {
     onUploadProgress?: (percent: number) => void,
     duplicateOpts?: {
       duplicateAction?: 'overwrite' | 'new_version'
-      overwriteGroupId?: number
+      overwriteGroupId?: string
     }
   ) {
     reset()

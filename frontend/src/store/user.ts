@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
-    uid: localStorage.getItem('uid') ? Number(localStorage.getItem('uid')) : null,
+    uid: localStorage.getItem('uid') || null,
     username: localStorage.getItem('username') || '',
     phone: localStorage.getItem('phone') || '',
     role: localStorage.getItem('role') || '',
@@ -12,7 +12,7 @@ export const useUserStore = defineStore('user', {
     isLoggedIn: (state) => !!state.token
   },
   actions: {
-    setUserInfo(info: { uid: number, username: string, phone: string, role: string, token: string }) {
+    setUserInfo(info: { uid: string, username: string, phone: string, role: string, token: string }) {
       this.uid = info.uid
       this.username = info.username
       this.phone = info.phone

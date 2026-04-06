@@ -20,6 +20,9 @@ export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ unique: true, nullable: true })
+  code: string;
+
   @Column()
   tenant_id: number;
 

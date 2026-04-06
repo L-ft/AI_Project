@@ -59,7 +59,7 @@
                   :checked-value="1"
                   :unchecked-value="0"
                   @update:value="(val) => handleStatusToggle(user, val)"
-                  :disabled="user.id === 1"
+                  :disabled="isProtectedUser(user)"
                 >
                   <template #checked>启用</template>
                   <template #unchecked>禁用</template>
@@ -72,7 +72,7 @@
                   <n-button size="small" ghost type="primary" @click="handleEditUser(user)">编辑</n-button>
                   <n-button size="small" ghost type="info" @click="handleEditRole(user)">分配角色</n-button>
                   <n-button size="small" ghost type="warning" @click="handleOpenResetPwd(user)">重置密码</n-button>
-                  <n-button size="small" ghost type="error" @click="handleDelete(user)" :disabled="user.id === 1">删除</n-button>
+                  <n-button size="small" ghost type="error" @click="handleDelete(user)" :disabled="isProtectedUser(user)">删除</n-button>
                 </n-space>
               </td>
             </tr>
@@ -171,7 +171,7 @@ const filteredUsers = computed(() =>
 )
 
 const showAddModal = ref(false)
-const formValue = ref({ username: '', phone_number: '', password: '', role_id: 3, status: 1 })
+const formValue = ref({ username: '', phone_number: '', password: '', role_id: 'TESTER', status: 1 })
 const rules: FormRules = {
   username:     { required: true, message: '请输入用户名', trigger: 'blur' },
   phone_number: { required: true, message: '请输入手机号', trigger: 'blur' },
@@ -181,13 +181,13 @@ const rules: FormRules = {
 
 const showRoleModal = ref(false)
 const currentUser = ref<any>(null)
-const selectedRoleId = ref<number | null>(null)
+const selectedRoleId = ref<string | null>(null)
 
 const showResetPwdModal = ref(false)
 const newPassword = ref('')
 
 const showEditUserModal = ref(false)
-const editUserForm = ref({ id: 0, username: '', phone_number: '' })
+const editUserForm = ref({ id: '', username: '', phone_number: '' })
 
 const dialog = useDialog()
 const message = useMessage()
@@ -206,11 +206,14 @@ const loadData = async () => {
   }
 }
 
-const getRoleTagType = (roleId: number) => {
-  if (roleId === 1) return 'error'
-  if (roleId === 2) return 'warning'
+const getRoleTagType = (roleId: string) => {
+  const normalized = String(roleId || '').toUpperCase()
+  if (normalized === 'ADMIN') return 'error'
+  if (normalized === 'DEV') return 'warning'
   return 'info'
 }
+
+const isProtectedUser = (user: any) => String(user?.role_id || '').toUpperCase() === 'ADMIN'
 
 const submitAddUser = async () => {
   if (!formValue.value.username || !formValue.value.phone_number || !formValue.value.password) {
@@ -229,7 +232,7 @@ const submitAddUser = async () => {
 }
 
 const resetForm = () => {
-  formValue.value = { username: '', phone_number: '', password: '', role_id: 3, status: 1 }
+  formValue.value = { username: '', phone_number: '', password: '', role_id: 'TESTER', status: 1 }
 }
 
 const handleEditUser = (user: any) => {
@@ -244,7 +247,7 @@ const submitEditUser = async () => {
       username: editUserForm.value.username,
       phone_number: editUserForm.value.phone_number
     })
-    if (Number(editUserForm.value.id) === Number(userStore.uid)) {
+    if (String(editUserForm.value.id) === String(userStore.uid || '')) {
       message.loading('正在重置您的会话，请使用新手机号重新登录...', { duration: 2000 })
       setTimeout(() => { userStore.logout(); window.location.href = '/login' }, 1500)
     } else {
@@ -303,6 +306,10 @@ const submitRoleChange = async () => {
 }
 
 const handleDelete = (user: any) => {
+  if (isProtectedUser(user)) {
+    message.warning('管理员账号不可删除')
+    return
+  }
   dialog.warning({
     title: '确认删除',
     content: `确定要删除用户 ${user.username} 吗？此操作不可撤销。`,

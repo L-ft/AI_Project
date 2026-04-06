@@ -14,7 +14,7 @@ export class AccountController {
       apiCount: 42,
       projectCount: 5,
       recentExecutions: [
-        { id: 101, name: 'Login API Test', status: 'SUCCESS', time: '2026-01-17 10:00:00' }
+        { id: 'login-api-test-a', code: 'login-api-test-a', name: 'Login API Test', status: 'SUCCESS', time: '2026-01-17 10:00:00' }
       ]
     };
   }
@@ -34,7 +34,7 @@ export class AccountController {
   @Get('apikey/list')
   async listApiKeys(@Request() req) {
     return [
-      { id: 1, name: 'Production Key', apiKey: 'ai_5f7d...3a2b', isActive: true }
+      { id: 'production-key-a', code: 'production-key-a', name: 'Production Key', apiKey: 'ai_5f7d...3a2b', isActive: true }
     ];
   }
 }

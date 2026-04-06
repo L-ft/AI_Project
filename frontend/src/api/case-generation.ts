@@ -23,11 +23,13 @@ export interface JobStatusPayload {
   keyPoints: KeyPoint[]
   cases: GeneratedCase[]
   errorMessage: string | null
-  groupId?: number | null
+  groupId?: string | null
+  groupCode?: string | null
 }
 
 export interface ConflictGroupInfo {
-  id: number
+  id: string
+  code?: string
   docTitle: string
   version: number
   uploadTime: string | null
@@ -43,7 +45,8 @@ export interface ConflictPayload {
 
 export type CreateJobSuccess = {
   taskId: string
-  groupId: number
+  groupId: string
+  groupCode?: string
   fileHash?: string
 }
 
@@ -68,7 +71,7 @@ export async function createRequirementJob(
   opts?: {
     onProgress?: (percent: number) => void
     duplicateAction?: 'overwrite' | 'new_version'
-    overwriteGroupId?: number
+    overwriteGroupId?: string
   }
 ): Promise<CreateJobSuccess> {
   const fd = new FormData()
