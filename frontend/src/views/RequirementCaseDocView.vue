@@ -3,9 +3,9 @@
     <header class="req-doc-view-head">
       <n-breadcrumb>
         <n-breadcrumb-item>
-          <router-link to="/requirement-cases">需求用例</router-link>
+          <router-link to="/requirement-cases">智能用例生成</router-link>
         </n-breadcrumb-item>
-        <n-breadcrumb-item>需求生成用例</n-breadcrumb-item>
+        <n-breadcrumb-item>AI用例生成</n-breadcrumb-item>
         <n-breadcrumb-item>{{ breadcrumbTitle }}</n-breadcrumb-item>
       </n-breadcrumb>
       <n-text v-if="group?.uploadTime" depth="3" class="req-doc-view-meta">
@@ -57,7 +57,7 @@
           </n-gi>
 
           <n-gi :span="24" :l="14">
-            <n-card title="测试用例" size="small" :bordered="true" class="req-doc-panel">
+            <n-card title="生成用例" size="small" :bordered="true" class="req-doc-panel">
               <n-scrollbar class="req-doc-scroll">
                 <n-empty
                   v-if="!cases.length && group.status === 'done'"

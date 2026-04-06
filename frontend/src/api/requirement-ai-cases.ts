@@ -13,7 +13,7 @@ export interface RequirementAiCaseRow {
   steps: unknown[]
 }
 
-/** GET /test-cases/:id 返回的接口用例详情（需求用例的字段在 body_definition） */
+/** GET /test-cases/:id 返回的接口用例详情（AI 生成用例的扩展字段在 body_definition） */
 export interface ApiTestCaseDetail {
   id: number
   interface_id: number | null

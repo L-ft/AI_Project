@@ -108,12 +108,12 @@ const renderIcon = (icon: Component) => () => h(NIcon, null, { default: () => h(
 function buildRequirementChildren() {
   return [
     {
-      label: '需求生成用例',
+      label: 'AI用例生成',
       key: 'requirement-cases',
       icon: renderIcon(FileTextOutlined)
     },
     {
-      label: '测试用例',
+      label: 'AI生成用例记录',
       key: 'requirement-test-cases',
       icon: renderIcon(TableOutlined)
     }
@@ -131,7 +131,7 @@ const menuOptions = computed(() => [
     ]
   },
   {
-    label: '需求用例',
+    label: '智能用例生成',
     key: 'requirement',
     icon: renderIcon(FileTextOutlined),
     children: buildRequirementChildren()

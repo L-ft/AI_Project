@@ -2,7 +2,7 @@
   <div class="req-case-page">
     <header class="req-case-header">
       <div>
-        <h1 class="req-case-title">需求生成测试用例</h1>
+        <h1 class="req-case-title">AI用例生成</h1>
         <p class="req-case-desc">
           上传需求文档（.md / .txt），由执行引擎异步生成关键点与原子化用例；右侧可编辑、复制与删除。
         </p>
