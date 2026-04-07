@@ -75,10 +75,6 @@
                   <n-icon :component="PlusOutlined" :size="14" />
                   新建测试场景
                 </button>
-                <button type="button" class="it-hero-btn it-hero-btn--ghost" @click="activeView = 'scheduled'">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-                  新建定时任务
-                </button>
               </div>
             </div>
 
@@ -164,61 +160,8 @@
         </div>
       </transition>
 
-      <!-- ══ 定时任务视图 ══ -->
-      <template v-if="activeView === 'scheduled'">
-        <div class="content-panel">
-          <header class="main-header">
-            <div class="header-tabs">
-              <button :class="['htab', { active: scheduledTab === 'tasks' }]" @click="scheduledTab = 'tasks'">
-                定时任务
-                <span v-if="scheduledTab === 'tasks'" class="htab-underline" />
-              </button>
-              <button :class="['htab', { active: scheduledTab === 'history' }]" @click="scheduledTab = 'history'">
-                运行历史
-                <span v-if="scheduledTab === 'history'" class="htab-underline" />
-              </button>
-            </div>
-          </header>
-
-          <!-- 无 Runner 提示横幅 -->
-          <div class="runner-banner">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="#fa8c16" style="flex-shrink:0"><path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19h-17L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>
-            <span>没有部署 Runner。请 <a href="#" class="runner-link">在此处</a> 部署通用 Runner 后，再使用定时任务功能。</span>
-          </div>
-
-          <!-- 搜索 + 新建 -->
-          <div class="scheduled-toolbar">
-            <n-input v-model:value="scheduledSearch" placeholder="输入关键字进行搜索" size="small" clearable style="width:280px">
-              <template #suffix><n-icon :component="SearchOutlined" style="color:#a0aab8" /></template>
-            </n-input>
-            <n-button type="primary" size="small" class="new-btn-scheduled">
-              <template #icon><n-icon :component="PlusOutlined" /></template>
-              新建
-            </n-button>
-          </div>
-
-          <!-- 表头 -->
-          <div class="scheduled-table">
-            <div class="st-head">
-              <div class="st-col-name">任务信息</div>
-              <div class="st-col-enable">启用</div>
-              <div class="st-col-next">下次运行时间</div>
-            </div>
-            <div class="st-empty">
-              <div class="st-empty-icon">
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c0c8d8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>
-                </svg>
-              </div>
-              <div class="st-empty-text">暂无数据</div>
-              <a href="#" class="st-empty-link">了解定时任务 ↗</a>
-            </div>
-          </div>
-        </div>
-      </template>
-
       <!-- ══ 测试场景 / 测试报告视图 ══ -->
-      <template v-if="activeView !== 'welcome' && activeView !== 'scheduled'">
+      <template v-if="activeView !== 'welcome'">
 
       <!-- 测试报告视图 -->
       <template v-if="activeView === 'reports'">
@@ -1642,7 +1585,7 @@
       </div><!-- end content-panel -->
 
       </template><!-- end 测试场景 v-else -->
-      </template><!-- end v-else (非scheduled) -->
+      </template><!-- end activeView !== welcome -->
     </div><!-- end workspace-main -->
 
     <!-- ── 新建/编辑场景弹窗 ── -->
@@ -2228,11 +2171,9 @@ const userStore = useUserStore()
 
 // ── 基础状态 ──
 const activeView = ref('welcome')
-const scheduledTab = ref('tasks')
 const sidebarSearch = ref('')
 const sidebarSearch2 = ref('')
 const tableSearch = ref('')
-const scheduledSearch = ref('')
 const rptScope = ref('personal')
 const rptType = ref('all')
 const rptSearch = ref('')
@@ -11321,95 +11262,6 @@ onUnmounted(() => {
   display: flex; align-items: center; justify-content: center;
 }
 .rpt-empty-text { font-size: 14px; color: #a0aab8; }
-
-/* ════════════════════════════════════════
-   定时任务视图
-════════════════════════════════════════ */
-.runner-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 24px;
-  padding: 10px 16px;
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #7c5800;
-  flex-shrink: 0;
-}
-.runner-link {
-  color: #7d33ff;
-  text-decoration: none;
-  font-weight: 500;
-}
-.runner-link:hover { text-decoration: underline; }
-
-.scheduled-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 24px 10px;
-  flex-shrink: 0;
-}
-.new-btn-scheduled {
-  background: #7d33ff !important;
-  border-color: #7d33ff !important;
-  border-radius: 7px !important;
-}
-
-.scheduled-table {
-  flex: 1;
-  margin: 0 24px 20px;
-  background: #fff;
-  border-radius: 10px;
-  border: 1px solid #eaecf4;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.st-head {
-  display: grid;
-  grid-template-columns: 1fr 120px 200px;
-  padding: 0 20px;
-  min-height: 42px;
-  align-items: center;
-  background: #fafbfc;
-  border-bottom: 1px solid #f0f2f7;
-  font-size: 12px;
-  color: #8792a2;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-.st-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 60px 0;
-}
-.st-empty-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: #f5f6fb;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.st-empty-text {
-  font-size: 14px;
-  color: #a0aab8;
-}
-.st-empty-link {
-  font-size: 13px;
-  color: #7d33ff;
-  text-decoration: none;
-}
-.st-empty-link:hover { text-decoration: underline; }
 
 /* 弹窗 header */
 .modal-header {
