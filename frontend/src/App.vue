@@ -74,9 +74,21 @@ import {
 } from 'naive-ui'
 import { aiSenseTheme } from './theme/theme'
 import {
-  DashboardOutlined, CloudServerOutlined, LineChartOutlined,
-  UserOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  FileTextOutlined, TableOutlined
+  ApiOutlined,
+  ClockCircleOutlined,
+  CloudServerOutlined,
+  DashboardOutlined,
+  FileTextOutlined,
+  GlobalOutlined,
+  LineChartOutlined,
+  LogoutOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  TableOutlined,
+  TeamOutlined,
+  ThunderboltOutlined,
+  UserOutlined,
+  UsergroupAddOutlined
 } from '@vicons/antd'
 import { useUserStore } from './store/user'
 import { useRequirementGroupsStore } from './store/requirementGroups'
@@ -87,7 +99,7 @@ const router = useRouter()
 const userStore = useUserStore()
 const reqGroups = useRequirementGroupsStore()
 const collapsed = ref(false)
-const expandedKeys = ref<string[]>(['api-mgmt', 'requirement', 'auth-center'])
+const expandedKeys = ref<string[]>([])
 
 let groupsPoll: ReturnType<typeof setInterval> | null = null
 
@@ -125,10 +137,10 @@ const menuOptions = computed(() => [
   {
     label: '接口管理', key: 'api-mgmt', icon: renderIcon(CloudServerOutlined),
     children: [
-      { label: '单接口测试', key: 'interface-test' },
-      { label: '自动化测试', key: 'test-scenarios' },
-      { label: '环境管理', key: 'env-mgmt' },
-      { label: '定时任务', key: 'scheduled-tasks' }
+      { label: '单接口测试', key: 'interface-test', icon: renderIcon(ApiOutlined) },
+      { label: '自动化测试', key: 'test-scenarios', icon: renderIcon(ThunderboltOutlined) },
+      { label: '环境管理', key: 'env-mgmt', icon: renderIcon(GlobalOutlined) },
+      { label: '定时任务', key: 'scheduled-tasks', icon: renderIcon(ClockCircleOutlined) }
     ]
   },
   {
@@ -141,8 +153,8 @@ const menuOptions = computed(() => [
   {
     label: '认证中心', key: 'auth-center', icon: renderIcon(UserOutlined),
     children: [
-      { label: '角色管理', key: 'role-mgmt' },
-      { label: '用户管理', key: 'user-mgmt' }
+      { label: '角色管理', key: 'role-mgmt', icon: renderIcon(TeamOutlined) },
+      { label: '用户管理', key: 'user-mgmt', icon: renderIcon(UsergroupAddOutlined) }
     ]
   }
 ])
