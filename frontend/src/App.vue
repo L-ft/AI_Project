@@ -127,7 +127,8 @@ const menuOptions = computed(() => [
     children: [
       { label: '单接口测试', key: 'interface-test' },
       { label: '自动化测试', key: 'test-scenarios' },
-      { label: '环境管理', key: 'env-mgmt' }
+      { label: '环境管理', key: 'env-mgmt' },
+      { label: '定时任务', key: 'scheduled-tasks' }
     ]
   },
   {

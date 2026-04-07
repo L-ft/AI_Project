@@ -231,3 +231,45 @@ class ScenarioTestReport(Base):
     scenario: Mapped["TestScenario"] = relationship(
         "TestScenario", back_populates="test_reports"
     )
+
+
+class ScheduledTask(Base):
+    """按 Cron 调度执行自动化测试场景（服务端逐步调用执行器，与页面手动运行能力对齐）。"""
+
+    __tablename__ = "scheduled_tasks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    scenario_code: Mapped[str] = mapped_column(String(128), index=True)
+    cron_expression: Mapped[str] = mapped_column(String(128))
+    timezone: Mapped[str] = mapped_column(String(64), default="Asia/Shanghai")
+    enabled: Mapped[bool] = mapped_column(default=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    next_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    last_run_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    runs: Mapped[List["ScheduledTaskRun"]] = relationship(
+        "ScheduledTaskRun", back_populates="task", cascade="all, delete-orphan"
+    )
+
+
+class ScheduledTaskRun(Base):
+    """单次定时触发执行记录。"""
+
+    __tablename__ = "scheduled_task_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("scheduled_tasks.id", ondelete="CASCADE"), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="running")
+    message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    report_code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+
+    task: Mapped["ScheduledTask"] = relationship("ScheduledTask", back_populates="runs")

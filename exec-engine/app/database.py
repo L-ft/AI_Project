@@ -13,6 +13,7 @@ from .models.api_mgmt import (
     Interface,
     RequirementGroup,
     ScenarioTestReport,
+    ScheduledTask,
     TestCase,
     TestScenario,
 )
@@ -260,6 +261,7 @@ def init_db():
             "functional-case",
             lambda row: row.case_code or row.title,
         )
+        _assign_resource_codes(db, ScheduledTask, "sched-task", lambda row: row.name)
         _migrate_scenario_step_refs(db)
     finally:
         db.close()

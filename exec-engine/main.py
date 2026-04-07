@@ -1,4 +1,5 @@
 import os
+import threading
 import time
 from typing import Optional
 
@@ -9,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db
 from app.routers import (
     dashboard,
+    debug,
     environments,
     executor,
     folders,
@@ -16,10 +18,10 @@ from app.routers import (
     groups,
     interfaces,
     requirement_cases,
+    scheduled_tasks,
     test_cases,
     test_scenarios,
 )
-from app.routers import debug
 
 
 load_dotenv()
@@ -40,6 +42,18 @@ app.add_middleware(
 )
 
 
+def _scheduled_tasks_loop() -> None:
+    time.sleep(20)
+    from app.services.scheduled_task_runner import process_due_scheduled_tasks
+
+    while True:
+        try:
+            process_due_scheduled_tasks()
+        except Exception as exc:
+            print(f"定时任务调度异常: {exc}")
+        time.sleep(30)
+
+
 @app.on_event("startup")
 def startup_event():
     last_err: Optional[Exception] = None
@@ -47,6 +61,7 @@ def startup_event():
         try:
             init_db()
             print("数据库初始化成功")
+            threading.Thread(target=_scheduled_tasks_loop, daemon=True, name="scheduled-tasks").start()
             return
         except Exception as exc:
             last_err = exc
@@ -70,6 +85,7 @@ app.include_router(dashboard.router)
 app.include_router(requirement_cases.router)
 app.include_router(groups.router)
 app.include_router(functional_test_cases.router)
+app.include_router(scheduled_tasks.router)
 app.include_router(debug.router)
 
 

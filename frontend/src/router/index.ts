@@ -58,6 +58,11 @@ const router = createRouter({
       meta: { requiresAuth: true, role: 'TESTER' }
     },
     {
+      path: '/scheduled-tasks',
+      component: () => import('@/views/ScheduledTasks.vue'),
+      meta: { requiresAuth: true, role: 'TESTER' }
+    },
+    {
       path: '/role-mgmt',
       component: () => import('@/views/RoleManagement.vue'),
       meta: { requiresAuth: true, role: 'ADMIN' }
