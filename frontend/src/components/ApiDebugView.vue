@@ -106,7 +106,7 @@
             </div>
 
             <!-- JSON 编辑区域 -->
-            <div v-if="bodyType === 'json'" class="json-editor-container">
+            <div v-if="['json', 'text', 'xml'].includes(bodyType)" class="json-editor-container">
               <div class="json-toolbar">
                 <n-button size="tiny" secondary class="dynamic-value-btn">
                   <template #icon><n-icon :component="ThunderboltOutlined" /></template>
@@ -1800,20 +1800,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, computed, h, nextTick } from 'vue'
+import { ref, watch, onMounted, computed, h, nextTick, toRaw } from 'vue'
 import { 
   NInput, NButton, NButtonGroup, NInputGroup, NIcon, NSpace, NTabs, NTabPane, 
   NDataTable, NEmpty, NSwitch, NSelect, NInputNumber, NModal, NRadioGroup, NRadio, NCheckbox,
-  NTooltip, useMessage
+  NTooltip, useMessage,
 } from 'naive-ui'
-import type { DataTableColumns } from 'naive-ui'
 import { 
   DownOutlined, ThunderboltOutlined, InfoCircleOutlined, 
   CodeOutlined, FormatPainterOutlined, MenuOutlined,
   BugOutlined, ReloadOutlined, LinkOutlined, ShareAltOutlined,
   CheckCircleFilled, CloseCircleFilled, DownloadOutlined, CopyOutlined, SearchOutlined,
   DatabaseOutlined, RightOutlined, EllipsisOutlined, DeleteOutlined, UpOutlined,
-  QuestionCircleOutlined
+  QuestionCircleOutlined,
 } from '@vicons/antd'
 import execRequest from '../api/exec-request'
 
@@ -4113,17 +4112,53 @@ const bodyTypeOptions = [
   { label: 'msgpack', value: 'msgpack' },
 ]
 
+function pickBodyDefinition(data: Record<string, any>) {
+  let bd: any = data.body_definition ?? data.bodyDefinition
+  if (bd == null) return { type: 'none', content: '' }
+  if (typeof bd === 'string') {
+    try {
+      bd = JSON.parse(bd)
+    } catch {
+      return { type: 'none', content: '' }
+    }
+  }
+  if (typeof bd !== 'object') return { type: 'none', content: '' }
+  try {
+    bd = JSON.parse(JSON.stringify(toRaw(bd)))
+  } catch {
+    bd = toRaw(bd) as Record<string, any>
+  }
+  const c = bd.content != null ? (typeof bd.content === 'string' ? bd.content : JSON.stringify(bd.content, null, 2)) : ''
+  const cTrim = c.trim()
+  let t =
+    bd.type != null && String(bd.type).trim() !== ''
+      ? String(bd.type).trim().toLowerCase()
+      : 'none'
+  // 与 bodyTypeOptions 对齐；避免存成 JSON 大写导致 includes 失败而不渲染编辑器
+  if (t === 'json' || t === 'application/json' || t.endsWith('+json')) t = 'json'
+  if (t === 'xml' || t.includes('xml')) t = 'xml'
+  if (t === 'text' || t === 'plain' || t === 'text/plain') t = 'text'
+  // type 为 none/空但已有正文时，按内容推断，否则会出现「有 content 仍走 none 分支」页面像没数据
+  if ((t === 'none' || t === '') && cTrim) {
+    if (cTrim.startsWith('{') || cTrim.startsWith('[')) t = 'json'
+    else t = 'text'
+  }
+  return { type: t, content: c }
+}
+
 const initData = (data: any) => {
   if (!data) return
   editableName.value = data.label || data.name || ''
   method.value = data.method || 'GET'
   path.value = data.path || ''
-  
-  queryParams.value = Array.isArray(data.query_params)
-    ? data.query_params.map((item: any, i: number) => ensureParamRow(item, i))
+
+  const qp = data.query_params ?? data.queryParams
+  const hp = data.header_params ?? data.headerParams
+  queryParams.value = Array.isArray(qp)
+    ? qp.map((item: any, i: number) => ensureParamRow(item, i))
     : []
-  headerParams.value = Array.isArray(data.header_params)
-    ? data.header_params.map((item: any, i: number) => ensureParamRow(item, i))
+  headerParams.value = Array.isArray(hp)
+    ? hp.map((item: any, i: number) => ensureParamRow(item, i))
     : []
   preOperations.value = Array.isArray(data.pre_operations)
     ? data.pre_operations.map((item: any) => normalizePreOperation(item))
@@ -4131,21 +4166,30 @@ const initData = (data: any) => {
   postOperations.value = Array.isArray(data.post_operations)
     ? data.post_operations.map((item: any) => normalizePostOperation(item))
     : []
-  
-  bodyType.value = data.body_definition?.type || 'json'
-  bodyJsonContent.value = data.body_definition?.content || ''
+
+  const bd = pickBodyDefinition(data)
+  // 禁止 bd.type || 'json'：当 type 为字符串 'none' 时也是 truthy，会错误保持 none，导致 JSON 编辑区不渲染
+  bodyType.value = bd.type
+  bodyJsonContent.value = bd.content ?? ''
 }
 
-watch(() => props.data, (newData) => {
-  initData(newData)
-}, { immediate: true, deep: true })
+watch(
+  () => {
+    const d = props.data
+    if (!d) return null
+    return [d.id ?? d.code, d.body_definition, d.bodyDefinition]
+  },
+  () => {
+    if (props.data) initData(props.data)
+  },
+  { deep: true, immediate: true },
+)
 
 watch(() => props.envId, () => {
   fetchHeaderVariableNames()
 }, { immediate: true })
 
 onMounted(() => {
-  initData(props.data)
   fetchHeaderVariableNames()
 })
 </script>
@@ -4205,6 +4249,7 @@ onMounted(() => {
 .method-btn.get { color: #52c41a; }
 .method-btn.put { color: #1890ff; }
 .method-btn.delete { color: #ff4d4f; }
+.method-btn.patch { color: #722ed1; }
 
 .url-input-wrapper {
   display: flex;

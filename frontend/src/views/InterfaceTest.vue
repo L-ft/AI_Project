@@ -73,24 +73,130 @@
       >
         <template #icon><n-icon :component="ApiOutlined" :size="18" /></template>
         <template #right>
-          <div v-if="tabs.length > 0" class="it-topbar-env">
-            <span class="it-topbar-env-label">运行环境</span>
-            <n-select
-              v-model:value="selectedEnvId"
-              placeholder="选择环境"
-              size="small"
-              style="width: 150px"
-              :options="envOptions"
-            />
-          </div>
-          <div v-else class="it-topbar-pills">
-            <span class="it-topbar-pill it-topbar-pill--green">
-              <i class="it-pill-dot"></i>服务在线
-            </span>
-            <span class="it-topbar-pill">{{ stats.total }} 个接口</span>
-          </div>
+          <n-space align="center" :size="12" :wrap="false">
+            <n-button secondary size="small" class="it-topbar-import-btn" @click="openImportModal">
+              <template #icon><n-icon :component="UploadOutlined" :size="16" /></template>
+              导入
+            </n-button>
+            <div v-if="tabs.length > 0" class="it-topbar-env">
+              <span class="it-topbar-env-label">运行环境</span>
+              <n-select
+                v-model:value="selectedEnvId"
+                placeholder="选择环境"
+                size="small"
+                style="width: 150px"
+                :options="envOptions"
+              />
+            </div>
+            <div v-else class="it-topbar-pills">
+              <span class="it-topbar-pill it-topbar-pill--green">
+                <i class="it-pill-dot"></i>服务在线
+              </span>
+              <span class="it-topbar-pill">{{ stats.total }} 个接口</span>
+            </div>
+          </n-space>
         </template>
       </PageTopbar>
+
+      <!-- 导入接口（OpenAPI / Postman / HAR / cURL）— 顶栏入口，解析后导入到所选目录 -->
+      <n-modal
+        v-model:show="showImportModal"
+        preset="card"
+        title="导入接口"
+        class="it-api-import-modal"
+        :style="{ width: '720px', maxWidth: '96vw', borderRadius: '12px' }"
+        :segmented="{ content: 'soft' }"
+        @after-leave="resetImportModal"
+      >
+        <n-spin :show="importLoading || importSaving">
+          <div class="it-api-import-body">
+            <div class="it-api-import-hint">
+              选择格式后上传文件或粘贴内容，点击「解析」识别全部接口；再<strong>必选目标目录</strong>，将文件中<strong>所有接口</strong>一次性写入目录树（含路径/Query/Header/Body 等）。
+            </div>
+            <div class="it-api-import-row">
+              <span class="it-api-import-label">格式</span>
+              <n-select
+                v-model:value="importFormat"
+                :options="importFormatOptions"
+                size="small"
+                style="width: 220px"
+              />
+            </div>
+            <div class="it-api-import-row">
+              <span class="it-api-import-label">文件</span>
+              <input
+                type="file"
+                accept=".json,.yaml,.yml,.har,.txt"
+                class="it-api-import-file-input"
+                @change="onImportFileChange"
+              />
+            </div>
+            <n-input
+              v-model:value="importText"
+              type="textarea"
+              placeholder="将 OpenAPI / Postman 导出 / HAR / cURL 粘贴到此处…"
+              :autosize="{ minRows: 8, maxRows: 16 }"
+              class="it-api-import-textarea"
+            />
+            <div class="it-api-import-actions">
+              <n-button size="small" :loading="importLoading" :disabled="importSaving" type="primary" color="#7D33FF" @click="runImportPreview">
+                解析
+              </n-button>
+            </div>
+            <template v-if="importItems.length > 0">
+              <div class="it-api-import-row it-api-import-folder-row">
+                <span class="it-api-import-label">目录</span>
+                <n-select
+                  v-model:value="importTargetFolderId"
+                  :options="importFolderOptions"
+                  placeholder="请选择要导入到的目录"
+                  filterable
+                  size="small"
+                  class="it-api-import-folder-select"
+                />
+              </div>
+              <div class="it-api-import-result-head">
+                共解析 <strong>{{ importItems.length }}</strong> 个接口（预览如下，确认目录后一次性全部导入）
+                <div
+                  v-if="importFormat === 'openapi' && (importMeta.paths_key_count != null || importMeta.operations_parsed != null)"
+                  class="it-api-import-meta"
+                >
+                  文档 paths 键数量：<strong>{{ importMeta.paths_key_count ?? '—' }}</strong>，
+                  解析出的 HTTP 操作数：<strong>{{ importMeta.operations_parsed ?? importItems.length }}</strong>
+                  <span v-if="importMeta.paths_keys_sample?.length" class="it-api-import-meta-sample">
+                    （示例路径：{{ importMeta.paths_keys_sample.slice(0, 8).join('、') }}<template v-if="(importMeta.paths_keys_sample?.length || 0) > 8">…</template>）
+                  </span>
+                </div>
+                <div v-if="importPayloadSummary" class="it-api-import-meta it-api-import-payload-summary">
+                  {{ importPayloadSummary }}
+                </div>
+              </div>
+              <n-data-table
+                class="it-import-result-table"
+                size="small"
+                :columns="importResultColumns"
+                :data="importPreviewRows"
+                :row-key="(row: any) => row._key"
+                :max-height="280"
+                :bordered="true"
+                :single-line="false"
+              />
+              <div class="it-api-import-footer-actions">
+                <n-button @click="showImportModal = false">关闭</n-button>
+                <n-button
+                  type="primary"
+                  color="#7D33FF"
+                  :disabled="importTargetFolderId === undefined || importTargetFolderId === null"
+                  :loading="importSaving"
+                  @click="importAllParsedToTree"
+                >
+                  导入全部到所选目录（{{ importItems.length }}）
+                </n-button>
+              </div>
+            </template>
+          </div>
+        </n-spin>
+      </n-modal>
 
       <!-- 主内容 -->
       <div class="it-content-area">
@@ -118,11 +224,12 @@
                     type="line"
                     class="sub-nav-tabs"
                     justify-content="start"
-                    :value="subTabByTabKey[tab.key] ?? (tab.isTestCase ? 'debug' : 'design')"
+                    :value="subTabByTabKey[tab.key] ?? (tab.isTestCase ? 'debug' : tab.isNew ? 'design' : 'debug')"
                     @update:value="(v) => { subTabByTabKey[tab.key] = v }"
                   >
                     <n-tab-pane v-if="!tab.isTestCase" name="design" tab="编辑">
                       <ApiDesignView
+                        :key="`design-${tab.key}`"
                         :data="tab"
                         :env-base-url="selectedEnvBaseUrl"
                         @switch-debug="handleSwitchToDebug(tab.key)"
@@ -130,6 +237,7 @@
                     </n-tab-pane>
                     <n-tab-pane name="debug" :tab="tab.isTestCase ? tab.label : '调试'">
                       <ApiDebugView
+                        :key="`debug-${tab.key}`"
                         :data="tab"
                         :env-base-url="selectedEnvBaseUrl"
                         :env-id="selectedEnvId"
@@ -272,17 +380,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, h } from 'vue'
+import { ref, reactive, onMounted, computed, h, nextTick } from 'vue'
 import {
   NTabs, NTabPane, NIcon, NSelect, NLayout, NLayoutSider,
-  NTree, NDropdown, useMessage, useDialog
+  NTree, NDropdown, useMessage, useDialog,
+  NButton, NModal, NInput, NSpin, NDataTable, NSpace,
 } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import {
   ThunderboltOutlined, CloudOutlined, DatabaseOutlined,
   PlusOutlined, EditOutlined, DeleteOutlined,
   FolderOutlined, FolderOpenOutlined, FileTextOutlined,
   ApiOutlined, CheckCircleOutlined, ClockCircleOutlined,
-  PieChartOutlined, FolderAddOutlined
+  PieChartOutlined, FolderAddOutlined, UploadOutlined,
 } from '@vicons/antd'
 import ApiDesignView from '../components/ApiDesignView.vue'
 import ApiDebugView from '../components/ApiDebugView.vue'
@@ -290,9 +400,237 @@ import ApiTestCaseView from '../components/ApiTestCaseView.vue'
 import NewFolderModal from '../components/NewFolderModal.vue'
 import PageTopbar from '../components/PageTopbar.vue'
 import execRequest from '../api/exec-request'
+import { previewApiImport } from '../api/api-import'
 
 const message = useMessage()
 const dialog = useDialog()
+
+// ── 顶栏：导入接口 ──
+const showImportModal = ref(false)
+const importFormat = ref<'openapi' | 'postman' | 'har' | 'curl'>('openapi')
+const importFormatOptions = [
+  { label: 'OpenAPI / Swagger', value: 'openapi' },
+  { label: 'Postman Collection', value: 'postman' },
+  { label: 'HAR', value: 'har' },
+  { label: 'cURL', value: 'curl' },
+]
+const importText = ref('')
+const importLoading = ref(false)
+const importSaving = ref(false)
+const importItems = ref<any[]>([])
+/** OpenAPI 解析诊断：paths 键数 vs 实际操作数 */
+const importMeta = ref<Record<string, any>>({})
+/** 解析成功后必选：导入到该目录（或根目录） */
+const importTargetFolderId = ref<number | 'root' | undefined>(undefined)
+
+const importPreviewRows = computed(() =>
+  importItems.value.map((it, idx) => ({
+    ...it,
+    _key: `import-row-${idx}`,
+  })),
+)
+
+/** 解析结果摘要（便于确认 Body/Headers 是否被识别，尤其 cURL 多行 --data-raw） */
+const importPayloadSummary = computed(() => {
+  const items = importItems.value
+  if (!items.length) return ''
+  const first = items[0]
+  const bd = first.body_definition || {}
+  const hcnt = Array.isArray(first.header_params) ? first.header_params.length : 0
+  const qcnt =
+    (Array.isArray(first.query_params) ? first.query_params.length : 0) +
+    (Array.isArray(first.path_params) ? first.path_params.length : 0)
+  const ctype = (bd.type != null && bd.type !== '' ? String(bd.type) : 'none').toLowerCase()
+  const raw = String(bd.content ?? '').trim()
+  const bodyHint =
+    ctype === 'none' || !raw
+      ? 'Body：未识别（none）'
+      : `Body：${ctype}，约 ${raw.length} 字符`
+  const more = items.length > 1 ? `；另有 ${items.length - 1} 条` : ''
+  return `${bodyHint} · Query/Path：${qcnt} 条 · Header：${hcnt} 条${more}（Query/Path 仅 URL ? 与路径占位；POST 的 JSON 在「调试 → Body」）`
+})
+
+const importResultColumns: DataTableColumns<any> = [
+  {
+    title: '名称',
+    key: 'name',
+    width: 240,
+    render(_row, rowIndex) {
+      return h(NInput, {
+        value: importItems.value[rowIndex]?.name ?? '',
+        size: 'small',
+        placeholder: '可修改，避免与已有接口重名',
+        maxlength: 255,
+        class: 'it-import-name-input',
+        onUpdateValue: (v: string) => {
+          const it = importItems.value[rowIndex]
+          if (it) it.name = v
+        },
+      })
+    },
+  },
+  { title: '方法', key: 'method', width: 72 },
+  { title: '路径', key: 'path', ellipsis: { tooltip: true } },
+]
+
+function resetImportModal() {
+  importText.value = ''
+  importItems.value = []
+  importMeta.value = {}
+  importTargetFolderId.value = undefined
+  importLoading.value = false
+  importSaving.value = false
+}
+
+async function openImportModal() {
+  resetImportModal()
+  showImportModal.value = true
+  try {
+    await fetchTreeData()
+  } catch {
+    /* noop */
+  }
+}
+
+async function onImportFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = async () => {
+    importText.value = String(reader.result || '')
+    message.success(`已读取 ${file.name}，正在解析…`)
+    await nextTick()
+    await runImportPreview()
+  }
+  reader.readAsText(file)
+  input.value = ''
+}
+
+async function runImportPreview() {
+  const content = importText.value.trim()
+  if (!content) {
+    message.warning('请先粘贴内容或选择文件')
+    return
+  }
+  importLoading.value = true
+  importItems.value = []
+  importMeta.value = {}
+  importTargetFolderId.value = undefined
+  try {
+    const res = await previewApiImport(importFormat.value, content)
+    importItems.value = res.items || []
+    importMeta.value = (res.meta || {}) as Record<string, any>
+    const ff = findFirstFolder(treeData.value)
+    importTargetFolderId.value = ff?.id != null ? ff.id : 'root'
+    const pk = importMeta.value.paths_key_count
+    const op = importMeta.value.operations_parsed
+    const hint =
+      importFormat.value === 'openapi' && pk != null && op != null
+        ? `（文档 paths 键：${pk}，操作数：${op}）`
+        : ''
+    message.success(`解析成功，共 ${importItems.value.length} 个接口${hint}，请选择目标目录后导入`)
+    const first = importItems.value[0]
+    const bd = first?.body_definition
+    const raw = String(bd?.content ?? '').trim()
+    if (
+      importFormat.value === 'curl' &&
+      (!bd || (bd.type === 'none' || !bd.type) || !raw)
+    ) {
+      message.warning(
+        '未从 cURL 中识别到 Body：请确认整段命令已粘贴（含 --data-raw 与首尾单引号），并重启后端服务后再试',
+        { duration: 6500 },
+      )
+    }
+  } catch (err) {
+    console.error(err)
+    message.error('解析失败，请检查格式与内容')
+  } finally {
+    importLoading.value = false
+  }
+}
+
+function findFirstFolder(nodes: TreeNode[]): TreeNode | null {
+  for (const n of nodes) {
+    if (n.type === 'folder') return n
+    if (n.children?.length) {
+      const f = findFirstFolder(n.children)
+      if (f) return f
+    }
+  }
+  return null
+}
+
+function stripInternalKeys(rows: any[]) {
+  return (rows || []).map(({ key: _rowKey, ...rest }: any) => rest)
+}
+
+function buildInterfaceCreatePayload(item: any, folderId: number | null) {
+  const bd = item.body_definition || { type: 'none', content: '' }
+  const allowed = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+  let method = String(item.method || 'GET').toUpperCase()
+  if (!allowed.has(method)) method = 'GET'
+  const mergedQuery = [
+    ...(Array.isArray(item.query_params) ? item.query_params : []),
+    ...(Array.isArray(item.path_params) ? item.path_params : []),
+  ]
+  let content = ''
+  if (bd.content != null && bd.content !== '') {
+    content = typeof bd.content === 'string' ? bd.content : JSON.stringify(bd.content, null, 2)
+  }
+  return {
+    name: String(item.name || `${item.method} ${item.path}`).slice(0, 255),
+    method,
+    path: item.path || '/',
+    folder_id: folderId ?? 0,
+    status: 'developing',
+    owner: 'admin',
+    query_params: stripInternalKeys(mergedQuery),
+    header_params: stripInternalKeys(item.header_params || []),
+    body_definition: {
+      type: bd.type || 'none',
+      content,
+    },
+  }
+}
+
+async function createInterfacesInTree(items: any[]) {
+  if (items.length === 0) return
+  if (importTargetFolderId.value === undefined || importTargetFolderId.value === null) {
+    message.warning('请选择目标目录')
+    return
+  }
+  importSaving.value = true
+  const folderId =
+    importTargetFolderId.value === 'root' ? null : (importTargetFolderId.value as number)
+  let ok = 0
+  try {
+    for (const item of items) {
+      const payload = buildInterfaceCreatePayload(item, folderId)
+      try {
+        await execRequest.post('/interfaces', payload)
+        ok++
+      } catch (err) {
+        console.error(err)
+        message.error(`「${payload.name}」导入失败，可能重名或参数无效`)
+      }
+    }
+    if (ok > 0) {
+      message.success(`已导入 ${ok} 个接口到目录树`)
+      await fetchTreeData()
+      showImportModal.value = false
+    } else {
+      message.warning('没有成功导入任何接口，请检查名称是否重复或网络')
+    }
+  } finally {
+    importSaving.value = false
+  }
+}
+
+async function importAllParsedToTree() {
+  if (importItems.value.length === 0) return
+  await createInterfacesInTree([...importItems.value])
+}
 
 const activeKey = ref('')
 const tabs = ref<any[]>([])
@@ -348,6 +686,23 @@ const editFolderData = ref<any>(null)
 const selectedKeys = ref<string[]>([])
 const expandedKeys = ref<string[]>([])
 const treeData = ref<TreeNode[]>([])
+
+const importFolderOptions = computed(() => {
+  const opts: { label: string; value: number | 'root' }[] = [
+    { label: '根目录（顶层，未分组）', value: 'root' },
+  ]
+  const walk = (nodes: TreeNode[], depth: number) => {
+    for (const n of nodes) {
+      if (n.type === 'folder' && n.id != null) {
+        const pad = '　'.repeat(depth) + (depth ? '└ ' : '')
+        opts.push({ label: `${pad}${n.label}`, value: n.id })
+        if (n.children?.length) walk(n.children, depth + 1)
+      }
+    }
+  }
+  walk(treeData.value, 0)
+  return opts
+})
 
 const newOptions = [
   { label: '新建接口', key: 'api', icon: () => h(NIcon, { component: ApiOutlined }) },
@@ -496,6 +851,7 @@ const renderSuffix = ({ option }: { option: any }) => {
 const nodeProps = () => ({})
 
 const handleSelect = (keys: string[], options: any[]) => {
+  selectedKeys.value = keys
   const node = options[0]
   if (node?.type === 'api' || node?.type === 'status') addTab(node)
 }
@@ -568,16 +924,24 @@ const addTab = async (node: any) => {
       try {
         const res: any = await execRequest.get(`/interfaces/${node.id}`)
         if (res) {
-          fullData = { ...fullData, ...res, label: res.name || node.label,
-            query_params: res.query_params || [], header_params: res.header_params || [],
-            body_definition: res.body_definition || { type: 'none' } }
+          const bd = res.body_definition ?? res.bodyDefinition
+          fullData = {
+            ...fullData,
+            ...res,
+            label: res.name || node.label,
+            query_params: res.query_params ?? res.queryParams ?? [],
+            header_params: res.header_params ?? res.headerParams ?? [],
+            body_definition: bd != null ? bd : { type: 'none', content: '' },
+          }
+          normalizeTabBodyDefinition(fullData)
         }
       } catch { message.error('获取接口详情失败') }
     } else {
       fullData = { ...fullData, query_params: [], header_params: [], body_definition: { type: 'none' } }
     }
     tabs.value.push(fullData)
-    subTabByTabKey[fullData.key] = fullData.isTestCase ? 'debug' : 'design'
+    // 已落库的接口默认进「调试」便于看 Params/Body/Headers；未保存的新建接口仍进「编辑」
+    subTabByTabKey[fullData.key] = fullData.isTestCase ? 'debug' : fullData.isNew ? 'design' : 'debug'
   }
   activeKey.value = node.key
 }
@@ -592,6 +956,27 @@ const removeTab = (key: string) => {
 }
 
 const handleSwitchToDebug = (tabKey: string) => { subTabByTabKey[tabKey] = 'debug' }
+
+/** 拉取接口详情后统一 body_definition，避免 content 为对象/双格式导致编辑/调试展示为空 */
+function normalizeTabBodyDefinition(row: Record<string, any>) {
+  const bd = row.body_definition ?? row.bodyDefinition
+  if (bd == null) return
+  let parsed: any = bd
+  if (typeof bd === 'string') {
+    try {
+      parsed = JSON.parse(bd)
+    } catch {
+      return
+    }
+  }
+  if (typeof parsed !== 'object') return
+  const c = parsed.content
+  const content = c == null ? '' : typeof c === 'string' ? c : JSON.stringify(c, null, 2)
+  row.body_definition = {
+    type: parsed.type || 'none',
+    content,
+  }
+}
 
 const loadEnvironments = async () => {
   try {
@@ -889,6 +1274,97 @@ onMounted(() => { loadEnvironments(); fetchTreeData() })
 }
 
 /* ── Topbar 右侧控件 ── */
+.it-topbar-import-btn {
+  flex-shrink: 0;
+}
+
+.it-api-import-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.it-api-import-hint {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.it-api-import-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.it-api-import-label {
+  width: 40px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: #334155;
+}
+
+.it-api-import-folder-row {
+  align-items: flex-start;
+}
+
+.it-api-import-folder-select {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.it-api-import-file-input {
+  font-size: 12px;
+  max-width: 100%;
+}
+
+.it-api-import-textarea :deep(textarea) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.it-api-import-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.it-api-import-result-head {
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+  margin-top: 4px;
+}
+
+.it-api-import-meta {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.it-api-import-meta-sample {
+  display: block;
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+.it-api-import-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.it-import-result-table :deep(tr.import-row-selected td) {
+  background: rgba(125, 51, 255, 0.07) !important;
+}
+
+.it-import-name-input {
+  width: 100%;
+  min-width: 0;
+}
+
 .it-topbar-env {
   display: flex;
   align-items: center;

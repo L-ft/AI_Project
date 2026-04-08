@@ -13,8 +13,12 @@ const execRequest = createHttpClient({
   baseURL: getExecEngineBaseURL(),
   timeout: 30000,
   unwrapResponse: (response) => {
-    const res = response.data as { code?: number; data?: unknown }
-    if (res?.code === 200) {
+    const res = response.data as { code?: number | string; data?: unknown; msg?: string }
+    // 后端 ResponseModel 的 code 一般为数字 200；若被序列化成字符串 "200"，严格 === 会失败，
+    // 导致整包 { code, data, msg } 原样返回，body_definition 落在 res.data 里，前端拿不到
+    const code = res?.code
+    const codeOk = code === undefined || code === null || Number(code) === 200
+    if (res && typeof res === 'object' && 'data' in res && codeOk) {
       return res.data
     }
     return res

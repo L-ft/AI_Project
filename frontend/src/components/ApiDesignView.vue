@@ -212,14 +212,33 @@ const headerParams = ref<any[]>([])
 const bodyType = ref('none')
 const bodyJsonContent = ref('')
 
+/** 与 ApiDebugView 一致：兼容 bodyDefinition、content 为对象、整段为 JSON 字符串，避免编辑页显示空 Body 后保存把服务端覆盖成空 */
+function pickBodyDefinitionForDesign(data: Record<string, any>) {
+  let bd: any = data.body_definition ?? data.bodyDefinition
+  if (bd == null) return { type: 'none', content: '' }
+  if (typeof bd === 'string') {
+    try {
+      bd = JSON.parse(bd)
+    } catch {
+      return { type: 'none', content: '' }
+    }
+  }
+  if (typeof bd !== 'object') return { type: 'none', content: '' }
+  const t = bd.type != null && bd.type !== '' ? String(bd.type) : 'none'
+  const c = bd.content != null ? (typeof bd.content === 'string' ? bd.content : JSON.stringify(bd.content, null, 2)) : ''
+  return { type: t, content: c }
+}
+
 const initData = (data: any) => {
   if (!data) return
   method.value = data.method || 'GET'
   path.value = data.path || ''
   apiName.value = data.label || data.name || '新建 HTTP 接口'
-  
-  queryParams.value = Array.isArray(data.query_params)
-    ? data.query_params.map((item: any, index: number) => ({
+
+  const qp = data.query_params ?? data.queryParams
+  const hp = data.header_params ?? data.headerParams
+  queryParams.value = Array.isArray(qp)
+    ? qp.map((item: any, index: number) => ({
         key: `${Date.now()}-${index}-${Math.random()}`,
         name: item?.name || '',
         type: item?.type || 'string',
@@ -227,9 +246,9 @@ const initData = (data: any) => {
         desc: item?.desc || ''
       }))
     : []
-    
-  headerParams.value = Array.isArray(data.header_params)
-    ? data.header_params.map((item: any, index: number) => ({
+
+  headerParams.value = Array.isArray(hp)
+    ? hp.map((item: any, index: number) => ({
         key: `${Date.now()}-${index}-${Math.random()}`,
         name: item?.name || '',
         type: item?.type || 'string',
@@ -237,11 +256,10 @@ const initData = (data: any) => {
         desc: item?.desc || ''
       }))
     : []
-    
-  bodyType.value = data.body_definition?.type || 'none'
-  bodyJsonContent.value = typeof data.body_definition?.content === 'string'
-    ? data.body_definition.content
-    : ''
+
+  const bd = pickBodyDefinitionForDesign(data)
+  bodyType.value = bd.type || 'none'
+  bodyJsonContent.value = bd.content || ''
 }
 
 // 监听 props.data 的变化，自动更新内部状态

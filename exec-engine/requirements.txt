@@ -12,3 +12,4 @@ faker
 httpx
 openpyxl
 croniter
+PyYAML>=6.0.1

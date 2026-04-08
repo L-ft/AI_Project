@@ -194,6 +194,7 @@ class InterfaceService:
             "queryParams": interface.query_params,
             "header_params": interface.header_params,
             "headerParams": interface.header_params,
+            # 与 queryParams 相同：同时给 snake_case / camelCase，便于不同前端约定；值是同一份，不是重复存储
             "body_definition": interface.body_definition,
             "bodyDefinition": interface.body_definition,
             "post_operations": interface.post_operations,

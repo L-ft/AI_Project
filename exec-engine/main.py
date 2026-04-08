@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.routers import (
+    api_import,
     dashboard,
     debug,
     environments,
@@ -86,6 +87,7 @@ app.include_router(requirement_cases.router)
 app.include_router(groups.router)
 app.include_router(functional_test_cases.router)
 app.include_router(scheduled_tasks.router)
+app.include_router(api_import.router)
 app.include_router(debug.router)
 
 
