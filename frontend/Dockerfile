@@ -7,8 +7,10 @@ COPY . .
 # 或复制 .env.production（见 .env.production.domain.example）
 ARG VITE_MGMT_API_URL
 ARG VITE_EXEC_ENGINE_URL
+ARG VITE_DATA_BUILDER_URL
 ENV VITE_MGMT_API_URL=$VITE_MGMT_API_URL
 ENV VITE_EXEC_ENGINE_URL=$VITE_EXEC_ENGINE_URL
+ENV VITE_DATA_BUILDER_URL=$VITE_DATA_BUILDER_URL
 RUN npm run build
 
 FROM nginx:stable-alpine as production-stage

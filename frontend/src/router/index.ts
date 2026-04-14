@@ -63,6 +63,11 @@ const router = createRouter({
       meta: { requiresAuth: true, role: 'TESTER' }
     },
     {
+      path: '/data-builder',
+      component: () => import('@/views/DataBuilder.vue'),
+      meta: { requiresAuth: true, role: 'TESTER' }
+    },
+    {
       path: '/role-mgmt',
       component: () => import('@/views/RoleManagement.vue'),
       meta: { requiresAuth: true, role: 'ADMIN' }

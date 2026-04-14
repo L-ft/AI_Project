@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_MGMT_API_URL?: string
   readonly VITE_EXEC_ENGINE_URL?: string
+  readonly VITE_DATA_BUILDER_URL?: string
 }
 
 interface ImportMeta {

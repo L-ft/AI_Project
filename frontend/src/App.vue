@@ -78,6 +78,7 @@ import {
   ClockCircleOutlined,
   CloudServerOutlined,
   DashboardOutlined,
+  DatabaseOutlined,
   FileTextOutlined,
   GlobalOutlined,
   LineChartOutlined,
@@ -140,7 +141,8 @@ const menuOptions = computed(() => [
       { label: '单接口测试', key: 'interface-test', icon: renderIcon(ApiOutlined) },
       { label: '自动化测试', key: 'test-scenarios', icon: renderIcon(ThunderboltOutlined) },
       { label: '环境管理', key: 'env-mgmt', icon: renderIcon(GlobalOutlined) },
-      { label: '定时任务', key: 'scheduled-tasks', icon: renderIcon(ClockCircleOutlined) }
+      { label: '定时任务', key: 'scheduled-tasks', icon: renderIcon(ClockCircleOutlined) },
+      { label: '智能造数', key: 'data-builder', icon: renderIcon(DatabaseOutlined) }
     ]
   },
   {
