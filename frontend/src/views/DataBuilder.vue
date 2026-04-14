@@ -24,8 +24,20 @@
         </n-alert>
 
         <n-tabs v-model:value="activeTab" type="line" animated class="main-tabs">
-          <n-tab-pane name="conn" tab="连接配置">
+                   <n-tab-pane name="conn" tab="连接配置">
             <n-card title="MySQL 目标库" size="small" class="panel-card">
+              <n-alert v-if="connRestoredFromLocal" type="info" title="已恢复本地配置" closable style="margin-bottom: 12px" @close="connRestoredFromLocal = false">
+                已从浏览器本地读取上次<strong>连接成功</strong>时保存的配置。请再点一次「测试连接」确认当前环境可用后再继续。
+              </n-alert>
+              <n-alert type="warning" title="连接行为说明" style="margin-bottom: 12px">
+                后端会严格按表单里填写的主机、端口、用户名、密码、数据库去发起连接，不会从项目配置里替你改写目标库。
+                为了让 Docker 部署下的体验更接近常见 MySQL 客户端，当后端运行在容器内且这里填写
+                localhost / 127.0.0.1 时，服务会自动把它解析为宿主机地址。若你要连接 Compose 内部的 MySQL
+                容器，请直接填写 mysql_final:3306。数据库名可先留空用于测试连通性，加载表列表前再填写。
+              </n-alert>
+              <n-text depth="3" style="display: block; margin: -4px 0 12px; font-size: 12px">
+                测试连接成功后，会将本页配置保存到当前浏览器的本地存储（含密码），下次进入本页自动回填。多人共用电脑请勿使用，可用「清除本地保存」删除。
+              </n-text>
               <n-form label-placement="left" label-width="96" :model="conn">
                 <n-grid :cols="2" :x-gap="16" :y-gap="12">
                   <n-gi>
@@ -54,9 +66,10 @@
                     </n-form-item>
                   </n-gi>
                 </n-grid>
-                <n-space style="margin-top: 8px">
+                <n-space style="margin-top: 8px" align="center">
                   <n-button type="primary" :loading="testing" @click="onTestConn">测试连接</n-button>
                   <n-button secondary :loading="loadingTables" :disabled="!lastTestOk" @click="onLoadTables">加载表列表</n-button>
+                  <n-button quaternary size="small" @click="onClearSavedMysqlConn">清除本地保存</n-button>
                 </n-space>
                 <n-alert v-if="testMsg" style="margin-top: 12px" :type="lastTestOk ? 'success' : 'error'" :title="testMsg">
                   <template v-if="serverVersion">Server: {{ serverVersion }}</template>
@@ -126,24 +139,113 @@
                     <n-radio-button value="semantic">语义化（LLM 文本）</n-radio-button>
                   </n-radio-group>
                 </n-space>
+
+                <n-card
+                  v-if="generationMode === 'semantic'"
+                  title="大模型配置"
+                  size="small"
+                  embedded
+                  class="llm-card"
+                >
+                  <n-alert type="warning" title="密钥安全" style="margin-bottom: 12px">
+                    API Key 仅随请求发往本平台的 data-builder 服务，服务端不落库；请勿在公共网络明文传播。
+                  </n-alert>
+                  <n-grid :cols="2" :x-gap="16" :y-gap="12">
+                    <n-gi>
+                      <n-form-item label="厂商" label-placement="left">
+                        <n-select
+                          v-model:value="llmProvider"
+                          :options="llmProviderOptions"
+                          style="width: 100%"
+                        />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi>
+                      <n-form-item label="模型" label-placement="left">
+                        <n-input v-model:value="llmModel" placeholder="如 deepseek-chat / qwen-plus" clearable />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="2">
+                      <n-form-item label="API Key" label-placement="left">
+                        <n-input
+                          v-model:value="llmApiKey"
+                          type="password"
+                          show-password-on="click"
+                          placeholder="大模型平台密钥"
+                          clearable
+                        />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="2">
+                      <n-form-item :label="llmProvider === 'openai_compatible' ? 'Base URL（必填）' : 'Base URL（可选）'" label-placement="left">
+                        <n-input
+                          v-model:value="llmBaseUrl"
+                          :placeholder="
+                            llmProvider === 'openai_compatible'
+                              ? 'https://example.com/v1'
+                              : '留空使用默认；填写则覆盖厂商默认端点'
+                          "
+                          clearable
+                        />
+                      </n-form-item>
+                    </n-gi>
+                  </n-grid>
+                  <n-text depth="3" style="font-size: 12px">
+                    DeepSeek 默认 <code>https://api.deepseek.com/v1</code>；千问兼容模式默认
+                    <code>https://dashscope.aliyuncs.com/compatible-mode/v1</code>。OpenAI 兼容通道需填写 Base URL。
+                  </n-text>
+                </n-card>
+
                 <n-input
                   v-model:value="instruction"
                   type="textarea"
-                  placeholder="例：生成 1000 条数据，用户名为合成中文姓名风格，年龄在 20–40 岁…"
+                  :placeholder="
+                    generationMode === 'template'
+                      ? '例：生成 1000 条数据，用户名为合成中文姓名风格，年龄在 20–40 岁…'
+                      : '例：统计当前表有多少行；或查询最近 10 条测试用例名称…'
+                  "
                   :autosize="{ minRows: 5, maxRows: 14 }"
                 />
-                <n-button
-                  type="primary"
-                  :loading="previewing"
-                  :disabled="!schema || !instruction.trim()"
-                  @click="onGeneratePreview"
-                >
-                  生成预览
-                </n-button>
-                <n-alert v-if="preview?.stub" type="warning" title="当前为占位预览">
+
+                <n-space v-if="generationMode === 'template'" align="center">
+                  <n-button
+                    type="primary"
+                    :loading="previewing"
+                    :disabled="!schema || !instruction.trim()"
+                    @click="onGeneratePreview"
+                  >
+                    生成预览
+                  </n-button>
+                </n-space>
+
+                <n-space v-else align="center">
+                  <n-button type="primary" :loading="generatingSql" :disabled="generatingSql" @click="onGenerateSql">
+                    生成 SQL
+                  </n-button>
+                  <n-input-number
+                    v-model:value="queryMaxRows"
+                    :min="1"
+                    :max="5000"
+                    :step="50"
+                    style="width: 140px"
+                  />
+                  <n-text depth="3" style="font-size: 12px">最大返回行</n-text>
+                  <n-button
+                    type="primary"
+                    secondary
+                    :loading="executingQuery"
+                    :disabled="executingQuery"
+                    @click="onExecuteReadonlyQuery"
+                  >
+                    执行查询
+                  </n-button>
+                </n-space>
+
+                <n-alert v-if="generationMode === 'template' && preview?.stub" type="warning" title="当前为占位预览">
                   后端尚未接入大模型时，仅根据表字段生成 INSERT 模板骨架，便于联调界面与接口。
                 </n-alert>
-                <template v-if="preview">
+
+                <template v-if="generationMode === 'template' && preview">
                   <n-tabs type="segment" class="preview-tabs">
                     <n-tab-pane name="rationale" tab="生成计划">
                       <n-card embedded size="small">
@@ -162,6 +264,30 @@
                     <n-descriptions-item label="预估行数">{{ preview.estimated_total_rows }}</n-descriptions-item>
                     <n-descriptions-item label="绑定数">{{ preview.bindings.length }}</n-descriptions-item>
                   </n-descriptions>
+                </template>
+
+                <template v-else-if="generationMode === 'semantic'">
+                  <n-alert v-if="nl2sqlRationale" type="default" title="模型说明" style="margin-top: 4px">
+                    <n-text style="white-space: pre-wrap">{{ nl2sqlRationale }}</n-text>
+                  </n-alert>
+                  <n-card v-if="aiSql" title="AI 生成的 SQL" size="small" embedded>
+                    <n-code language="sql" :code="aiSql" word-wrap />
+                  </n-card>
+                  <n-card v-if="queryResult" title="查询结果" size="small" embedded class="result-card">
+                    <n-space vertical :size="8" style="width: 100%">
+                      <n-space align="center">
+                        <n-text depth="3">行数：{{ queryResult.row_count }}</n-text>
+                        <n-tag v-if="queryResult.truncated" type="warning" size="small">已截断（达上限）</n-tag>
+                      </n-space>
+                      <n-data-table
+                        size="small"
+                        :columns="queryResultColumns"
+                        :data="queryResult.rows"
+                        :scroll-x="Math.max(480, (queryResult.columns?.length ?? 0) * 140)"
+                        :pagination="{ pageSize: 10 }"
+                      />
+                    </n-space>
+                  </n-card>
                 </template>
               </n-space>
             </n-card>
@@ -252,15 +378,19 @@ import PageTopbar from '@/components/PageTopbar.vue'
 import { dataBuilderUrl } from '@/api/data-builder-request'
 import {
   executePlan,
+  executeReadonlyQuery,
   generatePreview,
   getDataBuilderSettings,
   getPromptLibrary,
   listMysqlTables,
+  nl2sqlGenerate,
   patchDataBuilderSettings,
   syncTableSchema,
   testMysqlConnection,
   type GeneratePreviewResult,
+  type LlmProviderId,
   type PromptLibraryItem,
+  type QueryExecuteResult,
   type TableSchemaResult
 } from '@/api/data-builder'
 import { message } from '@/utils/naive-api'
@@ -268,13 +398,27 @@ import { message } from '@/utils/naive-api'
 const activeTab = ref('conn')
 const serviceOk = ref(false)
 
+const MYSQL_CONN_STORAGE_KEY = 'data-builder.mysql-conn.v1'
+
+type SavedMysqlConnPayload = {
+  v: 1
+  host: string
+  port: number
+  user: string
+  password: string
+  database: string
+  selectedTable?: string | null
+}
+
 const conn = ref({
-  host: '127.0.0.1',
-  port: 3308,
+  host: 'localhost',
+  port: 3306,
   user: 'root',
   password: '',
-  database: 'ai_automation_db'
+  database: ''
 })
+
+const connRestoredFromLocal = ref(false)
 
 const testing = ref(false)
 const lastTestOk = ref(false)
@@ -292,6 +436,24 @@ const promptItems = ref<PromptLibraryItem[]>([])
 const selectedPromptId = ref<string | null>(null)
 const instruction = ref('')
 const generationMode = ref<'template' | 'semantic'>('template')
+
+const llmProvider = ref<LlmProviderId>('deepseek')
+const llmModel = ref('deepseek-chat')
+const llmApiKey = ref('')
+const llmBaseUrl = ref('')
+
+const llmProviderOptions = [
+  { label: 'DeepSeek', value: 'deepseek' as const },
+  { label: '通义千问（OpenAI 兼容）', value: 'qwen' as const },
+  { label: 'OpenAI 兼容（自定义 Base URL）', value: 'openai_compatible' as const }
+]
+
+const generatingSql = ref(false)
+const executingQuery = ref(false)
+const aiSql = ref('')
+const nl2sqlRationale = ref('')
+const queryResult = ref<QueryExecuteResult | null>(null)
+const queryMaxRows = ref(500)
 
 const previewing = ref(false)
 const preview = ref<GeneratePreviewResult | null>(null)
@@ -349,6 +511,31 @@ const promptSelectOptions = computed(() =>
   promptItems.value.map((p) => ({ label: p.title, value: p.id }))
 )
 
+const connReady = computed(
+  () =>
+    !!conn.value.host.trim() &&
+    !!conn.value.user.trim() &&
+    !!conn.value.database.trim() &&
+    conn.value.port >= 1 &&
+    conn.value.port <= 65535
+)
+
+const queryResultColumns = computed<DataTableColumns<Record<string, unknown>>>(() => {
+  const cols = queryResult.value?.columns ?? []
+  return cols.map((c) => ({
+    title: c,
+    key: c,
+    minWidth: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => {
+      const v = row[c]
+      if (v == null) return ''
+      if (typeof v === 'object') return JSON.stringify(v)
+      return String(v)
+    }
+  }))
+})
+
 function connBody() {
   return {
     host: conn.value.host.trim(),
@@ -357,6 +544,53 @@ function connBody() {
     password: conn.value.password,
     database: conn.value.database.trim()
   }
+}
+
+function saveMysqlConnToLocal(): void {
+  const payload: SavedMysqlConnPayload = {
+    v: 1,
+    host: conn.value.host.trim(),
+    port: Number(conn.value.port) > 0 ? Number(conn.value.port) : 3306,
+    user: conn.value.user.trim(),
+    password: conn.value.password,
+    database: conn.value.database.trim(),
+    selectedTable: selectedTable.value
+  }
+  try {
+    localStorage.setItem(MYSQL_CONN_STORAGE_KEY, JSON.stringify(payload))
+  } catch {
+    message.warning('无法写入浏览器本地存储，请检查是否禁用存储权限')
+  }
+}
+
+function loadMysqlConnFromLocal(): boolean {
+  try {
+    const raw = localStorage.getItem(MYSQL_CONN_STORAGE_KEY)
+    if (!raw) return false
+    const o = JSON.parse(raw) as Partial<SavedMysqlConnPayload>
+    if (typeof o.host !== 'string' || typeof o.user !== 'string') return false
+    conn.value.host = o.host
+    conn.value.port = typeof o.port === 'number' && o.port > 0 && o.port <= 65535 ? o.port : 3306
+    conn.value.user = o.user
+    conn.value.password = typeof o.password === 'string' ? o.password : ''
+    conn.value.database = typeof o.database === 'string' ? o.database : ''
+    if (typeof o.selectedTable === 'string' && o.selectedTable.length > 0) {
+      selectedTable.value = o.selectedTable
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+function onClearSavedMysqlConn(): void {
+  try {
+    localStorage.removeItem(MYSQL_CONN_STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
+  connRestoredFromLocal.value = false
+  message.success('已清除本地保存的连接信息')
 }
 
 async function pingService() {
@@ -371,23 +605,11 @@ async function pingService() {
   }
 }
 
-async function onTestConn() {
-  testing.value = true
-  testMsg.value = ''
-  serverVersion.value = ''
-  try {
-    const res = await testMysqlConnection(connBody())
-    lastTestOk.value = res.ok
-    testMsg.value = res.message
-    serverVersion.value = res.server_version ?? ''
-    if (res.ok) message.success('连接成功')
-    else message.error(res.message)
-  } finally {
-    testing.value = false
+async function loadTablesFromConn() {
+  if (!conn.value.database.trim()) {
+    message.warning('请先填写数据库名，再加载表列表')
+    return
   }
-}
-
-async function onLoadTables() {
   loadingTables.value = true
   try {
     const res = await listMysqlTables(connBody())
@@ -399,12 +621,41 @@ async function onLoadTables() {
   }
 }
 
+async function onTestConn() {
+  testing.value = true
+  testMsg.value = ''
+  serverVersion.value = ''
+  try {
+    const res = await testMysqlConnection(connBody())
+    lastTestOk.value = res.ok
+    testMsg.value = res.message
+    serverVersion.value = res.server_version ?? ''
+    if (res.ok) {
+      message.success('连接成功，配置已保存到浏览器本地')
+      saveMysqlConnToLocal()
+    } else {
+      message.error(res.message)
+    }
+
+    if (res.ok && conn.value.database.trim()) {
+      await loadTablesFromConn()
+    }
+  } finally {
+    testing.value = false
+  }
+}
+
+async function onLoadTables() {
+  await loadTablesFromConn()
+}
+
 async function onSyncSchema() {
   if (!selectedTable.value) return
   syncing.value = true
   try {
     schema.value = await syncTableSchema({ ...connBody(), table: selectedTable.value })
     preview.value = null
+    saveMysqlConnToLocal()
     message.success('结构已同步')
     activeTab.value = 'preview'
   } finally {
@@ -416,6 +667,108 @@ function onPickPrompt(id: string | null) {
   if (!id) return
   const item = promptItems.value.find((p) => p.id === id)
   if (item) instruction.value = item.instruction
+}
+
+watch(llmProvider, (p) => {
+  if (p === 'deepseek') llmModel.value = 'deepseek-chat'
+  else if (p === 'qwen') llmModel.value = 'qwen-plus'
+  else llmModel.value = 'gpt-4o-mini'
+})
+
+watch(generationMode, (m) => {
+  if (m === 'semantic') {
+    preview.value = null
+  } else {
+    aiSql.value = ''
+    queryResult.value = null
+    nl2sqlRationale.value = ''
+  }
+})
+
+async function onGenerateSql() {
+  if (!instruction.value.trim()) {
+    message.warning('请填写自然语言需求')
+    return
+  }
+  if (!llmModel.value.trim()) {
+    message.warning('请填写模型名称')
+    return
+  }
+  if (!llmApiKey.value.trim()) {
+    message.warning('请填写 API Key')
+    return
+  }
+  if (llmProvider.value === 'openai_compatible' && !llmBaseUrl.value.trim()) {
+    message.warning('OpenAI 兼容模式需填写 Base URL')
+    return
+  }
+  if (!connReady.value) {
+    message.warning('请先在「连接配置」中填写主机、用户名与数据库名')
+    return
+  }
+
+  let sch = schema.value
+  if (!sch) {
+    if (!selectedTable.value) {
+      message.warning('请先到「表与结构」选择数据表并同步结构（或选中表后直接点生成，将自动同步）')
+      return
+    }
+    try {
+      sch = await syncTableSchema({ ...connBody(), table: selectedTable.value })
+      schema.value = sch
+      message.success('已根据当前所选表自动同步结构')
+    } catch {
+      return
+    }
+  }
+
+  generatingSql.value = true
+  nl2sqlRationale.value = ''
+  try {
+    const table_schema = {
+      database: sch.database,
+      table: sch.table,
+      columns: sch.columns
+    }
+    const res = await nl2sqlGenerate({
+      instruction: instruction.value.trim(),
+      table_schema,
+      provider: llmProvider.value,
+      model: llmModel.value.trim(),
+      api_key: llmApiKey.value.trim(),
+      base_url: llmBaseUrl.value.trim() || undefined
+    })
+    aiSql.value = res.sql
+    nl2sqlRationale.value = (res.rationale ?? '').trim()
+    queryResult.value = null
+    message.success('已生成 SQL')
+  } finally {
+    generatingSql.value = false
+  }
+}
+
+async function onExecuteReadonlyQuery() {
+  if (!aiSql.value.trim()) {
+    message.warning('请先生成 SQL')
+    return
+  }
+  if (!connReady.value) {
+    message.warning('请先在「连接配置」中填写主机、用户名与数据库名')
+    return
+  }
+  executingQuery.value = true
+  try {
+    const maxRows = queryMaxRows.value ?? 500
+    queryResult.value = await executeReadonlyQuery({
+      ...connBody(),
+      sql: aiSql.value.trim(),
+      max_rows: maxRows,
+      timeout_seconds: 30
+    })
+    message.success('查询完成')
+  } finally {
+    executingQuery.value = false
+  }
 }
 
 async function onGeneratePreview() {
@@ -489,9 +842,40 @@ async function onExecute(confirm: boolean) {
 watch(selectedTable, () => {
   schema.value = null
   preview.value = null
+  aiSql.value = ''
+  queryResult.value = null
+  nl2sqlRationale.value = ''
+  if (lastTestOk.value) {
+    saveMysqlConnToLocal()
+  }
+})
+
+watch(activeTab, (tab) => {
+  if (
+    tab === 'schema' &&
+    lastTestOk.value &&
+    conn.value.database.trim() &&
+    tableOptions.value.length === 0 &&
+    !loadingTables.value
+  ) {
+    void loadTablesFromConn()
+  }
 })
 
 onMounted(async () => {
+  if (loadMysqlConnFromLocal()) {
+    connRestoredFromLocal.value = true
+    lastTestOk.value = false
+    testMsg.value = ''
+    serverVersion.value = ''
+    tableOptions.value = []
+    schema.value = null
+    preview.value = null
+    aiSql.value = ''
+    queryResult.value = null
+    nl2sqlRationale.value = ''
+  }
+
   void pingService()
   try {
     const lib = await getPromptLibrary()
@@ -560,5 +944,13 @@ onMounted(async () => {
 
 .execute-card {
   margin-top: 0;
+}
+
+.llm-card :deep(.n-card__content) {
+  padding-top: 8px;
+}
+
+.result-card :deep(.n-card-header) {
+  padding-bottom: 8px;
 }
 </style>

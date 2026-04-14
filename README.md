@@ -15,16 +15,19 @@ flowchart TB
   end
 
   subgraph Server[一台服务器 / Docker 环境]
-    FE[前端静态站点<br/>Nginx · 默认 3010]
+    FE[前端静态站点 · Nginx<br/>3010 · 反代 /engine 与 /data-builder]
     API[管理端 API · NestJS<br/>默认 3011]
-    ENG[执行引擎 · FastAPI<br/>默认 8010]
+    ENG[执行引擎 · FastAPI<br/>8010 · 含智能造数 /api/v1]
     DB[(MySQL 8)]
     RD[(Redis 6)]
   end
 
   B -->|打开页面| FE
   B -->|登录、用户、权限等| API
-  B -->|单接口调试代理、环境、目录、用例等| ENG
+  B -->|同源 /engine：调试、环境、用例等| FE
+  B -->|同源 /data-builder：智能造数| FE
+  FE -->|/engine/* → 执行引擎根路径| ENG
+  FE -->|/data-builder/* → 执行引擎（造数接口 /api/v1/*）| ENG
   API --> DB
   API --> RD
   API -->|编排调用| ENG
@@ -42,11 +45,12 @@ flowchart LR
     N[NestJS mgmt-api]
   end
   subgraph Run[执行与数据]
-    F[FastAPI exec-engine]
+    F[FastAPI exec-engine<br/>智能造数挂载 /api/v1]
     M[(MySQL)]
   end
   V --> N
-  V --> F
+  V -->|接口调试与自动化 /engine| F
+  V -->|智能造数：/data-builder → /api/v1| F
   N --> M
   F --> M
 ```
@@ -55,7 +59,7 @@ flowchart LR
 |------|------|--------|
 | **frontend** | Vue 3 + Vite + Naive UI | 工作台界面：单接口测试、环境管理、自动化场景等 |
 | **mgmt-api** | NestJS + TypeORM | 登录、JWT、用户/角色/权限、与管理相关的接口 |
-| **exec-engine** | FastAPI + SQLAlchemy | 调试代理、环境/目录/接口/用例、执行与部分 AI 能力 |
+| **exec-engine** | FastAPI + SQLAlchemy | 调试代理、环境/目录/接口/用例、执行与部分 AI 能力；**智能造数**经前端 `/data-builder` 反代至本服务 **`/api/v1/*`** |
 | **MySQL** | 8.0 | 业务与 RBAC 数据持久化 |
 | **Redis** | 6.x | 缓存与运行期能力（管理端使用） |
 
@@ -83,7 +87,7 @@ AI_Project/
 |------|------------|------|
 | 前端 | **3010** | 浏览器访问入口 |
 | 管理 API | **3011** | 登录、用户、权限等 |
-| 执行引擎 | **8010** | 调试、环境、接口数据等；Swagger：`/docs` |
+| 执行引擎 | **8010** | 调试、环境、接口数据等；Swagger：`/docs`。**智能造数**与 `/engine` 同源：经前端 Nginx `/data-builder` 访问，后端路径为 **`/api/v1/*`** |
 | MySQL | **3308** | 仅建议内网或本机使用 |
 | Redis | **6380** | 同上 |
 

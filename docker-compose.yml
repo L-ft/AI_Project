@@ -60,6 +60,7 @@ services:
       - DB_USER=root
       - DB_PASS=root_password
       - DB_NAME=ai_automation_db
+      - MAX_INSERT_SELECT_ROWS=1000000
     ports:
       - "8010:8000"
     depends_on:
@@ -77,22 +78,6 @@ services:
     networks:
       - ai_platform_net
 
-  data_builder_final:
-    build: ./data-builder-service
-    container_name: ai_platform_data_builder_v1
-    environment:
-      - MAX_INSERT_SELECT_ROWS=1000000
-    ports:
-      - "8011:8000"
-    healthcheck:
-      test: ["CMD", "python", "/app/docker_healthcheck.py"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 15s
-    networks:
-      - ai_platform_net
-
   frontend_final:
     build:
       context: ./frontend
@@ -107,8 +92,6 @@ services:
       mgmt_api_final:
         condition: service_started
       exec_engine_final:
-        condition: service_healthy
-      data_builder_final:
         condition: service_healthy
     networks:
       - ai_platform_net

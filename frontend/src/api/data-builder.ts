@@ -109,3 +109,40 @@ export async function executePlan(body: { plan: Record<string, unknown>; confirm
 export async function getPromptLibrary(): Promise<{ items: PromptLibraryItem[] }> {
   return dataBuilderClient.get('/api/v1/prompts/library') as Promise<{ items: PromptLibraryItem[] }>
 }
+
+export type LlmProviderId = 'deepseek' | 'qwen' | 'openai_compatible'
+
+export interface Nl2SqlBody {
+  instruction: string
+  table_schema: Record<string, unknown>
+  provider: LlmProviderId
+  model: string
+  api_key: string
+  base_url?: string | null
+}
+
+export interface Nl2SqlResult {
+  sql: string
+  rationale?: string
+}
+
+export async function nl2sqlGenerate(body: Nl2SqlBody): Promise<Nl2SqlResult> {
+  return dataBuilderClient.post('/api/v1/query/nl2sql', body) as Promise<Nl2SqlResult>
+}
+
+export interface QueryExecuteBody extends MySQLConnectionBody {
+  sql: string
+  max_rows?: number
+  timeout_seconds?: number
+}
+
+export interface QueryExecuteResult {
+  columns: string[]
+  rows: Record<string, unknown>[]
+  truncated: boolean
+  row_count: number
+}
+
+export async function executeReadonlyQuery(body: QueryExecuteBody): Promise<QueryExecuteResult> {
+  return dataBuilderClient.post('/api/v1/query/execute', body) as Promise<QueryExecuteResult>
+}
