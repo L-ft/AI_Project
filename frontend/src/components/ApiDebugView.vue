@@ -2,21 +2,60 @@
   <div class="api-debug-container">
     <!-- 请求地址栏 -->
     <div class="debug-url-bar">
-      <div class="method-url-group">
-        <n-input-group>
-          <n-button strong secondary class="method-btn" :class="method.toLowerCase()">
-            {{ method }}
-          </n-button>
-          <div class="url-input-wrapper">
-            <span class="base-url">{{ envBaseUrl }}</span>
-            <n-input 
-              v-model:value="path" 
-              placeholder="接口路径" 
-              ghost 
-              class="path-input"
+      <div class="debug-title-row">
+        <n-input
+          v-model:value="editableName"
+          :placeholder="data?.isTestCase ? '用例名称' : '接口名称'"
+          ghost
+          class="debug-name-input"
+        />
+      </div>
+      <div class="debug-request-row">
+        <div class="method-url-group">
+          <n-input-group>
+            <n-select
+              v-model:value="method"
+              :options="methodOptions"
+              :class="['method-select', method.toLowerCase()]"
+              :style="{ width: '110px' }"
             />
-          </div>
-        </n-input-group>
+            <div class="url-input-wrapper">
+              <span class="base-url">{{ envBaseUrl }}</span>
+              <n-input
+                v-model:value="path"
+                placeholder="接口路径"
+                ghost
+                class="path-input"
+              />
+            </div>
+          </n-input-group>
+        </div>
+        <div class="debug-url-actions">
+          <n-space justify="end" :size="8" wrap align="center">
+            <n-button-group>
+              <n-button
+                type="primary"
+                color="#7D33FF"
+                class="send-btn"
+                :loading="sending"
+                @click="handleSend"
+              >
+                发送
+              </n-button>
+              <n-button type="primary" color="#7D33FF" style="padding: 0 8px">
+                <template #icon><n-icon :component="DownOutlined" /></template>
+              </n-button>
+            </n-button-group>
+            <template v-if="data?.isTestCase">
+              <n-button secondary @click="handleUpdateCase">保存</n-button>
+              <n-button secondary @click="handleDeleteCase" class="delete-btn">删除</n-button>
+            </template>
+            <template v-else>
+              <n-button secondary :loading="interfaceSaving" @click="handleSaveInterface">保存</n-button>
+              <n-button secondary @click="showSaveCaseModal = true">保存为用例</n-button>
+            </template>
+          </n-space>
+        </div>
       </div>
     </div>
 
@@ -1531,33 +1570,6 @@
       </n-tabs>
     </div>
 
-    <div class="debug-actions-bar">
-      <n-space justify="end" :size="8" wrap>
-        <n-button-group>
-          <n-button
-            type="primary"
-            color="#7D33FF"
-            class="send-btn"
-            :loading="sending"
-            @click="handleSend"
-          >
-            发送
-          </n-button>
-          <n-button type="primary" color="#7D33FF" style="padding: 0 8px">
-            <template #icon><n-icon :component="DownOutlined" /></template>
-          </n-button>
-        </n-button-group>
-        <template v-if="data?.isTestCase">
-          <n-button secondary @click="handleUpdateCase">保存</n-button>
-          <n-button secondary @click="handleDeleteCase" class="delete-btn">删除</n-button>
-        </template>
-        <template v-else>
-          <n-button secondary>暂存</n-button>
-          <n-button secondary @click="showSaveCaseModal = true">保存为用例</n-button>
-        </template>
-      </n-space>
-    </div>
-
     <!-- 上下拖拽手柄 -->
     <div class="panel-resizer-v" @mousedown="startResizeV"></div>
 
@@ -1822,14 +1834,28 @@ const props = defineProps<{
   envId?: number | string | null
 }>()
 
-const emit = defineEmits(['save-success', 'delete-success'])
+const emit = defineEmits<{
+  'save-success': [payload?: Record<string, any>]
+  'delete-success': []
+}>()
 
 const message = useMessage()
+const interfaceSaving = ref(false)
 const editableName = ref('')
 const method = ref(props.data?.method || 'GET')
 const path = ref(props.data?.path || '')
 const queryParams = ref<any[]>([])
 const headerParams = ref<any[]>([])
+
+const methodOptions = [
+  { label: 'GET', value: 'GET' },
+  { label: 'POST', value: 'POST' },
+  { label: 'PUT', value: 'PUT' },
+  { label: 'DELETE', value: 'DELETE' },
+  { label: 'PATCH', value: 'PATCH' },
+  { label: 'HEAD', value: 'HEAD' },
+  { label: 'OPTIONS', value: 'OPTIONS' },
+]
 
 const paramTypeOptions = [
   { label: 'string', value: 'string' },
@@ -3692,6 +3718,93 @@ const handleSend = async () => {
   }
 }
 
+const serializeParamRows = (rows: any[]) => rows.map(({ key, ...item }: any) => item)
+
+const buildBodyDefinitionPayload = () => ({
+  type: bodyType.value,
+  content: ['json', 'text', 'xml'].includes(bodyType.value) ? bodyJsonContent.value : '',
+})
+
+function getInterfacePersistRef(data: Record<string, any> | null | undefined): string | number | null {
+  if (!data) return null
+  const id = data.id
+  const code = data.code
+  if (id != null && String(id).trim() !== '') return id
+  if (code != null && String(code).trim() !== '') return code
+  return null
+}
+
+function folderIdForSavePayload(data: Record<string, any> | null | undefined): string | null {
+  if (!data) return null
+  const parentId = data.parent_id
+  if (parentId == null || parentId === '' || parentId === 0 || parentId === '0') return null
+  return String(parentId).trim() || null
+}
+
+const buildInterfacePayload = () => {
+  const fallbackName = props.data?.label || props.data?.name || '新接口'
+  const payload: Record<string, any> = {
+    name: String(editableName.value || fallbackName).trim() || fallbackName,
+    method: String(method.value || 'GET').toUpperCase(),
+    path: path.value || '/',
+    status: 'developing',
+    owner: 'admin',
+    query_params: serializeParamRows(queryParams.value),
+    header_params: serializeParamRows(headerParams.value),
+    pre_operations: preOperations.value,
+    post_operations: postOperations.value,
+    body_definition: buildBodyDefinitionPayload(),
+  }
+  const folderId = folderIdForSavePayload(props.data)
+  if (folderId != null) payload.folder_id = folderId
+  return payload
+}
+
+const applySavedInterfaceToLocal = (saved?: Record<string, any>) => {
+  const ref = getInterfacePersistRef(saved) ?? getInterfacePersistRef(props.data)
+  const savedName = saved?.name ?? (String(editableName.value || props.data?.label || props.data?.name || '新接口').trim() || '新接口')
+  props.data.label = savedName
+  props.data.name = savedName
+  props.data.method = saved?.method ?? String(method.value || 'GET').toUpperCase()
+  props.data.path = saved?.path ?? (path.value || '/')
+  props.data.query_params = serializeParamRows(queryParams.value)
+  props.data.header_params = serializeParamRows(headerParams.value)
+  props.data.pre_operations = preOperations.value
+  props.data.post_operations = postOperations.value
+  props.data.body_definition = buildBodyDefinitionPayload()
+  props.data.isNew = false
+  if (ref != null && ref !== '') props.data.id = ref
+  if (saved?.code != null) props.data.code = saved.code
+}
+
+/** 在当前页面直接保存接口定义，替代原来的独立编辑页与暂存流程 */
+const handleSaveInterface = async () => {
+  if (props.data?.isTestCase) return
+  if (interfaceSaving.value) return
+
+  interfaceSaving.value = true
+  try {
+    const payload = buildInterfacePayload()
+    method.value = payload.method
+    path.value = payload.path
+    editableName.value = payload.name
+
+    const persistRef = getInterfacePersistRef(props.data)
+    const shouldUpdate = !!persistRef && props.data?.isNew !== true
+    const saved: any = shouldUpdate
+      ? await execRequest.patch('/interfaces/' + persistRef, payload)
+      : await execRequest.post('/interfaces', payload)
+
+    applySavedInterfaceToLocal(saved && typeof saved === 'object' ? saved : undefined)
+    message.success(shouldUpdate ? '保存成功' : '接口创建成功')
+    emit('save-success', saved && typeof saved === 'object' ? saved : undefined)
+  } catch (err) {
+    message.error('保存失败')
+  } finally {
+    interfaceSaving.value = false
+  }
+}
+
 // 保存 / 更新用例
 const handleUpdateCase = async () => {
   if (!props.data?.id) return
@@ -3718,9 +3831,9 @@ const handleUpdateCase = async () => {
       payload.name = editableName.value
     }
     
-    await execRequest.patch(url, payload)
+    const saved: any = await execRequest.patch(url, payload)
     message.success('更新成功')
-    emit('save-success')
+    emit('save-success', saved && typeof saved === 'object' ? saved : undefined)
   } catch (err) {
     message.error('更新失败')
   }
@@ -4177,7 +4290,7 @@ watch(
   () => {
     const d = props.data
     if (!d) return null
-    return [d.id ?? d.code, d.body_definition, d.bodyDefinition]
+    return [d.id ?? d.code, d.body_definition, d.bodyDefinition, d.post_operations, d.pre_operations]
   },
   () => {
     if (props.data) initData(props.data)
@@ -4206,16 +4319,25 @@ onMounted(() => {
   flex-shrink: 0;
   padding: 8px 0 16px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
   border-bottom: 1px solid #f0f0f0;
 }
 
-.debug-actions-bar {
+.debug-request-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.debug-url-actions {
   flex-shrink: 0;
-  padding: 16px 0 0;
-  margin-top: 8px;
-  border-top: 1px solid #f0f0f0;
-  background: #fff;
+  margin-left: auto;
 }
 
 .param-add-btn {
@@ -4228,9 +4350,21 @@ onMounted(() => {
   color: #8792a2;
 }
 
+.debug-title-row {
+  width: 100%;
+  max-width: 360px;
+}
+
+.debug-name-input :deep(.n-input__input-el) {
+  font-size: 18px;
+  font-weight: 600;
+}
+
 .method-url-group {
   flex: 1;
-  max-width: 1000px;
+  min-width: 0;
+  max-width: none;
+  width: auto;
 }
 
 .delete-btn {
@@ -4241,15 +4375,20 @@ onMounted(() => {
   background-color: rgba(255, 77, 79, 0.1) !important;
 }
 
-.method-btn {
-  width: 80px;
-  font-weight: bold;
+.method-select :deep(.n-base-selection) {
+  border-radius: 4px 0 0 4px;
+  font-weight: 700;
 }
-.method-btn.post { color: #faad14; }
-.method-btn.get { color: #52c41a; }
-.method-btn.put { color: #1890ff; }
-.method-btn.delete { color: #ff4d4f; }
-.method-btn.patch { color: #722ed1; }
+
+.method-select :deep(.n-base-selection-label) {
+  justify-content: center;
+}
+
+.method-select.post :deep(.n-base-selection-label) { color: #faad14; }
+.method-select.get :deep(.n-base-selection-label) { color: #52c41a; }
+.method-select.put :deep(.n-base-selection-label) { color: #1890ff; }
+.method-select.delete :deep(.n-base-selection-label) { color: #ff4d4f; }
+.method-select.patch :deep(.n-base-selection-label) { color: #722ed1; }
 
 .url-input-wrapper {
   display: flex;

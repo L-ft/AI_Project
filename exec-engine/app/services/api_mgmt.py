@@ -7,7 +7,11 @@ from typing import Any, Dict, Iterable, List, Optional
 from fastapi import HTTPException
 
 from ..ai.llm_service import generate_test_cases
-from ..core.resource_codes import normalize_external_ref
+from ..core.resource_codes import (
+    build_resource_code,
+    is_valid_resource_code,
+    normalize_external_ref,
+)
 from ..executor.playwright_runner import run_api_test
 from ..models.api_mgmt import (
     Environment,
@@ -225,6 +229,14 @@ class InterfaceService:
             post_operations=body.post_operations,
         )
         saved = self.interface_repository.save(interface)
+        # 单行创建时立即写入 code，否则序列化 id/code 为空，前端会反复 POST 造成重复接口
+        if not is_valid_resource_code(saved.code):
+            saved.code = build_resource_code(
+                "interface",
+                preferred=f"{saved.name or ''} {saved.path or ''}",
+                entity_id=saved.id,
+            )
+            saved = self.interface_repository.save(saved)
         return self._serialize_interface(saved, self._folder_code_map())
 
     def list_interfaces(self, folder_id: object = None) -> List[Dict[str, Any]]:

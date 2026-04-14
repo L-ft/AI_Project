@@ -171,7 +171,14 @@
     <div class="api-design-actions-bar">
       <n-space justify="end" :size="8">
         <n-button secondary @click="emit('switch-debug')">调试</n-button>
-        <n-button type="primary" color="#7D33FF" class="save-btn" :loading="saving" @click="handleSave">
+        <n-button
+          type="primary"
+          color="#7D33FF"
+          class="save-btn"
+          :loading="saving"
+          :disabled="saving"
+          @click="handleSave"
+        >
           保存
         </n-button>
       </n-space>
@@ -199,6 +206,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'switch-debug': []
+  'save-success': [payload?: Record<string, any>]
 }>()
 
 const message = useMessage()
@@ -388,14 +396,36 @@ function buildParamColumns(onRemove: (key: string) => void): DataTableColumns<an
 const queryColumns = buildParamColumns(removeParam)
 const headerColumns = buildParamColumns(removeHeaderParam)
 
+/** 与后端 _dual_ref_payload 一致：持久化后主键为 code，可能挂在 id 或 code 字段 */
+function getInterfacePersistRef(data: Record<string, any> | null | undefined): string | number | null {
+  if (!data) return null
+  const id = data.id
+  const code = data.code
+  if (id != null && String(id).trim() !== '') return id
+  if (code != null && String(code).trim() !== '') return code
+  return null
+}
+
+/**
+ * 后端 InterfaceCreate/Update 的 folder_id 为 Optional[str]，不能传数字 0（会 422）。
+ * 无目录 / 顶层时用 null；有 parent 时传字符串（数字目录 id 或 folder code）。
+ */
+function folderIdForSavePayload(data: Record<string, any> | null | undefined): string | null {
+  if (!data) return null
+  const p = data.parent_id
+  if (p == null || p === '' || p === 0 || p === '0') return null
+  return String(p).trim() || null
+}
+
 const handleSave = async () => {
+  if (saving.value) return
   saving.value = true
   try {
-    const payload = {
+    const fid = folderIdForSavePayload(props.data)
+    const payload: Record<string, any> = {
       name: apiName.value,
-      method: method.value,
-      path: path.value,
-      folder_id: props.data?.parent_id || 0, 
+      method: String(method.value || 'GET').toUpperCase(),
+      path: path.value || '/',
       status: 'developing',
       owner: 'admin',
       query_params: queryParams.value.map(({ key, ...item }: any) => item),
@@ -405,11 +435,14 @@ const handleSave = async () => {
         content: bodyType.value === 'json' ? bodyJsonContent.value : ''
       }
     }
+    if (fid != null) payload.folder_id = fid
 
-    if (props.data?.id && !props.data?.isNew) {
-      const res: any = await execRequest.patch(`/interfaces/${props.data.id}`, payload)
+    const existingRef = getInterfacePersistRef(props.data)
+    const shouldUpdate = !!existingRef && props.data?.isNew !== true
+
+    if (shouldUpdate) {
+      const res: any = await execRequest.patch(`/interfaces/${existingRef}`, payload)
       message.success('保存成功')
-      // 同步更新左侧树显示的名称和路径
       props.data.label = apiName.value
       props.data.method = method.value
       props.data.path = path.value
@@ -419,25 +452,33 @@ const handleSave = async () => {
         type: bodyType.value,
         content: bodyType.value === 'json' ? bodyJsonContent.value : ''
       }
+      const nr = getInterfacePersistRef(res)
+      if (nr != null) {
+        props.data.id = nr
+        if (res?.code != null) props.data.code = res.code
+      }
+      emit('save-success', res && typeof res === 'object' ? res : undefined)
     } else {
       const res: any = await execRequest.post('/interfaces', payload)
-      message.success('接口创建成功')
-      // 更新当前数据 ID 和状态，避免重复创建
-      if (res) {
-        props.data.id = res.id
-        props.data.isNew = false
-        props.data.label = res.name
-        // 同步属性
-        props.data.label = res.name
-        props.data.method = res.method
-        props.data.path = res.path
-        props.data.query_params = queryParams.value.map(({ key, ...item }: any) => item)
-        props.data.header_params = headerParams.value.map(({ key, ...item }: any) => item)
-        props.data.body_definition = {
-          type: bodyType.value,
-          content: bodyType.value === 'json' ? bodyJsonContent.value : ''
-        }
+      const ref = getInterfacePersistRef(res)
+      if (!ref) {
+        message.error('创建成功但未返回接口标识，请刷新页面后再编辑')
+        return
       }
+      message.success('接口创建成功')
+      props.data.id = ref
+      if (res?.code != null) props.data.code = res.code
+      props.data.isNew = false
+      props.data.label = res.name ?? apiName.value
+      props.data.method = res.method ?? method.value
+      props.data.path = res.path ?? path.value
+      props.data.query_params = queryParams.value.map(({ key, ...item }: any) => item)
+      props.data.header_params = headerParams.value.map(({ key, ...item }: any) => item)
+      props.data.body_definition = {
+        type: bodyType.value,
+        content: bodyType.value === 'json' ? bodyJsonContent.value : ''
+      }
+      emit('save-success', res && typeof res === 'object' ? res : undefined)
     }
   } catch (err) {
     console.error('保存失败:', err)

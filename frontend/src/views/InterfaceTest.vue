@@ -224,24 +224,16 @@
                     type="line"
                     class="sub-nav-tabs"
                     justify-content="start"
-                    :value="subTabByTabKey[tab.key] ?? (tab.isTestCase ? 'debug' : tab.isNew ? 'design' : 'debug')"
+                    :value="subTabByTabKey[tab.key] ?? 'debug'"
                     @update:value="(v) => { subTabByTabKey[tab.key] = v }"
                   >
-                    <n-tab-pane v-if="!tab.isTestCase" name="design" tab="编辑">
-                      <ApiDesignView
-                        :key="`design-${tab.key}`"
-                        :data="tab"
-                        :env-base-url="selectedEnvBaseUrl"
-                        @switch-debug="handleSwitchToDebug(tab.key)"
-                      />
-                    </n-tab-pane>
-                    <n-tab-pane name="debug" :tab="tab.isTestCase ? tab.label : '调试'">
+                    <n-tab-pane name="debug" :tab="tab.isTestCase ? tab.label : '编辑'">
                       <ApiDebugView
                         :key="`debug-${tab.key}`"
                         :data="tab"
                         :env-base-url="selectedEnvBaseUrl"
                         :env-id="selectedEnvId"
-                        @save-success="refreshTree"
+                        @save-success="(p) => onDebugSaveSuccess(tab, p)"
                         @delete-success="() => { refreshTree(); removeTab(tab.key); }"
                       />
                     </n-tab-pane>
@@ -394,7 +386,6 @@ import {
   ApiOutlined, CheckCircleOutlined, ClockCircleOutlined,
   PieChartOutlined, FolderAddOutlined, UploadOutlined,
 } from '@vicons/antd'
-import ApiDesignView from '../components/ApiDesignView.vue'
 import ApiDebugView from '../components/ApiDebugView.vue'
 import ApiTestCaseView from '../components/ApiTestCaseView.vue'
 import NewFolderModal from '../components/NewFolderModal.vue'
@@ -447,7 +438,7 @@ const importPayloadSummary = computed(() => {
       ? 'Body：未识别（none）'
       : `Body：${ctype}，约 ${raw.length} 字符`
   const more = items.length > 1 ? `；另有 ${items.length - 1} 条` : ''
-  return `${bodyHint} · Query/Path：${qcnt} 条 · Header：${hcnt} 条${more}（Query/Path 仅 URL ? 与路径占位；POST 的 JSON 在「调试 → Body」）`
+  return `${bodyHint} · Query/Path：${qcnt} 条 · Header：${hcnt} 条${more}（Query/Path 仅 URL ? 与路径占位；POST 的 JSON 在「编辑 → Body」）`
 })
 
 const importResultColumns: DataTableColumns<any> = [
@@ -533,12 +524,19 @@ async function runImportPreview() {
     const first = importItems.value[0]
     const bd = first?.body_definition
     const raw = String(bd?.content ?? '').trim()
+    const curlMethod = String(first?.method || 'GET').toUpperCase()
+    const curlBodyish = new Set(['POST', 'PUT', 'PATCH'])
+    const qpN = Array.isArray(first?.query_params) ? first.query_params.length : 0
+    const ppN = Array.isArray(first?.path_params) ? first.path_params.length : 0
+    const hasUrlSideParams = qpN + ppN > 0
     if (
       importFormat.value === 'curl' &&
-      (!bd || (bd.type === 'none' || !bd.type) || !raw)
+      curlBodyish.has(curlMethod) &&
+      (!bd || (bd.type === 'none' || !bd.type) || !raw) &&
+      !hasUrlSideParams
     ) {
       message.warning(
-        '未从 cURL 中识别到 Body：请确认整段命令已粘贴（含 --data-raw 与首尾单引号），并重启后端服务后再试',
+        '未从 cURL 中识别到 Body：若请求体在命令里，请粘贴含 --data-raw、-d 或 --json 的完整片段；参数仅在 URL ? 后的无需 Body，可直接导入。',
         { duration: 6500 },
       )
     }
@@ -715,6 +713,69 @@ function handleNewOption(key: string) {
 }
 
 const refreshTree = () => fetchTreeData()
+
+function getInterfacePersistRef(data: Record<string, any> | null | undefined): string | number | null {
+  if (!data) return null
+  const id = data.id
+  const code = data.code
+  if (id != null && String(id).trim() !== '') return id
+  if (code != null && String(code).trim() !== '') return code
+  return null
+}
+
+function syncInterfaceTabAfterSave(tabRef: any, payload?: Record<string, any>) {
+  if (!tabRef?.key || !payload || typeof payload !== 'object') return
+  const idx = tabs.value.findIndex((t) => t.key === tabRef.key)
+  if (idx < 0) return
+
+  const current = tabs.value[idx]
+  const merged = { ...current, ...payload }
+  merged.isNew = false
+
+  if (payload.name != null) {
+    merged.label = String(payload.name)
+    merged.name = String(payload.name)
+  }
+
+  const ref = getInterfacePersistRef(merged)
+  if (ref != null && ref !== '') {
+    merged.id = ref
+    if (payload.code != null) merged.code = payload.code
+  }
+
+  normalizeTabBodyDefinition(merged)
+
+  const oldKey = current.key
+  const wasNew = current.isNew === true
+  if (wasNew && ref != null && ref !== '' && typeof oldKey === 'string' && oldKey.startsWith('api-')) {
+    const newKey = `api-${ref}`
+    merged.key = newKey
+    if (Object.prototype.hasOwnProperty.call(subTabByTabKey, oldKey)) {
+      subTabByTabKey[newKey] = subTabByTabKey[oldKey]
+      delete subTabByTabKey[oldKey]
+    }
+    if (activeKey.value === oldKey) activeKey.value = newKey
+    selectedKeys.value = [newKey]
+  }
+
+  tabs.value[idx] = merged
+}
+
+/** 暂存/保存后同步服务端返回的接口字段到当前 Tab，避免仅内存有后置操作而 Tab 数据陈旧 */
+const onDebugSaveSuccess = (tab: any, payload?: Record<string, any>) => {
+  refreshTree()
+  if (!payload || typeof payload !== 'object' || !tab?.key) return
+  if (!tab?.isTestCase) {
+    syncInterfaceTabAfterSave(tab, payload)
+    return
+  }
+  const idx = tabs.value.findIndex((t) => t.key === tab.key)
+  if (idx < 0) return
+  const merged = { ...tabs.value[idx], ...payload }
+  if (payload.name != null && merged.label == null) merged.label = String(payload.name)
+  normalizeTabBodyDefinition(merged)
+  tabs.value[idx] = merged
+}
 
 const fetchTreeData = async () => {
   try {
@@ -940,8 +1001,7 @@ const addTab = async (node: any) => {
       fullData = { ...fullData, query_params: [], header_params: [], body_definition: { type: 'none' } }
     }
     tabs.value.push(fullData)
-    // 已落库的接口默认进「调试」便于看 Params/Body/Headers；未保存的新建接口仍进「编辑」
-    subTabByTabKey[fullData.key] = fullData.isTestCase ? 'debug' : fullData.isNew ? 'design' : 'debug'
+    subTabByTabKey[fullData.key] = 'debug'
   }
   activeKey.value = node.key
 }
@@ -954,8 +1014,6 @@ const removeTab = (key: string) => {
     activeKey.value = tabs.value[tabs.value.length - 1].key
   }
 }
-
-const handleSwitchToDebug = (tabKey: string) => { subTabByTabKey[tabKey] = 'debug' }
 
 /** 拉取接口详情后统一 body_definition，避免 content 为对象/双格式导致编辑/调试展示为空 */
 function normalizeTabBodyDefinition(row: Record<string, any>) {
