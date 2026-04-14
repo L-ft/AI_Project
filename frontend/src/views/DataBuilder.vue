@@ -123,171 +123,189 @@
           <n-tab-pane name="preview" tab="需求与预览">
             <n-card title="自然语言需求" size="small" class="panel-card">
               <n-space vertical :size="12" style="width: 100%">
-                <n-space align="center">
-                  <n-text depth="3">提示词模版</n-text>
-                  <n-select
-                    v-model:value="selectedPromptId"
-                    :options="promptSelectOptions"
-                    placeholder="选用预设场景（可选）"
-                    clearable
-                    filterable
-                    style="min-width: 260px"
-                    @update:value="onPickPrompt"
-                  />
-                  <n-radio-group v-model:value="generationMode" name="genmode">
-                    <n-radio-button value="template">模版化（高性能）</n-radio-button>
-                    <n-radio-button value="semantic">语义化（LLM 文本）</n-radio-button>
-                  </n-radio-group>
-                </n-space>
+                <!-- 顶部行：提示词模版(左) + 生成SQL控件(右) -->
+                <div class="preview-top-row">
+                  <n-space align="center" wrap>
+                    <n-text depth="3">提示词模版</n-text>
+                    <n-select
+                      v-model:value="selectedPromptId"
+                      :options="promptSelectOptions"
+                      placeholder="选用预设场景（可选）"
+                      clearable
+                      filterable
+                      style="min-width: 260px"
+                      @update:value="onPickPrompt"
+                    />
+                    <n-radio-group v-model:value="generationMode" name="genmode">
+                      <n-radio-button value="template">模版化（高性能）</n-radio-button>
+                      <n-radio-button value="semantic">语义化（LLM 文本）</n-radio-button>
+                    </n-radio-group>
+                  </n-space>
+                  <n-space v-if="generationMode === 'semantic'" align="center" :size="8">
+                    <n-button type="primary" :loading="generatingSql" :disabled="generatingSql" @click="onGenerateSql">
+                      生成 SQL
+                    </n-button>
+                    <n-input-number
+                      v-model:value="queryMaxRows"
+                      :min="1"
+                      :max="5000"
+                      :step="50"
+                      style="width: 140px"
+                    />
+                    <n-text depth="3" style="font-size: 12px">最大返回行</n-text>
+                    <n-button
+                      type="primary"
+                      secondary
+                      :loading="executingQuery"
+                      :disabled="executingQuery"
+                      @click="onExecuteReadonlyQuery"
+                    >
+                      执行查询
+                    </n-button>
+                  </n-space>
+                </div>
 
-                <n-card
-                  v-if="generationMode === 'semantic'"
-                  title="大模型配置"
-                  size="small"
-                  embedded
-                  class="llm-card"
-                >
-                  <n-alert type="warning" title="密钥安全" style="margin-bottom: 12px">
-                    API Key 仅随请求发往本平台的 data-builder 服务，服务端不落库；请勿在公共网络明文传播。
+                <!-- 模版化模式：保持原有纵向布局 -->
+                <template v-if="generationMode === 'template'">
+                  <n-input
+                    v-model:value="instruction"
+                    type="textarea"
+                    placeholder="例：生成 1000 条数据，用户名为合成中文姓名风格，年龄在 20–40 岁…"
+                    :autosize="{ minRows: 5, maxRows: 14 }"
+                  />
+                  <n-space align="center">
+                    <n-button
+                      type="primary"
+                      :loading="previewing"
+                      :disabled="!schema || !instruction.trim()"
+                      @click="onGeneratePreview"
+                    >
+                      生成预览
+                    </n-button>
+                  </n-space>
+                  <n-alert v-if="preview?.stub" type="warning" title="当前为占位预览">
+                    后端尚未接入大模型时，仅根据表字段生成 INSERT 模板骨架，便于联调界面与接口。
                   </n-alert>
-                  <n-grid :cols="2" :x-gap="16" :y-gap="12">
-                    <n-gi>
-                      <n-form-item label="厂商" label-placement="left">
-                        <n-select
-                          v-model:value="llmProvider"
-                          :options="llmProviderOptions"
-                          style="width: 100%"
-                        />
-                      </n-form-item>
-                    </n-gi>
-                    <n-gi>
-                      <n-form-item label="模型" label-placement="left">
-                        <n-input v-model:value="llmModel" placeholder="如 deepseek-chat / qwen-plus" clearable />
-                      </n-form-item>
-                    </n-gi>
-                    <n-gi :span="2">
-                      <n-form-item label="API Key" label-placement="left">
-                        <n-input
-                          v-model:value="llmApiKey"
-                          type="password"
-                          show-password-on="click"
-                          placeholder="大模型平台密钥"
-                          clearable
-                        />
-                      </n-form-item>
-                    </n-gi>
-                    <n-gi :span="2">
-                      <n-form-item :label="llmProvider === 'openai_compatible' ? 'Base URL（必填）' : 'Base URL（可选）'" label-placement="left">
-                        <n-input
-                          v-model:value="llmBaseUrl"
-                          :placeholder="
-                            llmProvider === 'openai_compatible'
-                              ? 'https://example.com/v1'
-                              : '留空使用默认；填写则覆盖厂商默认端点'
-                          "
-                          clearable
-                        />
-                      </n-form-item>
-                    </n-gi>
-                  </n-grid>
-                  <n-text depth="3" style="font-size: 12px">
-                    DeepSeek 默认 <code>https://api.deepseek.com/v1</code>；千问兼容模式默认
-                    <code>https://dashscope.aliyuncs.com/compatible-mode/v1</code>。OpenAI 兼容通道需填写 Base URL。
-                  </n-text>
-                </n-card>
-
-                <n-input
-                  v-model:value="instruction"
-                  type="textarea"
-                  :placeholder="
-                    generationMode === 'template'
-                      ? '例：生成 1000 条数据，用户名为合成中文姓名风格，年龄在 20–40 岁…'
-                      : '例：统计当前表有多少行；或查询最近 10 条测试用例名称…'
-                  "
-                  :autosize="{ minRows: 5, maxRows: 14 }"
-                />
-
-                <n-space v-if="generationMode === 'template'" align="center">
-                  <n-button
-                    type="primary"
-                    :loading="previewing"
-                    :disabled="!schema || !instruction.trim()"
-                    @click="onGeneratePreview"
-                  >
-                    生成预览
-                  </n-button>
-                </n-space>
-
-                <n-space v-else align="center">
-                  <n-button type="primary" :loading="generatingSql" :disabled="generatingSql" @click="onGenerateSql">
-                    生成 SQL
-                  </n-button>
-                  <n-input-number
-                    v-model:value="queryMaxRows"
-                    :min="1"
-                    :max="5000"
-                    :step="50"
-                    style="width: 140px"
-                  />
-                  <n-text depth="3" style="font-size: 12px">最大返回行</n-text>
-                  <n-button
-                    type="primary"
-                    secondary
-                    :loading="executingQuery"
-                    :disabled="executingQuery"
-                    @click="onExecuteReadonlyQuery"
-                  >
-                    执行查询
-                  </n-button>
-                </n-space>
-
-                <n-alert v-if="generationMode === 'template' && preview?.stub" type="warning" title="当前为占位预览">
-                  后端尚未接入大模型时，仅根据表字段生成 INSERT 模板骨架，便于联调界面与接口。
-                </n-alert>
-
-                <template v-if="generationMode === 'template' && preview">
-                  <n-tabs type="segment" class="preview-tabs">
-                    <n-tab-pane name="rationale" tab="生成计划">
-                      <n-card embedded size="small">
-                        <n-text style="white-space: pre-wrap">{{ preview.rationale }}</n-text>
-                      </n-card>
-                    </n-tab-pane>
-                    <n-tab-pane name="sql" tab="SQL 模版">
-                      <n-code language="sql" :code="preview.sql_template" word-wrap />
-                    </n-tab-pane>
-                    <n-tab-pane name="bind" tab="字段绑定">
-                      <n-data-table size="small" :columns="bindingCols" :data="preview.bindings" :pagination="{ pageSize: 8 }" />
-                    </n-tab-pane>
-                  </n-tabs>
-                  <n-descriptions bordered size="small" :column="3" class="preview-meta">
-                    <n-descriptions-item label="模式">{{ preview.generation_mode }}</n-descriptions-item>
-                    <n-descriptions-item label="预估行数">{{ preview.estimated_total_rows }}</n-descriptions-item>
-                    <n-descriptions-item label="绑定数">{{ preview.bindings.length }}</n-descriptions-item>
-                  </n-descriptions>
+                  <template v-if="preview">
+                    <n-tabs type="segment" class="preview-tabs">
+                      <n-tab-pane name="rationale" tab="生成计划">
+                        <n-card embedded size="small">
+                          <n-text style="white-space: pre-wrap">{{ preview.rationale }}</n-text>
+                        </n-card>
+                      </n-tab-pane>
+                      <n-tab-pane name="sql" tab="SQL 模版">
+                        <n-code language="sql" :code="preview.sql_template" word-wrap />
+                      </n-tab-pane>
+                      <n-tab-pane name="bind" tab="字段绑定">
+                        <n-data-table size="small" :columns="bindingCols" :data="preview.bindings" :pagination="{ pageSize: 8 }" />
+                      </n-tab-pane>
+                    </n-tabs>
+                    <n-descriptions bordered size="small" :column="3" class="preview-meta">
+                      <n-descriptions-item label="模式">{{ preview.generation_mode }}</n-descriptions-item>
+                      <n-descriptions-item label="预估行数">{{ preview.estimated_total_rows }}</n-descriptions-item>
+                      <n-descriptions-item label="绑定数">{{ preview.bindings.length }}</n-descriptions-item>
+                    </n-descriptions>
+                  </template>
                 </template>
 
-                <template v-else-if="generationMode === 'semantic'">
-                  <n-alert v-if="nl2sqlRationale" type="default" title="模型说明" style="margin-top: 4px">
-                    <n-text style="white-space: pre-wrap">{{ nl2sqlRationale }}</n-text>
-                  </n-alert>
-                  <n-card v-if="aiSql" title="AI 生成的 SQL" size="small" embedded>
-                    <n-code language="sql" :code="aiSql" word-wrap />
-                  </n-card>
-                  <n-card v-if="queryResult" title="查询结果" size="small" embedded class="result-card">
-                    <n-space vertical :size="8" style="width: 100%">
-                      <n-space align="center">
-                        <n-text depth="3">行数：{{ queryResult.row_count }}</n-text>
-                        <n-tag v-if="queryResult.truncated" type="warning" size="small">已截断（达上限）</n-tag>
+                <!-- 语义化模式：左右分布 -->
+                <template v-else>
+                  <n-grid :cols="24" :x-gap="16">
+                    <!-- 左侧：大模型配置 + 需求输入 -->
+                    <n-gi :span="12">
+                      <n-space vertical :size="12" style="width: 100%">
+                        <n-card
+                          title="大模型配置"
+                          size="small"
+                          embedded
+                          class="llm-card"
+                        >
+                          <n-alert type="warning" title="密钥安全" style="margin-bottom: 12px">
+                            API Key 仅随请求发往本平台的 data-builder 服务，服务端不落库；请勿在公共网络明文传播。
+                          </n-alert>
+                          <n-grid :cols="2" :x-gap="16" :y-gap="12">
+                            <n-gi>
+                              <n-form-item label="厂商" label-placement="left">
+                                <n-select
+                                  v-model:value="llmProvider"
+                                  :options="llmProviderOptions"
+                                  style="width: 100%"
+                                />
+                              </n-form-item>
+                            </n-gi>
+                            <n-gi>
+                              <n-form-item label="模型" label-placement="left">
+                                <n-input v-model:value="llmModel" placeholder="如 deepseek-chat / qwen-plus" clearable />
+                              </n-form-item>
+                            </n-gi>
+                            <n-gi :span="2">
+                              <n-form-item label="API Key" label-placement="left">
+                                <n-input
+                                  v-model:value="llmApiKey"
+                                  type="password"
+                                  show-password-on="click"
+                                  placeholder="大模型平台密钥"
+                                  clearable
+                                />
+                              </n-form-item>
+                            </n-gi>
+                            <n-gi :span="2">
+                              <n-form-item :label="llmProvider === 'openai_compatible' ? 'Base URL（必填）' : 'Base URL（可选）'" label-placement="left">
+                                <n-input
+                                  v-model:value="llmBaseUrl"
+                                  :placeholder="
+                                    llmProvider === 'openai_compatible'
+                                      ? 'https://example.com/v1'
+                                      : '留空使用默认；填写则覆盖厂商默认端点'
+                                  "
+                                  clearable
+                                />
+                              </n-form-item>
+                            </n-gi>
+                          </n-grid>
+                          <n-text depth="3" style="font-size: 12px">
+                            DeepSeek 默认 <code>https://api.deepseek.com/v1</code>；千问兼容模式默认
+                            <code>https://dashscope.aliyuncs.com/compatible-mode/v1</code>。OpenAI 兼容通道需填写 Base URL。
+                          </n-text>
+                        </n-card>
+                        <n-input
+                          v-model:value="instruction"
+                          type="textarea"
+                          placeholder="例：统计当前表有多少行；或查询最近 10 条测试用例名称…"
+                          :autosize="{ minRows: 5, maxRows: 14 }"
+                        />
                       </n-space>
-                      <n-data-table
-                        size="small"
-                        :columns="queryResultColumns"
-                        :data="queryResult.rows"
-                        :scroll-x="Math.max(480, (queryResult.columns?.length ?? 0) * 140)"
-                        :pagination="{ pageSize: 10 }"
-                      />
-                    </n-space>
-                  </n-card>
+                    </n-gi>
+                    <!-- 右侧：生成的SQL + 查询结果 -->
+                    <n-gi :span="12">
+                      <n-space vertical :size="12" style="width: 100%">
+                        <n-alert v-if="nl2sqlRationale" type="default" title="模型说明">
+                          <n-text style="white-space: pre-wrap">{{ nl2sqlRationale }}</n-text>
+                        </n-alert>
+                        <n-card v-if="aiSql" title="AI 生成的 SQL" size="small" embedded>
+                          <n-code language="sql" :code="aiSql" word-wrap />
+                        </n-card>
+                        <n-card v-if="queryResult" title="查询结果" size="small" embedded class="result-card">
+                          <n-space vertical :size="8" style="width: 100%">
+                            <n-space align="center">
+                              <n-text depth="3">行数：{{ queryResult.row_count }}</n-text>
+                              <n-tag v-if="queryResult.truncated" type="warning" size="small">已截断（达上限）</n-tag>
+                            </n-space>
+                            <n-data-table
+                              size="small"
+                              :columns="queryResultColumns"
+                              :data="queryResult.rows"
+                              :scroll-x="Math.max(480, (queryResult.columns?.length ?? 0) * 140)"
+                              :pagination="{ pageSize: 10 }"
+                            />
+                          </n-space>
+                        </n-card>
+                        <div v-if="!aiSql && !queryResult" class="semantic-empty-hint">
+                          <n-text depth="3">在左侧配置模型并输入需求，点击「生成 SQL」后结果将在此展示</n-text>
+                        </div>
+                      </n-space>
+                    </n-gi>
+                  </n-grid>
                 </template>
               </n-space>
             </n-card>
@@ -952,5 +970,25 @@ onMounted(async () => {
 
 .result-card :deep(.n-card-header) {
   padding-bottom: 8px;
+}
+
+.preview-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.semantic-empty-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-subtle);
+  padding: 24px;
+  text-align: center;
 }
 </style>
