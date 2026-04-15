@@ -921,7 +921,9 @@ onMounted(async () => {
 
 .data-builder-inner {
   padding: 20px 24px 32px;
-  max-width: 1200px;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
 }
 
 .intro-alert {
