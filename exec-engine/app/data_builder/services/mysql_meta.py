@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections import defaultdict
 
 import pymysql
 from pymysql.cursors import DictCursor
@@ -144,3 +145,63 @@ def sync_table_schema(cfg: MySQLConnectionIn, table: str) -> tuple[str, str, lis
             )
         )
     return database, table, columns
+
+
+def sync_tables_schema_batch(cfg: MySQLConnectionIn, tables: list[str]) -> list[tuple[str, str, list[ColumnInfo]]]:
+    """单次连接从 information_schema 拉取多张表的列定义，顺序与去重后的 tables 一致。"""
+    database = require_database_name(cfg.database)
+    if len(tables) > 32:
+        raise ValueError("单次最多同步 32 张表")
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for raw in tables:
+        assert_safe_ident(raw, "表名")
+        if raw in seen:
+            continue
+        seen.add(raw)
+        normalized.append(raw)
+    if not normalized:
+        raise ValueError("至少选择一张表")
+
+    conn = mysql_connect(cfg)
+    try:
+        with conn.cursor() as cur:
+            placeholders = ",".join(["%s"] * len(normalized))
+            cur.execute(
+                f"""
+                SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT,
+                       COLUMN_COMMENT, EXTRA, ORDINAL_POSITION
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN ({placeholders})
+                ORDER BY TABLE_NAME, ORDINAL_POSITION
+                """,
+                (database, *normalized),
+            )
+            rows = cur.fetchall() or []
+    finally:
+        conn.close()
+
+    by_table: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        by_table[str(r["TABLE_NAME"])].append(r)
+
+    result: list[tuple[str, str, list[ColumnInfo]]] = []
+    for table in normalized:
+        t_rows = by_table.get(table)
+        if not t_rows:
+            raise ValueError(f"表不存在或无权访问：{table}")
+        columns: list[ColumnInfo] = []
+        for r in t_rows:
+            columns.append(
+                ColumnInfo(
+                    name=str(r["COLUMN_NAME"]),
+                    data_type=str(r["DATA_TYPE"]),
+                    column_type=str(r["COLUMN_TYPE"]),
+                    nullable=str(r["IS_NULLABLE"]).upper() == "YES",
+                    default=None if r["COLUMN_DEFAULT"] is None else str(r["COLUMN_DEFAULT"]),
+                    comment=str(r["COLUMN_COMMENT"] or ""),
+                    extra=str(r["EXTRA"] or ""),
+                )
+            )
+        result.append((database, table, columns))
+    return result

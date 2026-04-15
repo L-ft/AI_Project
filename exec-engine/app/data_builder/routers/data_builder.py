@@ -2,7 +2,15 @@ from fastapi import APIRouter, HTTPException
 
 from app.data_builder.config import get_settings
 from app.data_builder.schemas.generate import ExecuteIn, ExecuteOut, GeneratePreviewIn, GeneratePreviewOut
-from app.data_builder.schemas.mysql import ConnectionTestOut, MySQLConnectionIn, SchemaSyncIn, TableListOut, TableSchemaOut
+from app.data_builder.schemas.mysql import (
+    ConnectionTestOut,
+    MySQLConnectionIn,
+    SchemaSyncBatchIn,
+    SchemaSyncBatchOut,
+    SchemaSyncIn,
+    TableListOut,
+    TableSchemaOut,
+)
 from app.data_builder.schemas.query import Nl2SqlIn, Nl2SqlOut, QueryExecuteIn, QueryExecuteOut
 from app.data_builder.schemas.settings import DataBuilderSettingsOut, DataBuilderSettingsPatch
 from app.data_builder.services import mysql_meta
@@ -37,6 +45,18 @@ def schema_sync(body: SchemaSyncIn):
     try:
         db, table, columns = mysql_meta.sync_table_schema(body, body.table)
         return TableSchemaOut(database=db, table=table, columns=columns)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/schema/sync-batch", response_model=SchemaSyncBatchOut)
+def schema_sync_batch(body: SchemaSyncBatchIn):
+    try:
+        rows = mysql_meta.sync_tables_schema_batch(body, body.tables)
+        schemas = [TableSchemaOut(database=db, table=table, columns=columns) for db, table, columns in rows]
+        return SchemaSyncBatchOut(schemas=schemas)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

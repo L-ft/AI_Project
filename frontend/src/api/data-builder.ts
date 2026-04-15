@@ -75,6 +75,12 @@ export async function syncTableSchema(
   return dataBuilderClient.post('/api/v1/schema/sync', body) as Promise<TableSchemaResult>
 }
 
+export async function syncTableSchemasBatch(
+  body: MySQLConnectionBody & { tables: string[] }
+): Promise<{ schemas: TableSchemaResult[] }> {
+  return dataBuilderClient.post('/api/v1/schema/sync-batch', body) as Promise<{ schemas: TableSchemaResult[] }>
+}
+
 export async function getDataBuilderSettings(): Promise<DataBuilderSettings> {
   return dataBuilderClient.get('/api/v1/settings') as Promise<DataBuilderSettings>
 }
@@ -114,7 +120,10 @@ export type LlmProviderId = 'deepseek' | 'qwen' | 'openai_compatible'
 
 export interface Nl2SqlBody {
   instruction: string
-  table_schema: Record<string, unknown>
+  /** 单表（兼容旧用法）；与 tables_schema 二选一，优先 tables_schema */
+  table_schema?: Record<string, unknown>
+  /** 多表 schema，每项含 database、table、columns */
+  tables_schema?: Array<{ database: string; table: string; columns: ColumnInfo[] }>
   provider: LlmProviderId
   model: string
   api_key: string

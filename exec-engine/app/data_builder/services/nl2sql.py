@@ -33,13 +33,15 @@ def _extract_sql(text: str) -> str:
 
 
 def _build_messages(body: Nl2SqlIn) -> list[dict[str, str]]:
-    schema_json = json.dumps(body.table_schema, ensure_ascii=False, indent=2)
+    tables = body.tables_schema or []
+    payload = {"tables": tables}
+    schema_json = json.dumps(payload, ensure_ascii=False, indent=2)
     system = (
-        "你是 MySQL 8 专家。根据给定的表结构 JSON 与用户问题，生成**一条**只读 SQL。\n"
+        "你是 MySQL 8 专家。根据给定的表结构 JSON（字段 tables 为多张表）与用户问题，生成**一条**只读 SQL。\n"
         "硬性要求：\n"
         "1) 仅使用 SELECT 或 WITH … SELECT；禁止 INSERT/UPDATE/DELETE/DDL/存储过程/导出。\n"
         "2) 单条语句；不要分号后的第二条语句；不要 Markdown；不要解释。\n"
-        "3) 表名、列名与 schema 一致，必要时用反引号包裹标识符。\n"
+        "3) 只使用 JSON 中出现的表名与列名；多表问题时正确使用 JOIN / 子查询，必要时用反引号包裹标识符。\n"
         "4) 若统计行数，优先 COUNT(*)；需要示例行时请 LIMIT。\n"
         "输出：只输出 SQL 文本本身。"
     )

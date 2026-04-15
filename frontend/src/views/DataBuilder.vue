@@ -81,40 +81,55 @@
           <n-tab-pane name="schema" tab="表与结构">
             <n-card title="选择表并同步 DDL" size="small" class="panel-card">
               <n-space vertical :size="12" style="width: 100%">
-                <n-space>
+                <n-space align="center" wrap>
                   <n-select
-                    v-model:value="selectedTable"
+                    v-model:value="selectedTables"
                     :options="tableOptions"
-                    placeholder="先完成连接并加载表列表"
+                    placeholder="先完成连接并加载表列表（可多选）"
                     filterable
                     clearable
-                    style="min-width: 280px"
+                    multiple
+                    :max-tag-count="3"
+                    style="min-width: 320px; max-width: 520px"
                     :disabled="tableOptions.length === 0"
                   />
-                  <n-button type="primary" secondary :loading="syncing" :disabled="!selectedTable" @click="onSyncSchema">
+                  <n-button
+                    type="primary"
+                    secondary
+                    :loading="syncing"
+                    :disabled="!selectedTables.length"
+                    @click="onSyncSchema"
+                  >
                     同步结构
                   </n-button>
                 </n-space>
+                <n-text v-if="tableOptions.length" depth="3" style="font-size: 12px; display: block">
+                  「需求与预览」以<strong>当前表页签</strong>为准；「生成 SQL」会将<strong>当前已同步的全部表</strong>结构一并交给大模型，可按需在问题里写清关联关系。
+                </n-text>
                 <n-alert v-if="!tableOptions.length" type="warning" title="暂无表数据">请在「连接配置」中测试连接并加载表列表。</n-alert>
-                <template v-else-if="schema">
-                  <n-descriptions label-placement="left" bordered size="small" :column="2" class="schema-desc">
-                    <n-descriptions-item label="库名">{{ schema.database }}</n-descriptions-item>
-                    <n-descriptions-item label="表名">{{ schema.table }}</n-descriptions-item>
-                    <n-descriptions-item label="列数">{{ schema.columns.length }}</n-descriptions-item>
-                  </n-descriptions>
-                  <n-data-table
-                    size="small"
-                    :columns="columnTableCols"
-                    :data="schema.columns"
-                    :pagination="{ pageSize: 12 }"
-                    :scroll-x="720"
-                    class="col-table"
-                  />
-                  <n-collapse>
-                    <n-collapse-item title="JSON（供 LLM 上下文）" name="json">
-                      <n-code language="json" :code="schemaJsonPretty" word-wrap />
-                    </n-collapse-item>
-                  </n-collapse>
+                <template v-else-if="syncedSchemas.length">
+                  <n-tabs v-model:value="activeSchemaKey" type="line" class="schema-table-tabs">
+                    <n-tab-pane v-for="sch in syncedSchemas" :key="sch.table" :name="sch.table" :tab="sch.table">
+                      <n-descriptions label-placement="left" bordered size="small" :column="2" class="schema-desc">
+                        <n-descriptions-item label="库名">{{ sch.database }}</n-descriptions-item>
+                        <n-descriptions-item label="表名">{{ sch.table }}</n-descriptions-item>
+                        <n-descriptions-item label="列数">{{ sch.columns.length }}</n-descriptions-item>
+                      </n-descriptions>
+                      <n-data-table
+                        size="small"
+                        :columns="columnTableCols"
+                        :data="sch.columns"
+                        :pagination="{ pageSize: 12 }"
+                        :scroll-x="720"
+                        class="col-table"
+                      />
+                      <n-collapse>
+                        <n-collapse-item title="JSON（供 LLM 上下文）" :name="`json-${sch.table}`">
+                          <n-code language="json" :code="schemaJsonFor(sch)" word-wrap />
+                        </n-collapse-item>
+                      </n-collapse>
+                    </n-tab-pane>
+                  </n-tabs>
                 </template>
               </n-space>
             </n-card>
@@ -177,7 +192,7 @@
                     <n-button
                       type="primary"
                       :loading="previewing"
-                      :disabled="!schema || !instruction.trim()"
+                      :disabled="!activeSchema || !instruction.trim()"
                       @click="onGeneratePreview"
                     >
                       生成预览
@@ -403,7 +418,7 @@ import {
   listMysqlTables,
   nl2sqlGenerate,
   patchDataBuilderSettings,
-  syncTableSchema,
+  syncTableSchemasBatch,
   testMysqlConnection,
   type GeneratePreviewResult,
   type LlmProviderId,
@@ -425,6 +440,8 @@ type SavedMysqlConnPayload = {
   user: string
   password: string
   database: string
+  /** 多选表名；旧版仅含 selectedTable */
+  selectedTables?: string[]
   selectedTable?: string | null
 }
 
@@ -445,10 +462,22 @@ const serverVersion = ref('')
 
 const loadingTables = ref(false)
 const tableOptions = ref<{ label: string; value: string }[]>([])
-const selectedTable = ref<string | null>(null)
+const selectedTables = ref<string[]>([])
 
 const syncing = ref(false)
-const schema = ref<TableSchemaResult | null>(null)
+const syncedSchemas = ref<TableSchemaResult[]>([])
+const activeSchemaKey = ref<string | null>(null)
+
+const activeSchema = computed(() => {
+  const list = syncedSchemas.value
+  if (!list.length) return null
+  const key = activeSchemaKey.value
+  if (key) {
+    const found = list.find((s) => s.table === key)
+    if (found) return found
+  }
+  return list[0]
+})
 
 const promptItems = ref<PromptLibraryItem[]>([])
 const selectedPromptId = ref<string | null>(null)
@@ -512,18 +541,17 @@ const bindingCols: DataTableColumns<GeneratePreviewResult['bindings'][0]> = [
   }
 ]
 
-const schemaJsonPretty = computed(() => {
-  if (!schema.value) return ''
+function schemaJsonFor(sch: TableSchemaResult): string {
   return JSON.stringify(
     {
-      database: schema.value.database,
-      table: schema.value.table,
-      columns: schema.value.columns
+      database: sch.database,
+      table: sch.table,
+      columns: sch.columns
     },
     null,
     2
   )
-})
+}
 
 const promptSelectOptions = computed(() =>
   promptItems.value.map((p) => ({ label: p.title, value: p.id }))
@@ -572,7 +600,7 @@ function saveMysqlConnToLocal(): void {
     user: conn.value.user.trim(),
     password: conn.value.password,
     database: conn.value.database.trim(),
-    selectedTable: selectedTable.value
+    selectedTables: [...selectedTables.value]
   }
   try {
     localStorage.setItem(MYSQL_CONN_STORAGE_KEY, JSON.stringify(payload))
@@ -592,8 +620,10 @@ function loadMysqlConnFromLocal(): boolean {
     conn.value.user = o.user
     conn.value.password = typeof o.password === 'string' ? o.password : ''
     conn.value.database = typeof o.database === 'string' ? o.database : ''
-    if (typeof o.selectedTable === 'string' && o.selectedTable.length > 0) {
-      selectedTable.value = o.selectedTable
+    if (Array.isArray(o.selectedTables) && o.selectedTables.length > 0) {
+      selectedTables.value = o.selectedTables.filter((t): t is string => typeof t === 'string' && t.length > 0)
+    } else if (typeof o.selectedTable === 'string' && o.selectedTable.length > 0) {
+      selectedTables.value = [o.selectedTable]
     }
     return true
   } catch {
@@ -667,14 +697,21 @@ async function onLoadTables() {
   await loadTablesFromConn()
 }
 
+async function fetchSchemasForTables(tables: string[]): Promise<TableSchemaResult[]> {
+  const { schemas } = await syncTableSchemasBatch({ ...connBody(), tables })
+  return schemas
+}
+
 async function onSyncSchema() {
-  if (!selectedTable.value) return
+  if (!selectedTables.value.length) return
   syncing.value = true
   try {
-    schema.value = await syncTableSchema({ ...connBody(), table: selectedTable.value })
+    syncedSchemas.value = await fetchSchemasForTables(selectedTables.value)
+    const first = syncedSchemas.value[0]?.table ?? null
+    activeSchemaKey.value = first
     preview.value = null
     saveMysqlConnToLocal()
-    message.success('结构已同步')
+    message.success(`已同步 ${syncedSchemas.value.length} 张表结构`)
     activeTab.value = 'preview'
   } finally {
     syncing.value = false
@@ -725,32 +762,42 @@ async function onGenerateSql() {
     return
   }
 
-  let sch = schema.value
-  if (!sch) {
-    if (!selectedTable.value) {
+  if (!activeSchema.value) {
+    if (!selectedTables.value.length) {
       message.warning('请先到「表与结构」选择数据表并同步结构（或选中表后直接点生成，将自动同步）')
       return
     }
     try {
-      sch = await syncTableSchema({ ...connBody(), table: selectedTable.value })
-      schema.value = sch
-      message.success('已根据当前所选表自动同步结构')
+      const list = await fetchSchemasForTables(selectedTables.value)
+      syncedSchemas.value = list
+      activeSchemaKey.value = list[0]?.table ?? null
+      preview.value = null
+      message.success(
+        list.length > 1
+          ? `已根据当前所选 ${list.length} 张表自动同步结构（生成 SQL 将包含全部已同步表）`
+          : '已根据当前所选表自动同步结构'
+      )
     } catch {
       return
     }
   }
 
+  if (!syncedSchemas.value.length) {
+    message.warning('请先到「表与结构」同步表结构后再生成 SQL')
+    return
+  }
+
   generatingSql.value = true
   nl2sqlRationale.value = ''
   try {
-    const table_schema = {
-      database: sch.database,
-      table: sch.table,
-      columns: sch.columns
-    }
+    const tables_schema = syncedSchemas.value.map((s) => ({
+      database: s.database,
+      table: s.table,
+      columns: s.columns
+    }))
     const res = await nl2sqlGenerate({
       instruction: instruction.value.trim(),
-      table_schema,
+      tables_schema,
       provider: llmProvider.value,
       model: llmModel.value.trim(),
       api_key: llmApiKey.value.trim(),
@@ -790,17 +837,18 @@ async function onExecuteReadonlyQuery() {
 }
 
 async function onGeneratePreview() {
-  if (!schema.value || !instruction.value.trim()) return
+  const sch = activeSchema.value
+  if (!sch || !instruction.value.trim()) return
   previewing.value = true
   try {
     const table_schema = {
-      database: schema.value.database,
-      table: schema.value.table,
-      columns: schema.value.columns
+      database: sch.database,
+      table: sch.table,
+      columns: sch.columns
     }
     preview.value = await generatePreview({
       instruction: instruction.value.trim(),
-      target_table: schema.value.table,
+      target_table: sch.table,
       table_schema,
       generation_mode: generationMode.value
     })
@@ -835,7 +883,8 @@ async function onSaveSettings() {
 }
 
 async function onExecute(confirm: boolean) {
-  if (!preview.value || !schema.value) return
+  const sch = activeSchema.value
+  if (!preview.value || !sch) return
   executing.value = true
   executeMsg.value = ''
   try {
@@ -846,8 +895,8 @@ async function onExecute(confirm: boolean) {
       bindings: preview.value.bindings,
       generation_mode: preview.value.generation_mode,
       estimated_total_rows: preview.value.estimated_total_rows,
-      target_table: schema.value.table,
-      database: schema.value.database
+      target_table: sch.table,
+      database: sch.database
     }
     const res = await executePlan({ plan, confirm })
     executeMsg.value = res.message
@@ -857,8 +906,9 @@ async function onExecute(confirm: boolean) {
   }
 }
 
-watch(selectedTable, () => {
-  schema.value = null
+watch(selectedTables, () => {
+  syncedSchemas.value = []
+  activeSchemaKey.value = null
   preview.value = null
   aiSql.value = ''
   queryResult.value = null
@@ -866,6 +916,10 @@ watch(selectedTable, () => {
   if (lastTestOk.value) {
     saveMysqlConnToLocal()
   }
+})
+
+watch(activeSchemaKey, () => {
+  preview.value = null
 })
 
 watch(activeTab, (tab) => {
@@ -887,7 +941,8 @@ onMounted(async () => {
     testMsg.value = ''
     serverVersion.value = ''
     tableOptions.value = []
-    schema.value = null
+    syncedSchemas.value = []
+    activeSchemaKey.value = null
     preview.value = null
     aiSql.value = ''
     queryResult.value = null
@@ -944,6 +999,14 @@ onMounted(async () => {
 
 .w-full {
   width: 100%;
+}
+
+.schema-table-tabs {
+  margin-top: 4px;
+}
+
+.schema-table-tabs :deep(.n-tab-pane) {
+  padding-top: 12px;
 }
 
 .schema-desc {

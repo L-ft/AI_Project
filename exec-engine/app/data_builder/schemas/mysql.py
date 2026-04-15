@@ -37,3 +37,11 @@ class TableSchemaOut(BaseModel):
     database: str
     table: str
     columns: list[ColumnInfo]
+
+
+class SchemaSyncBatchIn(MySQLConnectionIn):
+    tables: list[str] = Field(..., min_length=1, max_length=32)
+
+
+class SchemaSyncBatchOut(BaseModel):
+    schemas: list[TableSchemaOut]
