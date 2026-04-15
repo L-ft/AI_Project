@@ -12,6 +12,15 @@ _BANNED = re.compile(
     r")\b"
 )
 
+# 写入编排：仅允许 INSERT（含 INSERT … SELECT），仍禁止高危子串。
+_BANNED_IN_INSERT = re.compile(
+    r"(?is)\b("
+    r"UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|"
+    r"CALL|DO|HANDLER|REPLACE|"
+    r"INTO\s+OUTFILE|INTO\s+DUMPFILE|LOAD\s+DATA"
+    r")\b"
+)
+
 
 def normalize_sql(sql: str) -> str:
     text = sqlparse.format(sql or "", strip_comments=True).strip()
@@ -56,6 +65,27 @@ def validate_ai_select_sql(sql: str) -> str:
 
     if _BANNED.search(stmt):
         raise ValueError("SQL 包含不允许的操作（写库/导出等）")
+
+    return stmt
+
+
+def validate_write_sql(sql: str) -> str:
+    """单条写入语句：仅允许 INSERT（可含 INSERT … SELECT），禁止多语句与高危操作。"""
+    text = normalize_sql(sql)
+    if not text:
+        raise ValueError("SQL 不能为空")
+
+    parts = [p.strip() for p in sqlparse.split(text) if p.strip()]
+    if len(parts) != 1:
+        raise ValueError("仅允许一条 SQL 语句")
+
+    stmt = parts[0]
+    kw = _first_meaningful_keyword(stmt)
+    if kw != "INSERT":
+        raise ValueError("写入步骤仅允许 INSERT（含 INSERT … SELECT）")
+
+    if _BANNED_IN_INSERT.search(stmt):
+        raise ValueError("SQL 包含不允许的操作（DDL/删除/导出等）")
 
     return stmt
 

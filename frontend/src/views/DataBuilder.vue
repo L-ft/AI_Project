@@ -20,7 +20,10 @@
     <n-scrollbar class="data-builder-scroll">
       <div class="data-builder-inner">
         <n-alert type="info" class="intro-alert" title="使用说明">
-          配置<strong>目标 MySQL</strong>（与平台自身库可不同）→ 选择表并同步结构 → 用自然语言描述造数需求 → 生成预览（当前为占位逻辑，接入 LLM 后将输出真实计划）→ 在设置中调整上限与归档选项。执行写入将在后续版本开放。
+          配置<strong>目标 MySQL</strong>（与平台自身库可不同）→ 选择表并同步结构 → 描述需求。
+          「需求与预览」支持模版占位预览与语义化只读 SQL；<strong>多语句写入编排</strong>在同页下方以事务执行（先校验
+          <code>confirm=false</code>，再 <code>confirm=true</code> 提交）。写入步骤仅允许单条
+          <code>INSERT</code>（含 <code>INSERT…SELECT</code>）或带 <code>{列名}</code> 模板的按行展开插入。
         </n-alert>
 
         <n-tabs v-model:value="activeTab" type="line" animated class="main-tabs">
@@ -322,6 +325,120 @@
                     </n-gi>
                   </n-grid>
                 </template>
+
+                <n-card title="多语句写入编排（事务）" size="small" embedded class="orchestrate-card">
+                  <n-space vertical :size="12" style="width: 100%">
+                    <n-alert type="warning" title="风险提示">
+                      确认执行将向<strong>当前连接库</strong>写入数据；所有步骤在同一事务中，失败会回滚。请先「校验计划」再执行。
+                    </n-alert>
+                    <n-space align="center" wrap :size="8">
+                      <n-button
+                        type="primary"
+                        secondary
+                        :loading="analyzingRel"
+                        :disabled="!connReady || !syncedSchemas.length"
+                        @click="onAnalyzeRelations"
+                      >
+                        分析表关联
+                      </n-button>
+                      <n-button
+                        type="primary"
+                        secondary
+                        :loading="generatingWritePlan"
+                        :disabled="llmGenerateDisabled || writePlanBusy"
+                        @click="onGenerateWritePlan"
+                      >
+                        生成写入计划（单段）
+                      </n-button>
+                      <n-button
+                        type="primary"
+                        tertiary
+                        :loading="generatingCot"
+                        :disabled="llmGenerateDisabled || writePlanBusy"
+                        @click="onGenerateWritePlanCot"
+                      >
+                        CoT：Planner + Steps
+                      </n-button>
+                      <n-button
+                        tertiary
+                        :loading="generatingPlannerOnly"
+                        :disabled="llmGenerateDisabled || writePlanBusy"
+                        @click="onGeneratePlannerOnly"
+                      >
+                        仅 Planner
+                      </n-button>
+                      <n-button
+                        tertiary
+                        :loading="generatingStepsOnly"
+                        :disabled="llmGenerateDisabled || writePlanBusy || !plannerJson.trim()"
+                        @click="onGenerateStepsFromPlanner"
+                      >
+                        根据 Planner 生成 Steps
+                      </n-button>
+                      <n-button
+                        :loading="orchestrateBusy"
+                        :disabled="!connReady || !orchestrateJson.trim()"
+                        @click="onOrchestrateValidate"
+                      >
+                        校验计划
+                      </n-button>
+                      <n-popconfirm @positive-click="onOrchestrateExecute">
+                        <template #trigger>
+                          <n-button
+                            type="error"
+                            secondary
+                            :loading="orchestrateBusy"
+                            :disabled="!connReady || !orchestrateJson.trim()"
+                          >
+                            确认执行写入
+                          </n-button>
+                        </template>
+                        确定在目标库执行编排中的写入步骤？此操作不可自动撤销（仅当事务失败时回滚）。
+                      </n-popconfirm>
+                    </n-space>
+                    <n-text depth="3" style="font-size: 12px; display: block">
+                      <strong>CoT 双段</strong>：先调用「仅 Planner」得到规划 JSON，再「根据 Planner 生成 Steps」；或一键「CoT：Planner +
+                      Steps」。便于固定第一段做回归对比。
+                    </n-text>
+                    <n-input
+                      v-model:value="plannerJson"
+                      type="textarea"
+                      placeholder="Planner JSON（CoT 第一段，可编辑；由「仅 Planner」或 CoT 一键生成后填入）"
+                      :autosize="{ minRows: 4, maxRows: 12 }"
+                    />
+                    <n-collapse v-if="relEdges.length">
+                      <n-collapse-item title="检测到的潜在关联" name="rel">
+                        <n-data-table
+                          size="small"
+                          :columns="relEdgeCols"
+                          :data="relEdges"
+                          :pagination="{ pageSize: 8 }"
+                          :scroll-x="720"
+                        />
+                      </n-collapse-item>
+                    </n-collapse>
+                    <n-input
+                      v-model:value="writePlanRationale"
+                      type="textarea"
+                      placeholder="写入计划说明（由 LLM 生成后展示，可编辑补充）"
+                      :autosize="{ minRows: 2, maxRows: 6 }"
+                    />
+                    <n-input
+                      v-model:value="orchestrateJson"
+                      type="textarea"
+                      placeholder='编排 JSON：steps 数组，示例 [{"id":"s1","kind":"readonly","sql":"SELECT id FROM t LIMIT 5","max_rows":10},{"id":"s2","kind":"write","sql":"INSERT INTO c (pid) VALUES ({id})","foreach_source_step_id":"s1"}]'
+                      :autosize="{ minRows: 8, maxRows: 22 }"
+                    />
+                    <n-alert v-if="orchestrateMsg" type="info" :title="orchestrateMsg" />
+                    <n-data-table
+                      v-if="orchestrateStepResults.length"
+                      size="small"
+                      :columns="orchestrateResultCols"
+                      :data="orchestrateStepResults"
+                      :pagination="{ pageSize: 6 }"
+                    />
+                  </n-space>
+                </n-card>
               </n-space>
             </n-card>
           </n-tab-pane>
@@ -350,7 +467,8 @@
             </n-card>
             <n-card title="执行" size="small" class="panel-card execute-card">
               <n-alert type="default" title="批量写入" style="margin-bottom: 12px">
-                当前版本仅完成预览与 Schema 联调；点击下方按钮可验证执行接口（将返回未开放提示）。
+                真实写入请使用「需求与预览」页签中的<strong>多语句写入编排</strong>（
+                <code>/api/v1/orchestrate/execute</code>）。下方按钮仍为旧版占位预览执行接口。
               </n-alert>
               <n-space>
                 <n-button
@@ -394,6 +512,7 @@ import {
   NIcon,
   NInput,
   NInputNumber,
+  NPopconfirm,
   NRadioButton,
   NRadioGroup,
   NScrollbar,
@@ -412,18 +531,27 @@ import { dataBuilderUrl } from '@/api/data-builder-request'
 import {
   executePlan,
   executeReadonlyQuery,
+  fetchSchemaRelationships,
   generatePreview,
+  generateWritePlan,
+  generateWritePlanCot,
+  generateWritePlanPlanner,
+  generateWritePlanSteps,
   getDataBuilderSettings,
   getPromptLibrary,
   listMysqlTables,
   nl2sqlGenerate,
+  orchestrateExecute,
   patchDataBuilderSettings,
   syncTableSchemasBatch,
   testMysqlConnection,
   type GeneratePreviewResult,
   type LlmProviderId,
+  type OrchestrateStepPayload,
+  type OrchestrateStepResult,
   type PromptLibraryItem,
   type QueryExecuteResult,
+  type RelationshipEdge,
   type TableSchemaResult
 } from '@/api/data-builder'
 import { message } from '@/utils/naive-api'
@@ -514,6 +642,19 @@ const savingSettings = ref(false)
 const executing = ref(false)
 const executeMsg = ref('')
 
+const analyzingRel = ref(false)
+const relEdges = ref<RelationshipEdge[]>([])
+const generatingWritePlan = ref(false)
+const generatingCot = ref(false)
+const generatingPlannerOnly = ref(false)
+const generatingStepsOnly = ref(false)
+const plannerJson = ref('')
+const orchestrateBusy = ref(false)
+const orchestrateJson = ref('')
+const writePlanRationale = ref('')
+const orchestrateMsg = ref('')
+const orchestrateStepResults = ref<OrchestrateStepResult[]>([])
+
 const columnTableCols: DataTableColumns<TableSchemaResult['columns'][0]> = [
   { title: '列名', key: 'name', width: 140, ellipsis: { tooltip: true } },
   { title: '类型', key: 'data_type', width: 120 },
@@ -525,6 +666,43 @@ const columnTableCols: DataTableColumns<TableSchemaResult['columns'][0]> = [
     render: (row) => (row.nullable ? '是' : '否')
   },
   { title: '注释', key: 'comment', ellipsis: { tooltip: true } }
+]
+
+const relEdgeCols: DataTableColumns<RelationshipEdge> = [
+  { title: '子表', key: 'from_table', width: 140, ellipsis: { tooltip: true } },
+  { title: '子列', key: 'from_column', width: 120 },
+  { title: '父表', key: 'to_table', width: 140, ellipsis: { tooltip: true } },
+  { title: '父列', key: 'to_column', width: 100 },
+  {
+    title: '来源',
+    key: 'source',
+    width: 100,
+    render: (row) => (row.source === 'fk' ? '外键' : '启发式')
+  },
+  {
+    title: '置信度',
+    key: 'confidence',
+    width: 88,
+    render: (row) => String(row.confidence)
+  }
+]
+
+const orchestrateResultCols: DataTableColumns<OrchestrateStepResult> = [
+  { title: '步骤', key: 'step_id', width: 100 },
+  {
+    title: '类型',
+    key: 'kind',
+    width: 88,
+    render: (row) => (row.kind === 'readonly' ? '只读' : '写入')
+  },
+  { title: '结果行数', key: 'row_count', width: 96 },
+  { title: '影响行', key: 'affected_rows', width: 96 },
+  {
+    title: '截断',
+    key: 'truncated',
+    width: 72,
+    render: (row) => (row.truncated ? '是' : '')
+  }
 ]
 
 const bindingCols: DataTableColumns<GeneratePreviewResult['bindings'][0]> = [
@@ -564,6 +742,24 @@ const connReady = computed(
     !!conn.value.database.trim() &&
     conn.value.port >= 1 &&
     conn.value.port <= 65535
+)
+
+const llmGenerateDisabled = computed(
+  () =>
+    !connReady.value ||
+    !syncedSchemas.value.length ||
+    !instruction.value.trim() ||
+    !llmModel.value.trim() ||
+    !llmApiKey.value.trim() ||
+    (llmProvider.value === 'openai_compatible' && !llmBaseUrl.value.trim())
+)
+
+const writePlanBusy = computed(
+  () =>
+    generatingWritePlan.value ||
+    generatingCot.value ||
+    generatingPlannerOnly.value ||
+    generatingStepsOnly.value
 )
 
 const queryResultColumns = computed<DataTableColumns<Record<string, unknown>>>(() => {
@@ -906,6 +1102,271 @@ async function onExecute(confirm: boolean) {
   }
 }
 
+function parseOrchestrateSteps(raw: string): OrchestrateStepPayload[] {
+  const trimmed = raw.trim()
+  if (!trimmed) throw new Error('编排 JSON 为空')
+  const j: unknown = JSON.parse(trimmed)
+  if (Array.isArray(j)) return j as OrchestrateStepPayload[]
+  if (j && typeof j === 'object' && Array.isArray((j as { steps?: unknown }).steps)) {
+    return (j as { steps: OrchestrateStepPayload[] }).steps
+  }
+  throw new Error('编排 JSON 须为数组，或包含 steps 数组的对象')
+}
+
+async function onAnalyzeRelations() {
+  if (!connReady.value) {
+    message.warning('请先在「连接配置」中填写主机、用户名与数据库名')
+    return
+  }
+  if (!syncedSchemas.value.length) {
+    message.warning('请先同步表结构')
+    return
+  }
+  analyzingRel.value = true
+  try {
+    const tables = syncedSchemas.value.map((s) => s.table)
+    const res = await fetchSchemaRelationships({ ...connBody(), tables })
+    relEdges.value = res.edges ?? []
+    message.success(`已分析关联，共 ${relEdges.value.length} 条边`)
+  } catch {
+    relEdges.value = []
+  } finally {
+    analyzingRel.value = false
+  }
+}
+
+function buildWritePlanLlmPayload() {
+  const hints = relEdges.value.map(
+    (e) => `${e.from_table}.${e.from_column} -> ${e.to_table}.${e.to_column} (${e.source})`
+  )
+  const tables_schema = syncedSchemas.value.map((s) => ({
+    database: s.database,
+    table: s.table,
+    columns: s.columns
+  }))
+  return {
+    instruction: instruction.value.trim(),
+    tables_schema,
+    relation_hints: hints.length ? hints : undefined,
+    provider: llmProvider.value,
+    model: llmModel.value.trim(),
+    api_key: llmApiKey.value.trim(),
+    base_url: llmBaseUrl.value.trim() || undefined
+  }
+}
+
+async function onGenerateWritePlan() {
+  if (!connReady.value) {
+    message.warning('请先在「连接配置」中填写主机、用户名与数据库名')
+    return
+  }
+  if (!syncedSchemas.value.length) {
+    message.warning('请先同步表结构')
+    return
+  }
+  if (!instruction.value.trim()) {
+    message.warning('请填写自然语言写入/造数目标')
+    return
+  }
+  if (!llmModel.value.trim() || !llmApiKey.value.trim()) {
+    message.warning('请填写模型名称与 API Key')
+    return
+  }
+  if (llmProvider.value === 'openai_compatible' && !llmBaseUrl.value.trim()) {
+    message.warning('OpenAI 兼容模式需填写 Base URL')
+    return
+  }
+  generatingWritePlan.value = true
+  try {
+    const res = await generateWritePlan(buildWritePlanLlmPayload())
+    plannerJson.value = ''
+    writePlanRationale.value = (res.rationale ?? '').trim()
+    orchestrateJson.value = JSON.stringify(
+      { rationale: res.rationale ?? '', steps: res.steps ?? [] },
+      null,
+      2
+    )
+    orchestrateMsg.value = ''
+    orchestrateStepResults.value = []
+    message.success('已生成写入计划（单段），请检查 JSON 后再校验/执行')
+  } finally {
+    generatingWritePlan.value = false
+  }
+}
+
+async function onGenerateWritePlanCot() {
+  if (!connReady.value) {
+    message.warning('请先在「连接配置」中填写主机、用户名与数据库名')
+    return
+  }
+  if (!syncedSchemas.value.length) {
+    message.warning('请先同步表结构')
+    return
+  }
+  if (!instruction.value.trim()) {
+    message.warning('请填写自然语言写入/造数目标')
+    return
+  }
+  if (!llmModel.value.trim() || !llmApiKey.value.trim()) {
+    message.warning('请填写模型名称与 API Key')
+    return
+  }
+  if (llmProvider.value === 'openai_compatible' && !llmBaseUrl.value.trim()) {
+    message.warning('OpenAI 兼容模式需填写 Base URL')
+    return
+  }
+  generatingCot.value = true
+  try {
+    const res = await generateWritePlanCot(buildWritePlanLlmPayload())
+    plannerJson.value = JSON.stringify(res.planner, null, 2)
+    const pr = (res.planner?.rationale ?? '').trim()
+    const wr = (res.write_plan?.rationale ?? '').trim()
+    writePlanRationale.value = [pr && `【Planner】${pr}`, wr && `【生成器】${wr}`].filter(Boolean).join('\n\n')
+    orchestrateJson.value = JSON.stringify(
+      { rationale: res.write_plan?.rationale ?? '', steps: res.write_plan?.steps ?? [] },
+      null,
+      2
+    )
+    orchestrateMsg.value = ''
+    orchestrateStepResults.value = []
+    message.success('CoT 两段已生成，请检查 Planner 与编排 JSON')
+  } finally {
+    generatingCot.value = false
+  }
+}
+
+async function onGeneratePlannerOnly() {
+  if (!connReady.value) {
+    message.warning('请先在「连接配置」中填写主机、用户名与数据库名')
+    return
+  }
+  if (!syncedSchemas.value.length) {
+    message.warning('请先同步表结构')
+    return
+  }
+  if (!instruction.value.trim()) {
+    message.warning('请填写自然语言写入/造数目标')
+    return
+  }
+  if (!llmModel.value.trim() || !llmApiKey.value.trim()) {
+    message.warning('请填写模型名称与 API Key')
+    return
+  }
+  if (llmProvider.value === 'openai_compatible' && !llmBaseUrl.value.trim()) {
+    message.warning('OpenAI 兼容模式需填写 Base URL')
+    return
+  }
+  generatingPlannerOnly.value = true
+  try {
+    const p = await generateWritePlanPlanner(buildWritePlanLlmPayload())
+    plannerJson.value = JSON.stringify(p, null, 2)
+    orchestrateMsg.value = ''
+    orchestrateStepResults.value = []
+    message.success('Planner 已生成，可继续生成 Steps 或手工改 JSON')
+  } finally {
+    generatingPlannerOnly.value = false
+  }
+}
+
+async function onGenerateStepsFromPlanner() {
+  if (!connReady.value) {
+    message.warning('请先在「连接配置」中填写主机、用户名与数据库名')
+    return
+  }
+  if (!syncedSchemas.value.length) {
+    message.warning('请先同步表结构')
+    return
+  }
+  if (!instruction.value.trim()) {
+    message.warning('请填写自然语言写入/造数目标')
+    return
+  }
+  if (!llmModel.value.trim() || !llmApiKey.value.trim()) {
+    message.warning('请填写模型名称与 API Key')
+    return
+  }
+  if (llmProvider.value === 'openai_compatible' && !llmBaseUrl.value.trim()) {
+    message.warning('OpenAI 兼容模式需填写 Base URL')
+    return
+  }
+  let planner: Record<string, unknown>
+  try {
+    planner = JSON.parse(plannerJson.value) as Record<string, unknown>
+  } catch {
+    message.error('Planner JSON 解析失败')
+    return
+  }
+  generatingStepsOnly.value = true
+  try {
+    const res = await generateWritePlanSteps({
+      ...buildWritePlanLlmPayload(),
+      planner
+    })
+    writePlanRationale.value = (res.rationale ?? '').trim()
+    orchestrateJson.value = JSON.stringify(
+      { rationale: res.rationale ?? '', steps: res.steps ?? [] },
+      null,
+      2
+    )
+    orchestrateMsg.value = ''
+    orchestrateStepResults.value = []
+    message.success('已根据 Planner 生成 Steps')
+  } finally {
+    generatingStepsOnly.value = false
+  }
+}
+
+async function onOrchestrateValidate() {
+  if (!connReady.value) {
+    message.warning('请先在「连接配置」中填写主机、用户名与数据库名')
+    return
+  }
+  let steps: OrchestrateStepPayload[]
+  try {
+    steps = parseOrchestrateSteps(orchestrateJson.value)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '编排 JSON 解析失败')
+    return
+  }
+  orchestrateBusy.value = true
+  orchestrateMsg.value = ''
+  orchestrateStepResults.value = []
+  try {
+    const out = await orchestrateExecute({ ...connBody(), confirm: false, steps })
+    orchestrateMsg.value = out.message
+    orchestrateStepResults.value = out.results ?? []
+    message.success('校验完成')
+  } finally {
+    orchestrateBusy.value = false
+  }
+}
+
+async function onOrchestrateExecute() {
+  if (!connReady.value) {
+    message.warning('请先在「连接配置」中填写主机、用户名与数据库名')
+    return
+  }
+  let steps: OrchestrateStepPayload[]
+  try {
+    steps = parseOrchestrateSteps(orchestrateJson.value)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '编排 JSON 解析失败')
+    return
+  }
+  orchestrateBusy.value = true
+  orchestrateMsg.value = ''
+  orchestrateStepResults.value = []
+  try {
+    const out = await orchestrateExecute({ ...connBody(), confirm: true, steps })
+    orchestrateMsg.value = out.message
+    orchestrateStepResults.value = out.results ?? []
+    if (out.ok) message.success(out.message)
+    else message.warning(out.message)
+  } finally {
+    orchestrateBusy.value = false
+  }
+}
+
 watch(selectedTables, () => {
   syncedSchemas.value = []
   activeSchemaKey.value = null
@@ -913,6 +1374,12 @@ watch(selectedTables, () => {
   aiSql.value = ''
   queryResult.value = null
   nl2sqlRationale.value = ''
+  relEdges.value = []
+  orchestrateJson.value = ''
+  plannerJson.value = ''
+  writePlanRationale.value = ''
+  orchestrateMsg.value = ''
+  orchestrateStepResults.value = []
   if (lastTestOk.value) {
     saveMysqlConnToLocal()
   }
@@ -1043,6 +1510,10 @@ onMounted(async () => {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.orchestrate-card {
+  margin-top: 4px;
 }
 
 .semantic-empty-hint {

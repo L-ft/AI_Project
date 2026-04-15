@@ -155,3 +155,124 @@ export interface QueryExecuteResult {
 export async function executeReadonlyQuery(body: QueryExecuteBody): Promise<QueryExecuteResult> {
   return dataBuilderClient.post('/api/v1/query/execute', body) as Promise<QueryExecuteResult>
 }
+
+export interface RelationshipEdge {
+  from_table: string
+  from_column: string
+  to_table: string
+  to_column: string
+  source: 'fk' | 'heuristic'
+  confidence: number
+}
+
+export async function fetchSchemaRelationships(
+  body: MySQLConnectionBody & { tables: string[] }
+): Promise<{ edges: RelationshipEdge[] }> {
+  return dataBuilderClient.post('/api/v1/schema/relationships', body) as Promise<{ edges: RelationshipEdge[] }>
+}
+
+export interface OrchestrateStepPayload {
+  id: string
+  kind: 'readonly' | 'write'
+  sql: string
+  max_rows?: number | null
+  foreach_source_step_id?: string | null
+}
+
+export interface OrchestrateStepResult {
+  step_id: string
+  kind: 'readonly' | 'write'
+  row_count: number
+  affected_rows: number
+  truncated: boolean
+  columns: string[]
+  sample_rows: Record<string, unknown>[]
+}
+
+export interface OrchestrateExecuteResult {
+  ok: boolean
+  message: string
+  results: OrchestrateStepResult[]
+}
+
+export async function orchestrateExecute(body: MySQLConnectionBody & {
+  confirm: boolean
+  steps: OrchestrateStepPayload[]
+}): Promise<OrchestrateExecuteResult> {
+  return dataBuilderClient.post('/api/v1/orchestrate/execute', body) as Promise<OrchestrateExecuteResult>
+}
+
+export async function generateWritePlan(body: {
+  instruction: string
+  tables_schema: Array<{ database: string; table: string; columns: ColumnInfo[] }>
+  relation_hints?: string[]
+  provider: LlmProviderId
+  model: string
+  api_key: string
+  base_url?: string | null
+}): Promise<{ rationale: string; steps: OrchestrateStepPayload[] }> {
+  return dataBuilderClient.post('/api/v1/generate/write-plan', body) as Promise<{
+    rationale: string
+    steps: OrchestrateStepPayload[]
+  }>
+}
+
+/** CoT 第一段：规划器 JSON（与后端 WritePlanPlannerOut 对齐） */
+export interface WritePlanPlanner {
+  rationale: string
+  self_qa: Array<{ question: string; answer: string }>
+  must_reference: string[]
+  ordered_tables: string[]
+  execution_strategy:
+    | 'single_insert_select'
+    | 'multi_step_select_then_insert'
+    | 'foreach_template_from_prior_select'
+    | 'mixed'
+  bulk_insert_feasible: boolean
+  bulk_insert_notes: string
+  risky_columns: string[]
+  generator_directives: string
+}
+
+export async function generateWritePlanPlanner(body: {
+  instruction: string
+  tables_schema: Array<{ database: string; table: string; columns: ColumnInfo[] }>
+  relation_hints?: string[]
+  provider: LlmProviderId
+  model: string
+  api_key: string
+  base_url?: string | null
+}): Promise<WritePlanPlanner> {
+  return dataBuilderClient.post('/api/v1/generate/write-plan/planner', body) as Promise<WritePlanPlanner>
+}
+
+export async function generateWritePlanSteps(body: {
+  instruction: string
+  tables_schema: Array<{ database: string; table: string; columns: ColumnInfo[] }>
+  relation_hints?: string[]
+  planner: Record<string, unknown>
+  provider: LlmProviderId
+  model: string
+  api_key: string
+  base_url?: string | null
+}): Promise<{ rationale: string; steps: OrchestrateStepPayload[] }> {
+  return dataBuilderClient.post('/api/v1/generate/write-plan/steps', body) as Promise<{
+    rationale: string
+    steps: OrchestrateStepPayload[]
+  }>
+}
+
+export async function generateWritePlanCot(body: {
+  instruction: string
+  tables_schema: Array<{ database: string; table: string; columns: ColumnInfo[] }>
+  relation_hints?: string[]
+  provider: LlmProviderId
+  model: string
+  api_key: string
+  base_url?: string | null
+}): Promise<{ planner: WritePlanPlanner; write_plan: { rationale: string; steps: OrchestrateStepPayload[] } }> {
+  return dataBuilderClient.post('/api/v1/generate/write-plan/cot', body) as Promise<{
+    planner: WritePlanPlanner
+    write_plan: { rationale: string; steps: OrchestrateStepPayload[] }
+  }>
+}
