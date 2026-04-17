@@ -1,0 +1,90 @@
+import { Injectable } from '@nestjs/common';
+
+/** 连接体：与 exec-engine MySQLConnectionIn 对齐 */
+export interface MysqlConnDraft {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+}
+
+/**
+ * M1：Prompt → Manifest 占位实现（待 AI 组接入真实模型）。
+ * 产出可通过 Schema 的最小模板；instruction_echo 写入用户原句。
+ */
+@Injectable()
+export class ManifestDraftService {
+  fromPrompt(prompt: string, mysql: MysqlConnDraft, tableHint?: string): Record<string, unknown> {
+    const db = String(mysql.database || '').trim() || 'ai_automation_db';
+    const table = (tableHint || process.env.DATA_BUILDER_DEFAULT_TABLE || 'api_environments').trim();
+    return {
+      manifest_version: '1.0',
+      database_context: {
+        dialect: 'mysql8',
+        connection_ref: 'mgmt_mysql',
+        database: db,
+        tables: [{ name: table, role: 'primary' }],
+      },
+      generation: {
+        mode: 'template',
+        instruction_echo: prompt,
+        sql_template: `INSERT INTO \`${table}\` (\`name\`, \`base_url\`) VALUES (:name, :base_url)`,
+        bindings: [
+          {
+            placeholder: 'name',
+            column: 'name',
+            strategy: 'fingerprint_remark',
+            params: { merge_mode: 'append' },
+          },
+          {
+            placeholder: 'base_url',
+            column: 'base_url',
+            strategy: 'literal',
+            params: { value: 'https://draft.example/l4' },
+          },
+        ],
+        batching: {
+          total_rows: 2,
+          batch_size: 2,
+          batch_count: 1,
+          batches: [{ batch_index: 0, row_count: 2, label: 'b0' }],
+        },
+        post_insert_sql: [],
+        state_machine: null,
+      },
+      fingerprint: {
+        strategy: 'row_map_only',
+        remark_column: null,
+        marker: {
+          format: 'prefixed_token',
+          prefix: 'DB_TASK_',
+          value_template: '${prefix}${task_id}',
+        },
+        row_map: { enabled: true, async_flush: false, table: 'data_builder_row_map' },
+      },
+      assertions: [
+        {
+          id: 'asrt_draft_row_count',
+          name: '草稿任务行数',
+          assertion_type: 'scalar',
+          severity: 'error',
+          sql: `SELECT COUNT(*) AS c FROM \`${table}\` WHERE \`name\` LIKE CONCAT('%', :task_marker, '%')`,
+          expect: { kind: 'row_count_eq', value: 2, column: 'c' },
+          rationale: '占位断言：接入 AI 后请按业务改写',
+          run_after_batch: null,
+        },
+      ],
+      cleanup: {
+        mode: 'row_map',
+        requires_confirm: true,
+        plans: [{ table, order: 10, source: 'row_map' }],
+      },
+      meta: {
+        source: 'api',
+        compliance: { production_row_sampling: false },
+        data_builder: { insert_pk_column: 'id', draft: true },
+      },
+    };
+  }
+}

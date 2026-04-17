@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.data_builder.routers import data_builder as data_builder_router
+from app.data_builder.routers import data_builder_tasks
 from app.routers import (
     api_import,
     dashboard,
@@ -91,6 +92,7 @@ app.include_router(scheduled_tasks.router)
 app.include_router(api_import.router)
 app.include_router(debug.router)
 app.include_router(data_builder_router.router, prefix="/api/v1", tags=["data-builder"])
+app.include_router(data_builder_tasks.router, prefix="/api/v1")
 
 
 if __name__ == "__main__":

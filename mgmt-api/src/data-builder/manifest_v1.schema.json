@@ -1,0 +1,375 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-project.local/schemas/data-builder/manifest_v1.schema.json",
+  "title": "Data Builder Task Manifest v1",
+  "description": "Contract between Vue (preview), mgmt-api (orchestration + AI), and execution adapters. Version 1.0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "database_context",
+    "generation",
+    "fingerprint",
+    "assertions",
+    "cleanup"
+  ],
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "task_id": {
+      "type": "string",
+      "description": "Server-assigned UUID; may be omitted on create, required after persist.",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "database_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dialect", "database"],
+      "properties": {
+        "dialect": {
+          "type": "string",
+          "enum": ["mysql8"]
+        },
+        "connection_ref": {
+          "type": "string",
+          "description": "Logical connection id (env/config), not raw credentials."
+        },
+        "database": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "Optional hash of DDL snapshot used for this manifest."
+        },
+        "timezone": {
+          "type": "string",
+          "default": "Asia/Shanghai"
+        },
+        "tables": {
+          "type": "array",
+          "description": "Tables touched by this task (for UI and cleanup ordering).",
+          "items": { "$ref": "#/$defs/table_ref" }
+        }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "sql_template", "bindings", "batching"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["template", "semantic", "chatops_v1"]
+        },
+        "instruction_echo": {
+          "type": "string",
+          "description": "Original user instruction (audit / ChatOps)."
+        },
+        "sql_template": {
+          "type": "string",
+          "description": "Parameterized INSERT (or multi-statement block) with named placeholders."
+        },
+        "bindings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/binding_item" }
+        },
+        "batching": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total_rows", "batch_size", "batch_count"],
+          "properties": {
+            "total_rows": { "type": "integer", "minimum": 1 },
+            "batch_size": { "type": "integer", "minimum": 1 },
+            "batch_count": { "type": "integer", "minimum": 1 },
+            "batches": {
+              "type": "array",
+              "description": "Optional explicit batch metadata; if omitted, derive from batch_size.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["batch_index", "row_count"],
+                "properties": {
+                  "batch_index": { "type": "integer", "minimum": 0 },
+                  "row_count": { "type": "integer", "minimum": 1 },
+                  "label": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "post_insert_sql": {
+          "type": "array",
+          "description": "Optional follow-up statements (soft L3); executed after each batch in order.",
+          "items": { "$ref": "#/$defs/sql_statement" }
+        },
+        "state_machine": {
+          "description": "Soft L3 placeholder; optional multi-step lifecycle.",
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/state_machine_spec" }
+          ]
+        }
+      }
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "marker"],
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["remark_only", "row_map_only", "remark_and_row_map"],
+          "description": "remark_only: inject task marker into remark column; row_map_only: sidecar only; both for redundancy."
+        },
+        "remark_column": {
+          "type": ["string", "null"],
+          "description": "Physical column for marker; null if strategy is row_map_only."
+        },
+        "marker": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "value_template"],
+          "properties": {
+            "format": {
+              "type": "string",
+              "enum": ["plain", "prefixed_token"],
+              "default": "prefixed_token"
+            },
+            "prefix": {
+              "type": "string",
+              "default": "DB_TASK_",
+              "description": "Human-readable prefix in remark for grep / DELETE predicate."
+            },
+            "value_template": {
+              "type": "string",
+              "description": "Template resolved with task_id, e.g. \"${prefix}${task_id}\"",
+              "default": "${prefix}${task_id}"
+            }
+          }
+        },
+        "row_map": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "async_flush": { "type": "boolean", "default": true },
+            "table": {
+              "type": "string",
+              "default": "data_builder_row_map"
+            }
+          }
+        }
+      }
+    },
+    "assertions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Read-only checks after batches; failures -> FAILED_ASSERTION, data retained. At least one assertion required before execution (L3).",
+      "items": { "$ref": "#/$defs/assertion_rule" }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "plans"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["predicate", "row_map", "hybrid"],
+          "description": "hybrid: prefer row_map PK deletes, remark as cross-check."
+        },
+        "plans": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/cleanup_plan_item" }
+        },
+        "requires_confirm": { "type": "boolean", "default": true }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "source": { "type": "string", "enum": ["ui", "api", "chatops"] },
+        "ai_model": { "type": "string" },
+        "compliance": {
+          "type": "object",
+          "properties": {
+            "production_row_sampling": { "type": "boolean", "const": false }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "table_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "alias": { "type": "string" },
+        "role": {
+          "type": "string",
+          "enum": ["primary", "dependent", "lookup"]
+        }
+      }
+    },
+    "binding_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["placeholder", "column", "strategy"],
+      "properties": {
+        "placeholder": { "type": "string" },
+        "column": { "type": "string" },
+        "strategy": { "type": "string" },
+        "params": { "type": "object" }
+      }
+    },
+    "sql_statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sql"],
+      "properties": {
+        "sql": { "type": "string" },
+        "purpose": { "type": "string" }
+      }
+    },
+    "state_machine_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity", "steps"],
+      "properties": {
+        "entity": { "type": "string" },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "sql_ref": { "type": "string" },
+              "expect_status": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "assertion_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "severity", "sql", "expect"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "assertion_type": {
+          "type": "string",
+          "enum": ["scalar", "rowset"],
+          "default": "scalar",
+          "description": "scalar: aggregate/scalar expectation; rowset: SELECT lists violating rows (PK columns required). Server enforces LIMIT <= 20 on execution."
+        },
+        "primary_key_columns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Required when assertion_type is rowset: business primary key column names that MUST appear in the SELECT list (composite PK = all columns)."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warn"]
+        },
+        "sql": {
+          "type": "string",
+          "description": "Must be read-only (SELECT). Enforced by mgmt-api guard. For assertion_type=rowset, mgmt-api normalizes LIMIT to at most 20."
+        },
+        "expect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "row_count_eq",
+                "row_count_zero",
+                "scalar_eq",
+                "scalar_gt",
+                "scalar_gte",
+                "expression_true",
+                "rowset_empty"
+              ]
+            },
+            "value": {},
+            "column": { "type": "string" }
+          }
+        },
+        "rationale": { "type": "string" },
+        "run_after_batch": {
+          "type": ["integer", "null"],
+          "description": "If set, run only after this batch_index completes; null = after all batches."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "allOf": [
+              { "required": ["assertion_type"] },
+              { "properties": { "assertion_type": { "const": "rowset" } } }
+            ]
+          },
+          "then": {
+            "required": ["primary_key_columns"],
+            "properties": {
+              "primary_key_columns": { "type": "array", "minItems": 1 },
+              "expect": {
+                "properties": {
+                  "kind": { "const": "rowset_empty" }
+                },
+                "required": ["kind"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "expect": {
+                "type": "object",
+                "properties": { "kind": { "const": "rowset_empty" } },
+                "required": ["kind"]
+              }
+            },
+            "required": ["expect"]
+          },
+          "then": {
+            "required": ["assertion_type", "primary_key_columns"],
+            "properties": {
+              "assertion_type": { "const": "rowset" },
+              "primary_key_columns": { "type": "array", "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "cleanup_plan_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["table", "order"],
+      "properties": {
+        "table": { "type": "string" },
+        "order": { "type": "integer", "description": "Lower deletes first (FK-safe order)." },
+        "predicate_sql": {
+          "type": "string",
+          "description": "DELETE predicate body after WHERE, must reference task marker or ids."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["manifest_predicate", "row_map", "ai_suggested"],
+          "description": "ai_suggested must pass SQL guard before persist."
+        }
+      }
+    }
+  }
+}

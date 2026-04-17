@@ -30,7 +30,10 @@ export function createHttpClient(options: CreateHttpClientOptions): AxiosInstanc
     (response) => options.unwrapResponse(response),
     (error) => {
       const appError = toAppError(error)
-      options.onError(error, appError)
+      const silent = Boolean((error.config as { skipErrorToast?: boolean } | undefined)?.skipErrorToast)
+      if (!silent) {
+        options.onError(error, appError)
+      }
       return Promise.reject(error)
     }
   )

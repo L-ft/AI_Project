@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { ApiModule } from './modules/api.module';
 import { AccountModule } from './modules/account.module';
+import { DataBuilderTasksProxyModule } from './modules/data-builder-tasks-proxy.module';
 import { User, Tenant } from './entities/user.entity';
 import { Menu } from './entities/menu.entity';
 
@@ -23,9 +24,10 @@ import { Menu } from './entities/menu.entity';
       timezone: '+08:00',
       synchronize: false,
     }),
-    AuthModule, 
-    ApiModule, 
-    AccountModule
+    AuthModule,
+    ApiModule,
+    AccountModule,
+    DataBuilderTasksProxyModule,
   ],
 })
 export class AppModule {}

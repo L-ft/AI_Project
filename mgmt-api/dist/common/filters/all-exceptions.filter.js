@@ -19,6 +19,15 @@ let AllExceptionsFilter = class AllExceptionsFilter {
         const exceptionResponse = exception instanceof common_1.HttpException
             ? exception.getResponse()
             : { message: 'Internal server error' };
+        const path = (request.url || '').split('?')[0];
+        if (path.startsWith('/v1/data-builder') && exception instanceof common_1.HttpException) {
+            if (typeof exceptionResponse === 'string') {
+                response.status(status).json({ detail: exceptionResponse });
+                return;
+            }
+            response.status(status).json(exceptionResponse);
+            return;
+        }
         const message = exceptionResponse.message || exceptionResponse;
         const code = exceptionResponse.code || 'INTERNAL_ERROR';
         response.status(status).json({

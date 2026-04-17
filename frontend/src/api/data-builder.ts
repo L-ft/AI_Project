@@ -1,4 +1,6 @@
-import dataBuilderClient from './data-builder-client'
+import dataBuilderClient, { getL3TasksHttpClient, getL3TasksPathPrefix } from './data-builder-client'
+
+export { useDataBuilderTasksViaMgmt } from './data-builder-client'
 
 export interface MySQLConnectionBody {
   host: string
@@ -259,6 +261,166 @@ export async function generateWritePlanSteps(body: {
   return dataBuilderClient.post('/api/v1/generate/write-plan/steps', body) as Promise<{
     rationale: string
     steps: OrchestrateStepPayload[]
+  }>
+}
+
+// --- L3 Manifest 任务（默认直连 exec-engine；VITE_DATA_BUILDER_VIA_MGMT=true 时走 mgmt-api 代理）---
+
+export type TaskStatusL3 =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'COMPLETED_OK'
+  | 'FAILED_ASSERTION'
+  | 'FAILED_EXECUTION'
+
+export type CleanupStateL3 = 'not_applicable' | 'eligible' | 'completed' | 'blocked'
+
+export interface BatchProgressL3 {
+  batch_count: number
+  completed_batches: number
+  current_batch_index: number | null
+  rows_inserted_total?: number
+}
+
+export interface AssertionSummaryL3 {
+  evaluated: boolean
+  passed: boolean
+  failed_rules?: string[]
+}
+
+export interface AssertionRunItemL3 {
+  assertion_id: string
+  assertion_type?: 'scalar' | 'rowset'
+  passed: boolean
+  actual?: unknown
+  expect?: unknown
+  error_code?: string | null
+  message?: string | null
+  primary_key_columns?: string[] | null
+  sample_rows?: Record<string, unknown>[] | null
+  truncated?: boolean
+}
+
+export interface CleanupStatusL3 {
+  state: CleanupStateL3
+  blocked_reason?: string | null
+}
+
+/** GET 合同 M1：`runtime.assertion_summary` 为条数统计 */
+export interface RuntimeAssertionSummaryL3 {
+  total: number
+  passed: number
+}
+
+export interface TaskRuntimeL3 {
+  batch_progress: BatchProgressL3
+  last_heartbeat_at?: string | null
+  last_batch_started_at?: string | null
+  cleanup_status: CleanupStatusL3
+  assertion_summary: RuntimeAssertionSummaryL3
+}
+
+export interface TaskDetailL3 {
+  task_id: string
+  status: TaskStatusL3
+  manifest: Record<string, unknown>
+  batch_progress: BatchProgressL3
+  last_heartbeat_at?: string | null
+  last_batch_started_at?: string | null
+  assertion_summary: AssertionSummaryL3
+  assertion_runs?: AssertionRunItemL3[]
+  cleanup_status: CleanupStatusL3
+  row_map_flush_lag?: number
+  last_error?: { code?: string; message?: string; details?: unknown } | null
+  /** M1 OpenAPI：轮询核心对象（与顶层字段镜像，断言为 total/passed 计数） */
+  runtime?: TaskRuntimeL3
+}
+
+export interface CreateDataBuilderTaskBody {
+  manifest?: Record<string, unknown>
+  mysql: MySQLConnectionBody
+  /** 经 mgmt-api 时与 manifest 二选一 */
+  prompt?: string
+  table_hint?: string
+}
+
+export async function createDataBuilderTask(body: CreateDataBuilderTaskBody): Promise<{
+  task_id: string
+  status: TaskStatusL3
+  manifest: Record<string, unknown>
+}> {
+  const p = getL3TasksPathPrefix()
+  return getL3TasksHttpClient().post(`${p}/tasks`, body) as Promise<{
+    task_id: string
+    status: TaskStatusL3
+    manifest: Record<string, unknown>
+  }>
+}
+
+export async function listDataBuilderTasks(limit = 50): Promise<TaskDetailL3[]> {
+  const p = getL3TasksPathPrefix()
+  return getL3TasksHttpClient().get(`${p}/tasks`, { params: { limit } }) as Promise<TaskDetailL3[]>
+}
+
+export async function getDataBuilderTask(
+  taskId: string,
+  options?: { skipErrorToast?: boolean }
+): Promise<TaskDetailL3> {
+  const p = getL3TasksPathPrefix()
+  return getL3TasksHttpClient().get(`${p}/tasks/${taskId}`, {
+    skipErrorToast: options?.skipErrorToast === true
+  } as Record<string, unknown>) as Promise<TaskDetailL3>
+}
+
+export async function executeDataBuilderBatch(
+  taskId: string,
+  batchIndex: number,
+  dryRun = false
+): Promise<{
+  task_id: string
+  status: TaskStatusL3
+  batch_index: number
+  rows_affected: number
+  assertions_evaluated: boolean
+  assertion_summary: AssertionSummaryL3 | null
+}> {
+  const p = getL3TasksPathPrefix()
+  return getL3TasksHttpClient().post(`${p}/tasks/${taskId}/execute-batch`, {
+    batch_index: batchIndex,
+    dry_run: dryRun
+  }) as Promise<{
+    task_id: string
+    status: TaskStatusL3
+    batch_index: number
+    rows_affected: number
+    assertions_evaluated: boolean
+    assertion_summary: AssertionSummaryL3 | null
+  }>
+}
+
+export async function cleanupDataBuilderTask(
+  taskId: string,
+  confirm: boolean,
+  actor?: string
+): Promise<{
+  task_id: string
+  deleted_by_table: Record<string, number>
+  mode_used?: string | null
+  cleanup_completed_at?: string | null
+  cleanup_completed_by?: string | null
+  idempotent_replay?: boolean
+}> {
+  const p = getL3TasksPathPrefix()
+  return getL3TasksHttpClient().post(`${p}/tasks/${taskId}/cleanup`, {
+    confirm,
+    actor: actor ?? 'ui'
+  }) as Promise<{
+    task_id: string
+    deleted_by_table: Record<string, number>
+    mode_used?: string | null
+    cleanup_completed_at?: string | null
+    cleanup_completed_by?: string | null
+    idempotent_replay?: boolean
   }>
 }
 

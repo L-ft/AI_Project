@@ -1,0 +1,584 @@
+openapi: 3.0.3
+info:
+  title: Data Builder — Core Task APIs (mgmt-api orchestration layer)
+  version: 0.3.0-m1
+  description: |
+    M1 活文档：Swagger UI 由 mgmt-api 挂载 `GET /api/docs`（加载本 YAML）。
+    四接口合同；exec-engine 仅受控执行。任务状态：PENDING, RUNNING, COMPLETED_OK,
+    FAILED_ASSERTION, FAILED_EXECUTION。
+
+    **创建任务**：`POST` 经 mgmt-api 编排 — 可传 `prompt`（自然语言）或 `manifest`；
+    二者均须通过 `manifest_v1.schema.json` 校验后方可转发 exec-engine；**task_id 由 exec-engine 创建时生成**。
+    **轮询**：`GET` 返回顶层字段 + **`runtime`**（batch 进度、心跳、cleanup、断言计数 total/passed）。
+
+servers:
+  - url: /api/v1
+    description: mgmt-api base (adjust to your global prefix)
+
+tags:
+  - name: data-builder-tasks
+    description: Task manifest lifecycle and sharded execution
+
+paths:
+  /data-builder/tasks:
+    post:
+      tags: [data-builder-tasks]
+      summary: Create task（prompt 或 manifest + 强校验）
+      description: |
+        mgmt-api：`prompt` 时先用占位草稿生成 manifest，再 AJV Schema + assertions/cleanup.plans 硬约束；
+        未通过 **422**，不写入 DB、不下发 exec-engine。仅 `manifest` 时同样校验。
+        **task_id** 在 exec-engine `create_task` 内 `uuid4` 生成并写入 manifest 快照。
+      operationId: dataBuilderCreateTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+            examples:
+              naturalLanguage:
+                summary: 自然语言 Prompt（M1 占位草稿）
+                value:
+                  prompt: "在 api_environments 插入 2 条测试环境，base_url 以 https://test 开头"
+                  table_hint: api_environments
+                  mysql:
+                    host: localhost
+                    port: 3306
+                    user: root
+                    password: secret
+                    database: ai_automation_db
+              fullManifest:
+                summary: 直接提交已生成的 manifest_v1
+                value:
+                  mysql:
+                    host: localhost
+                    port: 3306
+                    user: root
+                    password: secret
+                    database: ai_automation_db
+                  manifest:
+                    manifest_version: "1.0"
+                    database_context:
+                      dialect: mysql8
+                      connection_ref: ui_mysql
+                      database: ai_automation_db
+                      tables: [{ name: api_environments, role: primary }]
+                    generation:
+                      mode: template
+                      instruction_echo: manual
+                      sql_template: 'INSERT INTO `api_environments` (`name`,`base_url`) VALUES (:name,:base_url)'
+                      bindings:
+                        - { placeholder: name, column: name, strategy: fingerprint_remark, params: { merge_mode: append } }
+                        - { placeholder: base_url, column: base_url, strategy: literal, params: { value: "https://x" } }
+                      batching:
+                        total_rows: 2
+                        batch_size: 2
+                        batch_count: 1
+                        batches: [{ batch_index: 0, row_count: 2, label: b0 }]
+                      post_insert_sql: []
+                      state_machine: null
+                    fingerprint:
+                      strategy: row_map_only
+                      remark_column: null
+                      marker:
+                        format: prefixed_token
+                        prefix: DB_TASK_
+                        value_template: "${prefix}${task_id}"
+                      row_map: { enabled: true, async_flush: false, table: data_builder_row_map }
+                    assertions:
+                      - id: asrt_c
+                        name: cnt
+                        assertion_type: scalar
+                        severity: error
+                        sql: "SELECT COUNT(*) AS c FROM `api_environments` WHERE `name` LIKE CONCAT('%', :task_marker, '%')"
+                        expect: { kind: row_count_eq, value: 2, column: c }
+                        rationale: demo
+                        run_after_batch: null
+                    cleanup:
+                      mode: row_map
+                      requires_confirm: true
+                      plans: [{ table: api_environments, order: 10, source: row_map }]
+                    meta:
+                      source: api
+                      compliance: { production_row_sampling: false }
+                      data_builder: { insert_pk_column: id }
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTaskResponse'
+              example:
+                task_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                status: PENDING
+                manifest:
+                  manifest_version: "1.0"
+                  task_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                  database_context:
+                    database: ai_automation_db
+        '400':
+          description: 请求体缺 mysql / 同时传 prompt+manifest 等
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Manifest 未过 Schema 或缺 assertions / cleanup.plans
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestValidationError'
+
+  /data-builder/tasks/{taskId}:
+    get:
+      tags: [data-builder-tasks]
+      summary: Get task status and progress (polling)
+      description: |
+        轮询任务详情。除顶层字段外 **必须包含 `runtime`**：
+        `batch_progress`、`last_heartbeat_at`、`cleanup_status`、`assertion_summary: { total, passed }`。
+        建议编排层（mgmt-api）写心跳；exec-engine 亦可回传，最终以合同字段为准。
+      operationId: dataBuilderGetTask
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Current task state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDetailResponse'
+              example:
+                task_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                status: RUNNING
+                manifest:
+                  manifest_version: "1.0"
+                  task_id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                batch_progress:
+                  batch_count: 2
+                  completed_batches: 1
+                  current_batch_index: 0
+                  rows_inserted_total: 4
+                last_heartbeat_at: "2026-04-16T08:01:02.000Z"
+                last_batch_started_at: "2026-04-16T08:01:00.000Z"
+                assertion_summary:
+                  evaluated: false
+                  passed: true
+                  failed_rules: []
+                assertion_runs: []
+                cleanup_status:
+                  state: not_applicable
+                  blocked_reason: null
+                row_map_flush_lag: 0
+                last_error: null
+                runtime:
+                  batch_progress:
+                    batch_count: 2
+                    completed_batches: 1
+                    current_batch_index: 0
+                    rows_inserted_total: 4
+                  last_heartbeat_at: "2026-04-16T08:01:02.000Z"
+                  last_batch_started_at: "2026-04-16T08:01:00.000Z"
+                  cleanup_status:
+                    state: not_applicable
+                    blocked_reason: null
+                  assertion_summary:
+                    total: 1
+                    passed: 0
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /data-builder/tasks/{taskId}/execute-batch:
+    post:
+      tags: [data-builder-tasks]
+      summary: Execute one batch shard
+      description: |
+        Idempotent per (task_id, batch_index) when possible. Transitions PENDING→RUNNING,
+        RUNNING→RUNNING. After final batch, runs assertions (soft L3); on assertion mismatch
+        sets FAILED_ASSERTION and retains data. SQL/connection errors → FAILED_EXECUTION.
+      operationId: dataBuilderExecuteBatch
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteBatchRequest'
+      responses:
+        '200':
+          description: Batch result; task may still be RUNNING until all batches done
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecuteBatchResponse'
+        '409':
+          description: Invalid state transition (e.g. cleanup already ran)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /data-builder/tasks/{taskId}/cleanup:
+    post:
+      tags: [data-builder-tasks]
+      summary: One-click cleanup for this task
+      description: |
+        Uses manifest.cleanup + row_map. Requires confirm=true. Must refuse if task is RUNNING
+        unless policy allows cancel (document in implementation).
+      operationId: dataBuilderCleanupTask
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CleanupRequest'
+      responses:
+        '200':
+          description: Cleanup summary (rows affected per table)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupResponse'
+        '400':
+          description: Confirm missing or guard failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+components:
+  parameters:
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    TaskStatus:
+      type: string
+      enum:
+        - PENDING
+        - RUNNING
+        - COMPLETED_OK
+        - FAILED_ASSERTION
+        - FAILED_EXECUTION
+
+    MySQLConnection:
+      type: object
+      required: [host, port, user, password, database]
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        user: { type: string }
+        password: { type: string }
+        database: { type: string }
+
+    CreateTaskRequest:
+      type: object
+      required: [mysql]
+      description: |
+        `manifest` 与 `prompt` 二选一（不可同时出现）。均须带 `mysql` 连接体（与 exec-engine 对齐）。
+      properties:
+        mysql:
+          $ref: '#/components/schemas/MySQLConnection'
+        prompt:
+          type: string
+          description: 自然语言；mgmt-api 生成草稿 manifest 后再过 Schema。
+        table_hint:
+          type: string
+          description: 可选；提示目标物理表名（如 api_environments）。
+        manifest:
+          type: object
+          description: 完整 manifest_v1；与 prompt 互斥。
+          additionalProperties: true
+        idempotency_key:
+          type: string
+          description: Optional client key to dedupe creates.
+
+    ManifestValidationError:
+      type: object
+      required: [code, message, fixes]
+      properties:
+        code:
+          type: string
+          example: DB_MANIFEST_INVALID
+        message:
+          type: string
+        fixes:
+          type: array
+          items: { type: string }
+          description: 人类可读的修复建议（如补 assertions / cleanup.plans）。
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              keyword: { type: string }
+              message: { type: string }
+
+    CreateTaskResponse:
+      type: object
+      required: [task_id, status, manifest]
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        manifest:
+          type: object
+          additionalProperties: true
+
+    BatchProgress:
+      type: object
+      required: [batch_count, completed_batches, current_batch_index]
+      properties:
+        batch_count: { type: integer }
+        completed_batches: { type: integer }
+        current_batch_index:
+          type: integer
+          nullable: true
+        rows_inserted_total: { type: integer }
+
+    RuntimeAssertionSummary:
+      type: object
+      required: [total, passed]
+      description: 断言条数统计（轮询 UI 进度条）；passed 为已通过条数，未评估前为 0。
+      properties:
+        total: { type: integer }
+        passed: { type: integer }
+
+    TaskRuntime:
+      type: object
+      required: [batch_progress, cleanup_status, assertion_summary]
+      properties:
+        batch_progress:
+          $ref: '#/components/schemas/BatchProgress'
+        last_heartbeat_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_batch_started_at:
+          type: string
+          format: date-time
+          nullable: true
+        cleanup_status:
+          $ref: '#/components/schemas/CleanupStatus'
+        assertion_summary:
+          $ref: '#/components/schemas/RuntimeAssertionSummary'
+
+    TaskDetailResponse:
+      type: object
+      required:
+        - task_id
+        - status
+        - manifest
+        - batch_progress
+        - assertion_summary
+        - cleanup_status
+        - runtime
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        manifest:
+          type: object
+          description: manifest_v1 snapshot; MUST NOT embed runtime telemetry fields.
+          additionalProperties: true
+        batch_progress:
+          $ref: '#/components/schemas/BatchProgress'
+        runtime:
+          $ref: '#/components/schemas/TaskRuntime'
+        last_heartbeat_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Updated by orchestration only, after exec-engine reports each batch SQL success.
+        last_batch_started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when execute-batch begins invoking exec-engine; used with heartbeat for stall detection.
+        assertion_summary:
+          $ref: '#/components/schemas/AssertionSummary'
+        assertion_runs:
+          type: array
+          description: Per-rule results; includes sample_rows for failed rowset assertions.
+          items:
+            $ref: '#/components/schemas/AssertionRunItem'
+        cleanup_status:
+          $ref: '#/components/schemas/CleanupStatus'
+        row_map_flush_lag:
+          type: integer
+          description: Pending sidecar rows not yet flushed (best-effort).
+        last_error:
+          $ref: '#/components/schemas/ErrorEnvelope'
+          nullable: true
+
+    CleanupStatus:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [not_applicable, eligible, completed, blocked]
+          description: |
+            not_applicable: task not in a state where cleanup applies (e.g. PENDING with no writes).
+            eligible: cleanup may be invoked (confirm + guards).
+            completed: cleanup already ran successfully for this task.
+            blocked: cleanup temporarily forbidden; see blocked_reason.
+        blocked_reason:
+          type: string
+          nullable: true
+          description: Machine-oriented code, e.g. row_map_flush_lag, task_running, cleanup_already_completed.
+
+    ExecuteBatchRequest:
+      type: object
+      required: [batch_index]
+      properties:
+        batch_index:
+          type: integer
+          minimum: 0
+        dry_run:
+          type: boolean
+          default: false
+
+    ExecuteBatchResponse:
+      type: object
+      required: [task_id, status, batch_index, rows_affected]
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        batch_index:
+          type: integer
+        rows_affected:
+          type: integer
+        assertions_evaluated:
+          type: boolean
+          description: True if this response completed final batch and ran assertions.
+        assertion_summary:
+          $ref: '#/components/schemas/AssertionSummary'
+          nullable: true
+
+    AssertionSummary:
+      type: object
+      required: [evaluated, passed]
+      description: |
+        Always present on GET task. Before the final batch, use evaluated=false and passed=true
+        with empty failed_rules (assertions not run yet).
+      properties:
+        evaluated:
+          type: boolean
+          description: True once assertions have run for this task (typically after final batch).
+        passed:
+          type: boolean
+          description: True if all error-severity rules passed; false if any failed or not yet evaluated.
+        failed_rules:
+          type: array
+          items:
+            type: string
+            description: assertion rule id
+
+    AssertionRunItem:
+      type: object
+      required: [assertion_id, passed]
+      properties:
+        assertion_id:
+          type: string
+        assertion_type:
+          type: string
+          enum: [scalar, rowset]
+          description: Echo from manifest for UI routing.
+        passed:
+          type: boolean
+        actual:
+          description: Driver-dependent scalar for scalar rules; may be null for rowset_empty.
+          nullable: true
+        expect:
+          nullable: true
+        error_code:
+          type: string
+          nullable: true
+        primary_key_columns:
+          type: array
+          items:
+            type: string
+          description: From manifest; repeated on failure for table rendering without re-parsing manifest.
+          nullable: true
+        sample_rows:
+          type: array
+          description: |
+            Violating rows when assertion_type=rowset and passed=false; each item is a column->value map.
+            At most 20 rows (server-enforced LIMIT).
+          items:
+            type: object
+            additionalProperties: true
+          nullable: true
+        truncated:
+          type: boolean
+          description: True if more violating rows existed than returned in sample_rows.
+          default: false
+
+    CleanupRequest:
+      type: object
+      required: [confirm]
+      properties:
+        confirm:
+          type: boolean
+          description: Must be true to execute destructive deletes.
+
+    CleanupResponse:
+      type: object
+      required: [task_id, deleted_by_table]
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        deleted_by_table:
+          type: object
+          additionalProperties:
+            type: integer
+        mode_used:
+          type: string
+          enum: [predicate, row_map, hybrid]
+        cleanup_completed_at:
+          type: string
+          format: date-time
+          description: Audit timestamp written when CleanupService finishes successfully.
+        cleanup_completed_by:
+          type: string
+          description: Subject id or service principal that invoked cleanup.
+          nullable: true
+        idempotent_replay:
+          type: boolean
+          description: True if cleanup was a no-op replay (already completed).
+          default: false
+
+    ErrorEnvelope:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine code; see error_codes.md
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

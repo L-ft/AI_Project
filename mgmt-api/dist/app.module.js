@@ -12,6 +12,7 @@ const typeorm_1 = require("@nestjs/typeorm");
 const auth_module_1 = require("./auth/auth.module");
 const api_module_1 = require("./modules/api.module");
 const account_module_1 = require("./modules/account.module");
+const data_builder_tasks_proxy_module_1 = require("./modules/data-builder-tasks-proxy.module");
 const user_entity_1 = require("./entities/user.entity");
 const menu_entity_1 = require("./entities/menu.entity");
 let AppModule = class AppModule {
@@ -37,7 +38,8 @@ exports.AppModule = AppModule = __decorate([
             }),
             auth_module_1.AuthModule,
             api_module_1.ApiModule,
-            account_module_1.AccountModule
+            account_module_1.AccountModule,
+            data_builder_tasks_proxy_module_1.DataBuilderTasksProxyModule,
         ],
     })
 ], AppModule);

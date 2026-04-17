@@ -24,6 +24,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getResponse()
         : { message: 'Internal server error' };
 
+    const path = (request.url || '').split('?')[0];
+    if (path.startsWith('/v1/data-builder') && exception instanceof HttpException) {
+      if (typeof exceptionResponse === 'string') {
+        response.status(status).json({ detail: exceptionResponse });
+        return;
+      }
+      response.status(status).json(exceptionResponse);
+      return;
+    }
+
     const message = exceptionResponse.message || exceptionResponse;
     const code = exceptionResponse.code || 'INTERNAL_ERROR';
 

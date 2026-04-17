@@ -7,6 +7,10 @@
     "start:prod": "node dist/main"
   },
   "dependencies": {
+    "ajv": "^8.12.0",
+    "ajv-formats": "^3.0.1",
+    "js-yaml": "^4.1.0",
+    "@nestjs/swagger": "^7.3.0",
     "@nestjs/axios": "^3.0.0",
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",
@@ -25,6 +29,7 @@
     "typeorm": "^0.3.17"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@faker-js/faker": "^10.2.0",
     "@nestjs/cli": "^10.0.0",
     "@nestjs/schematics": "^10.0.0",

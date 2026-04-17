@@ -41,6 +41,10 @@ services:
       - JWT_SECRET=ai_platform_secret
       - REDIS_HOST=redis_final
       - EXEC_ENGINE_URL=http://exec_engine_final:8000
+      # 活文档：镜像内无仓库 docs/，挂载宿主合同 YAML（见 main.ts tryLoadOpenApiSpec）
+      - OPENAPI_DATA_BUILDER_PATH=/app/docs-contract/openapi_core.yaml
+    volumes:
+      - ./docs/data-builder/openapi_core.yaml:/app/docs-contract/openapi_core.yaml:ro
     ports:
       - "3011:3000"
     depends_on:
@@ -85,6 +89,8 @@ services:
         VITE_MGMT_API_URL: /api
         VITE_EXEC_ENGINE_URL: /engine
         VITE_DATA_BUILDER_URL: /data-builder
+        # "true"：L3/造数任务走 mgmt（强校验、Prompt 创建）；需重建前端镜像
+        VITE_DATA_BUILDER_VIA_MGMT: "false"
     container_name: ai_platform_fe_v1
     ports:
       - "3010:80"

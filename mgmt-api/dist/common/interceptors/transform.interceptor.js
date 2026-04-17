@@ -11,6 +11,11 @@ const common_1 = require("@nestjs/common");
 const operators_1 = require("rxjs/operators");
 let TransformInterceptor = class TransformInterceptor {
     intercept(context, next) {
+        const req = context.switchToHttp().getRequest();
+        const path = (req.url || '').split('?')[0];
+        if (path.startsWith('/v1/data-builder')) {
+            return next.handle();
+        }
         return next.handle().pipe((0, operators_1.map)((data) => ({
             code: context.switchToHttp().getResponse().statusCode,
             msg: '操作成功',

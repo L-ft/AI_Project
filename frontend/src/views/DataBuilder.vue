@@ -443,6 +443,112 @@
             </n-card>
           </n-tab-pane>
 
+          <n-tab-pane name="l3" tab="L3 分片任务">
+            <n-card title="Manifest 任务看板（分片 + 断言 + 清理）" size="small" class="panel-card">
+              <n-space vertical :size="12" style="width: 100%">
+                <n-alert type="info" title="说明">
+                  本页 L3 接口默认经 <code>/data-builder</code> 直连 exec-engine；若构建时设置
+                  <code>VITE_DATA_BUILDER_VIA_MGMT=true</code>，则走 <code>/api/v1/data-builder/*</code>（mgmt-api 转发至
+                  <code>EXEC_ENGINE_URL</code>）。创建任务后按批执行 INSERT，末批自动跑断言。Manifest 须符合
+                  <code>docs/data-builder/manifest_v1.schema.json</code>；目标库需可写且建议先执行侧车 DDL（<code>table_ddl.sql</code>）。
+                  <strong>任务列表仅在当前 exec-engine 进程内存中</strong>：容器重启、热重载后旧 <code>task_id</code> 会报「任务不存在」，请重新创建或刷新列表后点选仍存在的任务。
+                  <span v-if="l3ViaMgmt">当前为 <strong>mgmt 代理模式</strong>。</span>
+                  <br />
+                  <n-text depth="3" style="font-size: 13px">
+                    合同与请求/响应示例见
+                    <a :href="l3OpenApiDocsUrl" target="_blank" rel="noopener noreferrer">OpenAPI 活文档（Swagger）</a>
+                    （新标签页打开；Docker 生产为当前站点 <code>/api/docs</code>）。
+                  </n-text>
+                </n-alert>
+                <n-space align="center" wrap>
+                  <n-button size="small" secondary :disabled="!activeSchema" @click="onFillL3ManifestSkeleton">
+                    用当前表生成骨架
+                  </n-button>
+                  <n-button type="primary" :disabled="!connReady || l3Creating" :loading="l3Creating" @click="onL3CreateTask">
+                    创建任务
+                  </n-button>
+                  <n-button
+                    type="primary"
+                    secondary
+                    :disabled="!l3TaskId || l3RunningBatches"
+                    :loading="l3RunningBatches"
+                    @click="onL3RunAllBatches"
+                  >
+                    顺序执行全部分片
+                  </n-button>
+                  <n-popconfirm @positive-click="onL3Cleanup">
+                    <template #trigger>
+                      <n-button type="error" secondary :disabled="!l3TaskId">撤回清理</n-button>
+                    </template>
+                    确认对当前 task 执行 cleanup（confirm=true）？
+                  </n-popconfirm>
+                  <n-button quaternary size="small" :loading="l3LoadingList" @click="onL3RefreshList">刷新任务列表</n-button>
+                </n-space>
+                <n-input
+                  v-model:value="l3ManifestJson"
+                  type="textarea"
+                  placeholder="manifest_v1 JSON"
+                  :autosize="{ minRows: 14, maxRows: 28 }"
+                />
+                <n-text v-if="l3TaskId" depth="2">task_id：{{ l3TaskId }}</n-text>
+                <n-alert v-if="l3StallDetected" type="warning" title="执行可能挂死">
+                  已超过约 30s 未收到本批成功心跳（last_heartbeat_at 未晚于 last_batch_started_at）。请检查 exec-engine、数据库锁或慢查询。
+                </n-alert>
+                <template v-if="l3Detail">
+                  <n-space align="center" wrap>
+                    <n-tag :type="l3StatusTagType" size="small">{{ l3Detail.status }}</n-tag>
+                    <n-text depth="3">
+                      Batch {{ l3Detail.batch_progress.completed_batches }} / {{ l3Detail.batch_progress.batch_count }} · 写入
+                      {{ l3Detail.batch_progress.rows_inserted_total ?? 0 }} 行
+                    </n-text>
+                    <n-tag size="small" type="default">cleanup: {{ l3Detail.cleanup_status.state }}</n-tag>
+                    <n-tag v-if="l3RuntimeAssertionText" size="small" type="info">
+                      断言进度（runtime）{{ l3RuntimeAssertionText }}
+                    </n-tag>
+                  </n-space>
+                  <n-divider style="margin: 8px 0" />
+                  <n-text strong>断言摘要</n-text>
+                  <n-space v-if="l3Detail.assertion_runs?.length" vertical :size="6" style="width: 100%">
+                    <n-space v-for="ar in l3Detail.assertion_runs" :key="ar.assertion_id" align="center" wrap>
+                      <n-tag :type="ar.passed ? 'success' : 'error'" size="small">{{ ar.assertion_id }}</n-tag>
+                      <n-text depth="3" style="font-size: 12px">{{ ar.assertion_type ?? 'scalar' }}</n-text>
+                      <n-button
+                        v-if="!ar.passed && ar.sample_rows?.length"
+                        size="tiny"
+                        quaternary
+                        @click="onL3OpenSample(ar.sample_rows)"
+                      >
+                        查看异常行
+                      </n-button>
+                    </n-space>
+                  </n-space>
+                  <n-text v-else depth="3">尚无断言结果（未完成末批或未执行）</n-text>
+                </template>
+                <n-modal v-model:show="l3ShowSample" preset="card" title="断言样例行" style="width: 800px; max-width: 96vw">
+                  <n-data-table
+                    v-if="l3AssertionSample?.length"
+                    size="small"
+                    :columns="l3SampleCols"
+                    :data="l3AssertionSample"
+                    :row-key="l3SampleRowKey"
+                  />
+                </n-modal>
+                <n-divider style="margin: 8px 0" />
+                <n-text strong>最近任务</n-text>
+                <n-text depth="3" style="font-size: 12px; display: block">点击表格行加载该任务详情并继续轮询。</n-text>
+                <n-data-table
+                  size="small"
+                  :columns="l3ListCols"
+                  :data="l3TaskList"
+                  :pagination="{ pageSize: 6 }"
+                  :scroll-x="640"
+                  :row-key="l3TaskRowKey"
+                  :row-props="l3RowProps"
+                />
+              </n-space>
+            </n-card>
+          </n-tab-pane>
+
           <n-tab-pane name="settings" tab="设置与执行">
             <n-card title="高级选项" size="small" class="panel-card">
               <n-form label-placement="left" label-width="180" :show-feedback="false">
@@ -494,7 +600,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref, watch } from 'vue'
+import axios from 'axios'
+import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   NAlert,
   NButton,
@@ -503,6 +610,7 @@ import {
   NCollapse,
   NCollapseItem,
   NDataTable,
+  NDivider,
   NDescriptions,
   NDescriptionsItem,
   NForm,
@@ -512,6 +620,7 @@ import {
   NIcon,
   NInput,
   NInputNumber,
+  NModal,
   NPopconfirm,
   NRadioButton,
   NRadioGroup,
@@ -527,6 +636,7 @@ import {
 } from 'naive-ui'
 import { DatabaseOutlined } from '@vicons/antd'
 import PageTopbar from '@/components/PageTopbar.vue'
+import { getMgmtApiBaseURL } from '@/api/core/mgmt-base'
 import { dataBuilderUrl } from '@/api/data-builder-request'
 import {
   executePlan,
@@ -534,11 +644,16 @@ import {
   fetchSchemaRelationships,
   generatePreview,
   generateWritePlan,
+  cleanupDataBuilderTask,
+  createDataBuilderTask,
+  executeDataBuilderBatch,
   generateWritePlanCot,
   generateWritePlanPlanner,
   generateWritePlanSteps,
   getDataBuilderSettings,
+  getDataBuilderTask,
   getPromptLibrary,
+  listDataBuilderTasks,
   listMysqlTables,
   nl2sqlGenerate,
   orchestrateExecute,
@@ -552,7 +667,9 @@ import {
   type PromptLibraryItem,
   type QueryExecuteResult,
   type RelationshipEdge,
-  type TableSchemaResult
+  type TableSchemaResult,
+  type TaskDetailL3,
+  useDataBuilderTasksViaMgmt
 } from '@/api/data-builder'
 import { message } from '@/utils/naive-api'
 
@@ -743,6 +860,349 @@ const connReady = computed(
     conn.value.port >= 1 &&
     conn.value.port <= 65535
 )
+
+const l3ManifestJson = ref('{}')
+const l3TaskId = ref<string | null>(null)
+const l3Detail = ref<TaskDetailL3 | null>(null)
+const l3TaskList = ref<TaskDetailL3[]>([])
+
+function isL3TaskNotFound(err: unknown): boolean {
+  if (!axios.isAxiosError(err)) return false
+  if (err.response?.status !== 404) return false
+  const code = (err.response?.data as { detail?: { code?: string } } | undefined)?.detail?.code
+  return code === 'DB_TASK_NOT_FOUND'
+}
+
+function l3DropStaleSelection() {
+  stopL3Poll()
+  l3TaskId.value = null
+  l3Detail.value = null
+}
+const l3Creating = ref(false)
+const l3RunningBatches = ref(false)
+const l3LoadingList = ref(false)
+const l3ShowSample = ref(false)
+const l3AssertionSample = ref<Record<string, unknown>[] | null>(null)
+let l3PollTimer: ReturnType<typeof setInterval> | null = null
+
+const l3StallDetected = computed(() => {
+  const d = l3Detail.value
+  if (!d || d.status !== 'RUNNING') return false
+  const started = d.last_batch_started_at
+  if (!started) return false
+  const hb = d.last_heartbeat_at
+  const th = 30_000
+  const now = Date.now()
+  const st = new Date(started).getTime()
+  if (now - st <= th) return false
+  if (!hb) return true
+  return new Date(hb).getTime() < st
+})
+
+const l3StatusTagType = computed(() => {
+  const s = l3Detail.value?.status
+  if (s === 'COMPLETED_OK') return 'success'
+  if (s === 'FAILED_ASSERTION' || s === 'FAILED_EXECUTION') return 'error'
+  if (s === 'RUNNING') return 'info'
+  return 'default'
+})
+
+const l3SampleCols = computed<DataTableColumns<Record<string, unknown>>>(() => {
+  const r = l3AssertionSample.value?.[0]
+  if (!r) return []
+  return Object.keys(r).map((k) => ({
+    title: k,
+    key: k,
+    minWidth: 96,
+    ellipsis: { tooltip: true },
+    render: (row) => {
+      const v = row[k]
+      if (v == null) return ''
+      return typeof v === 'object' ? JSON.stringify(v) : String(v)
+    }
+  }))
+})
+
+const l3ViaMgmt = computed(
+  () => useDataBuilderTasksViaMgmt()
+)
+
+/**
+ * Swagger 挂在 mgmt 的 /api/docs。生产环境前端 Nginx 将 /api/ 转发到 mgmt 根路径，
+ * 故浏览器需访问 /api/api/docs 才能落到 mgmt 的 /api/docs。
+ */
+const l3OpenApiDocsUrl = computed(() => {
+  const mgmt = getMgmtApiBaseURL().replace(/\/$/, '')
+  if (import.meta.env.DEV) {
+    // 本地直连 mgmt 时 Swagger 在 /docs
+    return `${mgmt}/docs`
+  }
+  if (typeof window === 'undefined') return '/api/docs'
+  return `${window.location.origin}/api/docs`
+})
+
+/** 展示 runtime.assertion_summary：已通过条数 / 规则总数（M1 合同） */
+const l3RuntimeAssertionText = computed(() => {
+  const r = l3Detail.value?.runtime?.assertion_summary
+  if (!r || typeof r.total !== 'number') return ''
+  return `${r.passed ?? 0} / ${r.total}`
+})
+
+const l3ListCols: DataTableColumns<TaskDetailL3> = [
+  { title: 'task_id', key: 'task_id', width: 260, ellipsis: { tooltip: true } },
+  { title: 'status', key: 'status', width: 130 },
+  {
+    title: 'batch',
+    key: 'batch',
+    width: 100,
+    render: (row) => `${row.batch_progress.completed_batches}/${row.batch_progress.batch_count}`
+  },
+  {
+    title: 'cleanup',
+    key: 'cleanup',
+    width: 120,
+    render: (row) => row.cleanup_status.state
+  }
+]
+
+function onFillL3ManifestSkeleton() {
+  const sch = activeSchema.value
+  if (!sch) {
+    message.warning('请在「表与结构」中同步至少一张表')
+    return
+  }
+  const db = sch.database || conn.value.database.trim()
+  const table = sch.table
+  const dataCols = sch.columns.filter(
+    (c) => !String(c.extra || '').toLowerCase().includes('auto_increment')
+  )
+  if (!dataCols.length) {
+    message.warning('未找到非 AUTO_INCREMENT 列，请手工编写 Manifest')
+    return
+  }
+  const colA = dataCols[0]
+  const colB = dataCols.length > 1 ? dataCols[1] : dataCols[0]
+  const pkCol =
+    sch.columns.find((c) => String(c.extra || '').toLowerCase().includes('auto_increment'))?.name ??
+    sch.columns[0]?.name ??
+    'id'
+  const colsPart =
+    colA.name === colB.name
+      ? `(\`${colA.name}\`) VALUES (:${colA.name})`
+      : `(\`${colA.name}\`, \`${colB.name}\`) VALUES (:${colA.name}, :${colB.name})`
+  const sqlTemplate = `INSERT INTO \`${table}\` ${colsPart}`
+  const bindings =
+    colA.name === colB.name
+      ? [{ placeholder: colA.name, column: colA.name, strategy: 'literal', params: { value: 'l3-demo' } }]
+      : [
+          { placeholder: colA.name, column: colA.name, strategy: 'literal', params: { value: 'l3-a' } },
+          { placeholder: colB.name, column: colB.name, strategy: 'literal', params: { value: 'l3-b' } }
+        ]
+  const manifest: Record<string, unknown> = {
+    manifest_version: '1.0',
+    database_context: {
+      dialect: 'mysql8',
+      connection_ref: 'ui_mysql',
+      database: db,
+      tables: [{ name: table, role: 'primary' }]
+    },
+    generation: {
+      mode: 'template',
+      instruction_echo: 'L3 skeleton from UI',
+      sql_template: sqlTemplate,
+      bindings,
+      batching: {
+        total_rows: 4,
+        batch_size: 2,
+        batch_count: 2,
+        batches: [
+          { batch_index: 0, row_count: 2, label: 'b0' },
+          { batch_index: 1, row_count: 2, label: 'b1' }
+        ]
+      },
+      post_insert_sql: [],
+      state_machine: null
+    },
+    fingerprint: {
+      strategy: 'row_map_only',
+      remark_column: null,
+      marker: {
+        format: 'prefixed_token',
+        prefix: 'DB_TASK_',
+        value_template: '${prefix}${task_id}'
+      },
+      row_map: { enabled: true, async_flush: false, table: 'data_builder_row_map' }
+    },
+    assertions: [
+      {
+        id: 'asrt_dummy',
+        assertion_type: 'scalar',
+        name: '占位',
+        severity: 'error',
+        sql: 'SELECT 0 AS c',
+        expect: { kind: 'scalar_eq', value: 0, column: 'c' },
+        rationale: '占位，请按业务改写',
+        run_after_batch: null
+      }
+    ],
+    cleanup: {
+      mode: 'row_map',
+      requires_confirm: true,
+      plans: [{ table, order: 10, source: 'row_map' }]
+    },
+    meta: {
+      source: 'ui',
+      compliance: { production_row_sampling: false },
+      data_builder: { insert_pk_column: pkCol }
+    }
+  }
+  l3ManifestJson.value = JSON.stringify(manifest, null, 2)
+  message.success('已填充骨架（请核对列与主键 meta.data_builder.insert_pk_column）')
+}
+
+async function onL3CreateTask() {
+  if (!connReady.value) {
+    message.warning('请先填写并测试数据库连接')
+    return
+  }
+  let manifest: Record<string, unknown>
+  try {
+    manifest = JSON.parse(l3ManifestJson.value) as Record<string, unknown>
+  } catch {
+    message.error('Manifest JSON 解析失败')
+    return
+  }
+  l3Creating.value = true
+  try {
+    const res = await createDataBuilderTask({ manifest, mysql: connBody() })
+    l3TaskId.value = res.task_id
+    l3Detail.value = await getDataBuilderTask(res.task_id)
+    message.success('任务已创建')
+    await onL3RefreshList()
+  } finally {
+    l3Creating.value = false
+  }
+}
+
+async function onL3RunAllBatches() {
+  if (!l3TaskId.value) return
+  const tid = l3TaskId.value
+  l3RunningBatches.value = true
+  try {
+    let detail: TaskDetailL3
+    try {
+      detail = await getDataBuilderTask(tid)
+    } catch (e) {
+      if (isL3TaskNotFound(e)) l3DropStaleSelection()
+      throw e
+    }
+    const n = detail.batch_progress.batch_count
+    for (let i = 0; i < n; i++) {
+      await executeDataBuilderBatch(tid, i, false)
+      detail = await getDataBuilderTask(tid)
+      l3Detail.value = detail
+      if (detail.status === 'FAILED_EXECUTION') {
+        message.error(detail.last_error?.message ?? '执行失败')
+        return
+      }
+    }
+    message.success('分片执行完成')
+    await onL3RefreshList()
+  } catch {
+    /* 其它错误由 HTTP 拦截器提示 */
+  } finally {
+    l3RunningBatches.value = false
+  }
+}
+
+async function onL3Cleanup() {
+  if (!l3TaskId.value) return
+  try {
+    const r = await cleanupDataBuilderTask(l3TaskId.value, true, 'ui')
+    if (r.idempotent_replay) message.info('清理已完成（幂等重放）')
+    else message.success('清理已执行')
+    l3Detail.value = await getDataBuilderTask(l3TaskId.value)
+    await onL3RefreshList()
+  } catch (e) {
+    if (isL3TaskNotFound(e)) l3DropStaleSelection()
+  }
+}
+
+async function onL3RefreshList() {
+  l3LoadingList.value = true
+  try {
+    l3TaskList.value = await listDataBuilderTasks(30)
+    const tid = l3TaskId.value
+    if (tid && !l3TaskList.value.some((t) => t.task_id === tid)) {
+      l3DropStaleSelection()
+      message.warning('当前任务在服务端已不存在，已清除选中（常见于 exec-engine 重启）。请重新创建或从列表选择。')
+    }
+  } finally {
+    l3LoadingList.value = false
+  }
+}
+
+function onL3OpenSample(rows: Record<string, unknown>[] | null | undefined) {
+  l3AssertionSample.value = rows ?? null
+  l3ShowSample.value = true
+}
+
+function l3SampleRowKey(row: Record<string, unknown>) {
+  return JSON.stringify(row)
+}
+
+function l3TaskRowKey(row: TaskDetailL3) {
+  return row.task_id
+}
+
+function l3RowProps(row: TaskDetailL3) {
+  return {
+    style: 'cursor: pointer',
+    onClick: () => {
+      void onL3SelectTask(row.task_id)
+    }
+  }
+}
+
+async function onL3SelectTask(taskId: string) {
+  l3TaskId.value = taskId
+  try {
+    l3Detail.value = await getDataBuilderTask(taskId)
+    message.success('已加载任务详情')
+  } catch (e) {
+    if (isL3TaskNotFound(e)) l3DropStaleSelection()
+  }
+}
+
+function startL3Poll() {
+  stopL3Poll()
+  if (!l3TaskId.value || activeTab.value !== 'l3') return
+  l3PollTimer = setInterval(async () => {
+    if (!l3TaskId.value) return
+    try {
+      l3Detail.value = await getDataBuilderTask(l3TaskId.value, { skipErrorToast: true })
+    } catch (e) {
+      if (isL3TaskNotFound(e)) {
+        l3DropStaleSelection()
+        message.warning('任务已失效（例如 exec-engine 已重启），已停止轮询。请刷新列表或重新创建任务。')
+      }
+    }
+  }, 2000)
+}
+
+function stopL3Poll() {
+  if (l3PollTimer) {
+    clearInterval(l3PollTimer)
+    l3PollTimer = null
+  }
+}
+
+watch([l3TaskId, activeTab], () => {
+  stopL3Poll()
+  if (activeTab.value === 'l3' && l3TaskId.value) startL3Poll()
+})
+
+onUnmounted(() => stopL3Poll())
 
 const llmGenerateDisabled = computed(
   () =>
@@ -1390,6 +1850,7 @@ watch(activeSchemaKey, () => {
 })
 
 watch(activeTab, (tab) => {
+  if (tab === 'l3') void onL3RefreshList()
   if (
     tab === 'schema' &&
     lastTestOk.value &&

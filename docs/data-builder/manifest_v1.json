@@ -1,0 +1,142 @@
+{
+  "manifest_version": "1.0",
+  "task_id": "a1b2c3d4-e5f6-4a1b-8c9d-0e1f2a3b4c5d",
+  "database_context": {
+    "dialect": "mysql8",
+    "connection_ref": "default_mysql",
+    "database": "ai_automation_db",
+    "schema_version": "sha256:demo_ddl_snapshot",
+    "timezone": "Asia/Shanghai",
+    "tables": [
+      { "name": "orders", "role": "primary" },
+      { "name": "order_items", "role": "dependent" }
+    ]
+  },
+  "generation": {
+    "mode": "semantic",
+    "instruction_echo": "造 500 条已完成订单，金额为正，支付时间晚于创建时间。",
+    "sql_template": "INSERT INTO `orders` (`user_id`, `amount`, `status`, `create_time`, `pay_time`, `remark`) VALUES (:user_id, :amount, :status, :create_time, :pay_time, :remark)",
+    "bindings": [
+      {
+        "placeholder": "user_id",
+        "column": "user_id",
+        "strategy": "uniform_int",
+        "params": { "min": 1, "max": 10000 }
+      },
+      {
+        "placeholder": "amount",
+        "column": "amount",
+        "strategy": "positive_decimal",
+        "params": { "min": "0.01", "max": "9999.99" }
+      },
+      {
+        "placeholder": "status",
+        "column": "status",
+        "strategy": "literal",
+        "params": { "value": 3 }
+      },
+      {
+        "placeholder": "create_time",
+        "column": "create_time",
+        "strategy": "datetime_sequence",
+        "params": {}
+      },
+      {
+        "placeholder": "pay_time",
+        "column": "pay_time",
+        "strategy": "offset_after",
+        "params": { "ref": "create_time", "min_seconds": 60, "max_seconds": 3600 }
+      },
+      {
+        "placeholder": "remark",
+        "column": "remark",
+        "strategy": "fingerprint_remark",
+        "params": { "merge_mode": "append" }
+      }
+    ],
+    "batching": {
+      "total_rows": 500,
+      "batch_size": 100,
+      "batch_count": 5,
+      "batches": [
+        { "batch_index": 0, "row_count": 100, "label": "batch-0" },
+        { "batch_index": 1, "row_count": 100, "label": "batch-1" },
+        { "batch_index": 2, "row_count": 100, "label": "batch-2" },
+        { "batch_index": 3, "row_count": 100, "label": "batch-3" },
+        { "batch_index": 4, "row_count": 100, "label": "batch-4" }
+      ]
+    },
+    "post_insert_sql": [],
+    "state_machine": null
+  },
+  "fingerprint": {
+    "strategy": "remark_and_row_map",
+    "remark_column": "remark",
+    "marker": {
+      "format": "prefixed_token",
+      "prefix": "DB_TASK_",
+      "value_template": "${prefix}${task_id}"
+    },
+    "row_map": {
+      "enabled": true,
+      "async_flush": true,
+      "table": "data_builder_row_map"
+    }
+  },
+  "assertions": [
+    {
+      "id": "asrt_amount_non_negative",
+      "name": "订单金额非负",
+      "assertion_type": "scalar",
+      "severity": "error",
+      "sql": "SELECT COUNT(*) AS c FROM `orders` WHERE `amount` < 0 AND `remark` LIKE CONCAT('%', :task_marker, '%')",
+      "expect": { "kind": "row_count_eq", "value": 0, "column": "c" },
+      "rationale": "业务要求金额不为负；仅检查本任务指纹范围内的行。",
+      "run_after_batch": null
+    },
+    {
+      "id": "asrt_pay_after_create",
+      "name": "支付时间不早于创建时间",
+      "assertion_type": "scalar",
+      "severity": "error",
+      "sql": "SELECT COUNT(*) AS c FROM `orders` WHERE `pay_time` < `create_time` AND `remark` LIKE CONCAT('%', :task_marker, '%')",
+      "expect": { "kind": "row_count_eq", "value": 0, "column": "c" },
+      "rationale": "已完成订单应满足时间顺序。",
+      "run_after_batch": null
+    },
+    {
+      "id": "asrt_violation_amount_negative_rowset",
+      "name": "负金额违规行（应为空，供排障展示主键）",
+      "assertion_type": "rowset",
+      "primary_key_columns": ["id"],
+      "severity": "error",
+      "sql": "SELECT `id`, `amount`, `user_id` FROM `orders` WHERE `amount` < 0 AND `remark` LIKE CONCAT('%', :task_marker, '%')",
+      "expect": { "kind": "rowset_empty" },
+      "rationale": "rowset：若存在违规行，失败响应返回 sample_rows（服务端强制 LIMIT≤20）。",
+      "run_after_batch": null
+    }
+  ],
+  "cleanup": {
+    "mode": "hybrid",
+    "requires_confirm": true,
+    "plans": [
+      {
+        "table": "order_items",
+        "order": 10,
+        "predicate_sql": "`order_id` IN (SELECT `id` FROM `orders` WHERE `remark` LIKE CONCAT('%', :task_marker, '%'))",
+        "source": "manifest_predicate"
+      },
+      {
+        "table": "orders",
+        "order": 20,
+        "predicate_sql": "`remark` LIKE CONCAT('%', :task_marker, '%')",
+        "source": "manifest_predicate"
+      }
+    ]
+  },
+  "meta": {
+    "source": "ui",
+    "ai_model": "placeholder",
+    "compliance": { "production_row_sampling": false }
+  }
+}
