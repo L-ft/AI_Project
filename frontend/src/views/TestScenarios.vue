@@ -2163,6 +2163,14 @@ import {
   normalizeProxyHeaderMap,
   type ScenarioSendLogEntry as ExecScenarioLogEntry
 } from '@/utils/scenario-step-exec'
+import {
+  ASSERTION_OPERATOR_OPTIONS,
+  ASSERTION_TARGET_OPTIONS,
+  getAssertionOperatorOptionLabel,
+  getAssertionTargetOptionLabel,
+  normalizeAssertionOperator,
+  normalizeAssertionTarget
+} from '@/utils/http-assertion-contract'
 import { getScenarioLastDisplayStatus } from '@/utils/scenario-last-display'
 
 const message = useMessage()
@@ -3227,21 +3235,6 @@ const stepExtractSourceOptions = [
   { label: '响应头', value: 'header' }
 ]
 
-const stepAssertionTargetOptions = [
-  { label: '状态码', value: 'status' },
-  { label: '响应 JSON', value: 'response_json' },
-  { label: '响应头', value: 'response_header' },
-  { label: '响应文本', value: 'response_text' }
-]
-
-const stepAssertionOperatorOptions = [
-  { label: '等于', value: 'eq' },
-  { label: '不等于', value: 'neq' },
-  { label: '包含', value: 'contains' },
-  { label: '存在', value: 'exists' },
-  { label: '正则匹配', value: 'regex' }
-]
-
 const stepUnifiedDbActionOptions = [
   { label: '查询', value: 'query' },
   { label: '执行', value: 'execute' }
@@ -3331,28 +3324,9 @@ const stepUnifiedExtractSourceOptions = [
   { label: '响应文本', value: 'text' }
 ]
 
-const stepUnifiedAssertionTargetOptions = [
-  { label: 'HTTP Code', value: 'status_code' },
-  { label: 'Response JSON', value: 'response_json' },
-  { label: 'Response Header', value: 'response_header' },
-  { label: 'Response Text', value: 'response_text' },
-  { label: 'Response Cookie', value: 'response_cookie' },
-  { label: '环境变量', value: 'env_var' },
-  { label: '全局变量', value: 'global_var' }
-]
+const stepUnifiedAssertionTargetOptions = ASSERTION_TARGET_OPTIONS
 
-const stepUnifiedAssertionOperatorOptions = [
-  { label: '等于', value: 'equals' },
-  { label: '不等于', value: 'not_equals' },
-  { label: '包含', value: 'contains' },
-  { label: '存在', value: 'exists' },
-  { label: '不存在', value: 'not_exists' },
-  { label: '小于', value: 'less_than' },
-  { label: '小于等于', value: 'less_than_or_equals' },
-  { label: '大于', value: 'greater_than' },
-  { label: '大于等于', value: 'greater_than_or_equals' },
-  { label: '正则匹配', value: 'regex' }
-]
+const stepUnifiedAssertionOperatorOptions = ASSERTION_OPERATOR_OPTIONS
 
 const stepUnifiedPreOpTypeLabels: Record<string, string> = {
   db: '数据库操作',
@@ -3457,20 +3431,11 @@ const legacyStepValueScript = (method: 'setHeader' | 'setQuery' | 'setVar', name
   `context.${method}(${JSON.stringify(name)}, ${JSON.stringify(value)})`
 
 const normalizeStepUnifiedAssertionOperator = (operator: string) => {
-  if (operator === 'eq') return 'equals'
-  if (operator === 'neq') return 'not_equals'
-  if (operator === 'gt') return 'greater_than'
-  if (operator === 'gte') return 'greater_than_or_equals'
-  if (operator === 'lt') return 'less_than'
-  if (operator === 'lte') return 'less_than_or_equals'
-  return operator || 'equals'
+  return normalizeAssertionOperator(operator)
 }
 
 const normalizeStepUnifiedAssertionTarget = (target: string) => {
-  if (target === 'status') return 'status_code'
-  if (target === 'header') return 'response_header'
-  if (target === 'text') return 'response_text'
-  return target || 'response_json'
+  return normalizeAssertionTarget(target)
 }
 
 const normalizeStepUnifiedPreOperation = (op: any) => {
@@ -4093,8 +4058,8 @@ const stepResponsePostAssertionPass = computed(() =>
 )
 
 const stepAssertionOpPreview = (op: any) => {
-  const target = stepAssertionTargetOptions.find((item) => item.value === op?.config?.target)?.label || '响应 JSON'
-  const operator = stepAssertionOperatorOptions.find((item) => item.value === op?.config?.operator)?.label || '等于'
+  const target = getAssertionTargetOptionLabel(op?.config?.target, 'Response JSON')
+  const operator = getAssertionOperatorOptionLabel(op?.config?.operator, '等于')
   return `${target} ${operator}`
 }
 

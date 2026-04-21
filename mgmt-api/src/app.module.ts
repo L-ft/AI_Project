@@ -6,6 +6,7 @@ import { AccountModule } from './modules/account.module';
 import { DataBuilderTasksProxyModule } from './modules/data-builder-tasks-proxy.module';
 import { User, Tenant } from './entities/user.entity';
 import { Menu } from './entities/menu.entity';
+import { DataBuilderTask, DataBuilderTaskBatch } from './entities/data-builder-task.entity';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { Menu } from './entities/menu.entity';
       username: process.env.DB_USER || 'root',
       password: process.env.DB_PASS || 'root_password',
       database: process.env.DB_NAME || 'ai_automation_db',
-      entities: [User, Tenant, Menu],
+      entities: [User, Tenant, Menu, DataBuilderTask, DataBuilderTaskBatch],
       charset: 'utf8mb4', // 修正为驱动支持的简写
       extra: {
         charset: 'utf8mb4_unicode_ci',

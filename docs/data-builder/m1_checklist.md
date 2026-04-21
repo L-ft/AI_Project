@@ -1,38 +1,45 @@
-# M1 架构交付 Checklist（日会 / 周报）
+# R1 架构交付 Checklist
 
-与 `l4_prd.md`、`openapi_core.yaml` v0.3 对齐。
+本清单用于评审 R1/PR-1：只冻结 Data Builder 持久化任务合同，不要求代码实现。
 
-## 活文档（Swagger）
+## DDL 合同
 
-- [ ] mgmt-api 启动后可打开 **`http://<host>:3000/api/docs`**（加载 `docs/data-builder/openapi_core.yaml`）。
-- [ ] `POST/GET /data-builder/tasks` 在文档中可见 **Request/Response 示例**（含 `runtime`、`422`）。
-
-## Schema 与仓库
-
-- [ ] `manifest_v1.schema.json` 在 Git 中；mgmt-api 使用 `src/data-builder/manifest_v1.schema.json`（或 `MANIFEST_SCHEMA_PATH`）。
-- [ ] 前端构建若需 Schema，路径与 CI 一致（可选：从 `docs/` 拷贝）。
+- [ ] `data_builder_tasks` 已明确为任务级 source of truth。
+- [ ] `data_builder_task_batches` 已明确为批次级 source of truth。
+- [ ] `data_builder_row_map` 已明确从属于 task/batch 执行链，并以 `task_id` 作为 cleanup 入口。
+- [ ] `data_builder_tasks.completed_batches` 与 `rows_inserted_total` 被定义为反规范化缓存，而非唯一审计来源。
 
 ## 状态机
 
-- [ ] `task_status` 枚举在全栈一致：`PENDING` | `RUNNING` | `COMPLETED_OK` | `FAILED_ASSERTION` | `FAILED_EXECUTION`（OpenAPI `TaskStatus`、exec-engine、TS `TaskStatusL3`）。
+- [ ] task 状态枚举固定为 `PENDING|RUNNING|COMPLETED_OK|FAILED_ASSERTION|FAILED_EXECUTION`。
+- [ ] batch 状态枚举与 task 状态枚举一致。
+- [ ] cleanup 状态枚举固定为 `not_applicable|eligible|running|completed|blocked`。
+- [ ] `completed_batches` 统计终态批次，包括 `COMPLETED_OK`、`FAILED_ASSERTION`、`FAILED_EXECUTION`。
 
-## 心跳
+## Ownership
 
-- [ ] **建议**：`last_heartbeat_at` / `last_batch_started_at` 由 **mgmt-api 编排层**在调用 exec-engine 前后更新（当前 PoC 可由 exec-engine 回写内存任务，生产以任务表为准）。
-- [ ] 文档与实现已标注「权威写入点」，避免双写冲突。
+- [ ] `mgmt-api` 被定义为 `db_primary` 模式下的任务状态写入点。
+- [ ] `exec-engine` 被定义为受控执行器，不持久化或修改任务生命周期真相。
+- [ ] 前端只负责提交、轮询和展示，不负责补写任务结果。
+- [ ] `proxy|shadow|db_primary` 三种迁移模式已在文档中对齐。
 
-## 强校验
+## 安全与连接快照
 
-- [ ] AI 或 Prompt 草稿 → **必须先过** mgmt-api `ManifestValidateService`，**422** 禁止落库与转发。
-- [ ] 错误体含 **`fixes`**（见 `ManifestValidationError`）。
+- [ ] `mysql_conn_snapshot_json` 只允许非敏感字段。
+- [ ] `mysql_conn_encrypted_json` 不允许通过公开 API 返回。
+- [ ] R1 只冻结字段和安全边界，具体加密实现留到 R2/PR-2。
 
-## 清理与安全
+## 执行与事务
 
-- [ ] `CleanupService`（exec-engine）chunk **500**、侧车 `task_id` 隔离；predicate 路径仅替换 `:task_marker`。
-- [ ] 单元测试覆盖 chunk 删除与空任务（待补全）。
+- [ ] `db_primary` 模式明确使用两段短事务。
+- [ ] mgmt-api 不得持有 DB 行锁跨越 exec-engine HTTP 调用。
+- [ ] task 级错误写入 `data_builder_tasks.last_error_json`。
+- [ ] batch 级错误写入 `data_builder_task_batches.last_error_json`。
 
-## 并行开发催办（PM）
+## 非目标确认
 
-- [ ] **前端**：拿到 `task_id` 后做详情页 **进度条** + **`runtime.assertion_summary.total/passed`**。
-- [ ] **后端**：`CleanupService` 单测作为安全底线。
-- [ ] **AI 组**：按 DDL 调 Prompt，使输出 **稳过** Schema。
+- [ ] R1 不改 `mgmt-api` 业务代码。
+- [ ] R1 不改 `exec-engine` 执行代码。
+- [ ] R1 不改前端。
+- [ ] R1 不迁移 Scenario Runner。
+- [ ] R1 不实现加密服务或密钥轮换。

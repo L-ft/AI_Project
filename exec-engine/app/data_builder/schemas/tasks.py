@@ -101,6 +101,18 @@ class ExecuteBatchResponse(BaseModel):
     assertion_summary: AssertionSummaryOut | None = None
 
 
+class InternalExecuteBatchBody(BaseModel):
+    task_id: str = Field(..., min_length=1)
+    manifest: dict[str, Any]
+    mysql: MySQLConnectionIn
+    batch_index: int = Field(..., ge=0)
+    dry_run: bool = False
+
+
+class InternalExecuteBatchResponse(ExecuteBatchResponse):
+    assertion_runs: list[AssertionRunItemOut] = Field(default_factory=list)
+
+
 class CleanupBody(BaseModel):
     confirm: bool = False
     actor: str | None = None
@@ -113,3 +125,11 @@ class CleanupResponse(BaseModel):
     cleanup_completed_at: datetime | None = None
     cleanup_completed_by: str | None = None
     idempotent_replay: bool = False
+
+
+class InternalCleanupBody(BaseModel):
+    task_id: str = Field(..., min_length=1)
+    manifest: dict[str, Any]
+    mysql: MySQLConnectionIn
+    confirm: bool = False
+    actor: str | None = None

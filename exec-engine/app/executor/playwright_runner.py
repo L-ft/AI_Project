@@ -1,67 +1,56 @@
-from playwright.async_api import async_playwright
 import time
 
+from playwright.async_api import async_playwright
+
+from .api_contract import ApiExecutionRequest, evaluate_assertions
+
+
 async def run_api_test(api_def):
-    """
-    使用 Playwright API Request Context 执行接口测试
-    """
-    async with async_playwright() as p:
-        # 启动浏览器不是必须的，可以直接使用 request context
-        request_context = await p.request.new_context(base_url=api_def.get("base_url"))
-        
-        method = api_def.get("method", "GET").upper()
-        url = api_def.get("url")
-        headers = api_def.get("headers", {})
-        params = api_def.get("params", {})
-        data = api_def.get("body")
-        
-        start_time = time.time()
-        try:
+    """Run an HTTP API test through Playwright request context."""
+    start_time = time.time()
+    request_context = None
+    try:
+        request = ApiExecutionRequest.from_mapping(api_def)
+        async with async_playwright() as p:
+            request_context = await p.request.new_context(base_url=request.base_url)
             response = await request_context.fetch(
-                url,
-                method=method,
-                headers=headers,
-                params=params,
-                data=data if method in ["POST", "PUT", "PATCH"] else None
+                request.url,
+                method=request.method,
+                headers=request.headers,
+                params=request.params,
+                data=request.fetch_body(),
             )
-            
+
             elapsed = (time.time() - start_time) * 1000
             status = response.status
             body = await response.text()
-            
-            # 断言逻辑
-            assertions_results = []
-            success = True
-            if api_def.get("assertions"):
-                for assertion in api_def["assertions"]:
-                    # 简单状态码断言示例
-                    if assertion["type"] == "status_code":
-                        actual = status
-                        expected = int(assertion["value"])
-                        pass_assertion = actual == expected
-                        assertions_results.append({
-                            "type": "status_code",
-                            "expected": expected,
-                            "actual": actual,
-                            "pass": pass_assertion
-                        })
-                        if not pass_assertion:
-                            success = False
-            
+
+            assertions_results = evaluate_assertions(
+                request.assertions,
+                status_code=status,
+                response_text=body,
+            )
+            success = (
+                all(item.get("pass") is True for item in assertions_results)
+                if request.assertions
+                else True
+            )
+
             return {
                 "success": success,
                 "status_code": status,
                 "response_body": body,
                 "elapsed": elapsed,
                 "assertions": assertions_results,
-                "log": f"API {method} {url} executed with status {status}"
+                "log": f"API {request.method} {request.url} executed with status {status}",
             }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "error_log": str(e),
-                "elapsed": (time.time() - start_time) * 1000
-            }
-        finally:
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error_log": str(e),
+            "elapsed": (time.time() - start_time) * 1000,
+        }
+    finally:
+        if request_context is not None:
             await request_context.dispose()

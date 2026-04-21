@@ -264,7 +264,7 @@ export async function generateWritePlanSteps(body: {
   }>
 }
 
-// --- L3 Manifest 任务（默认直连 exec-engine；VITE_DATA_BUILDER_VIA_MGMT=true 时走 mgmt-api 代理）---
+// --- L3 Manifest 任务（默认走 mgmt-api；显式 VITE_DATA_BUILDER_VIA_MGMT=false 时回退直连 exec-engine）---
 
 export type TaskStatusL3 =
   | 'PENDING'
@@ -273,7 +273,7 @@ export type TaskStatusL3 =
   | 'FAILED_ASSERTION'
   | 'FAILED_EXECUTION'
 
-export type CleanupStateL3 = 'not_applicable' | 'eligible' | 'completed' | 'blocked'
+export type CleanupStateL3 = 'not_applicable' | 'eligible' | 'running' | 'completed' | 'blocked'
 
 export interface BatchProgressL3 {
   batch_count: number
@@ -328,12 +328,23 @@ export interface TaskDetailL3 {
   last_heartbeat_at?: string | null
   last_batch_started_at?: string | null
   assertion_summary: AssertionSummaryL3
-  assertion_runs?: AssertionRunItemL3[]
+  assertion_runs: AssertionRunItemL3[]
   cleanup_status: CleanupStatusL3
   row_map_flush_lag?: number
   last_error?: { code?: string; message?: string; details?: unknown } | null
   /** M1 OpenAPI：轮询核心对象（与顶层字段镜像，断言为 total/passed 计数） */
-  runtime?: TaskRuntimeL3
+  runtime: TaskRuntimeL3
+}
+
+export interface ExecuteBatchResponseL3 {
+  task_id: string
+  status: TaskStatusL3
+  batch_index: number
+  rows_affected: number
+  assertions_evaluated: boolean
+  assertion_summary: AssertionSummaryL3 | null
+  /** 终态批次通常会返回明细；某些 replay 响应可能省略 */
+  assertion_runs?: AssertionRunItemL3[]
 }
 
 export interface CreateDataBuilderTaskBody {
@@ -376,26 +387,12 @@ export async function executeDataBuilderBatch(
   taskId: string,
   batchIndex: number,
   dryRun = false
-): Promise<{
-  task_id: string
-  status: TaskStatusL3
-  batch_index: number
-  rows_affected: number
-  assertions_evaluated: boolean
-  assertion_summary: AssertionSummaryL3 | null
-}> {
+): Promise<ExecuteBatchResponseL3> {
   const p = getL3TasksPathPrefix()
   return getL3TasksHttpClient().post(`${p}/tasks/${taskId}/execute-batch`, {
     batch_index: batchIndex,
     dry_run: dryRun
-  }) as Promise<{
-    task_id: string
-    status: TaskStatusL3
-    batch_index: number
-    rows_affected: number
-    assertions_evaluated: boolean
-    assertion_summary: AssertionSummaryL3 | null
-  }>
+  }) as Promise<ExecuteBatchResponseL3>
 }
 
 export async function cleanupDataBuilderTask(

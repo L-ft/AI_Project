@@ -15,6 +15,7 @@ const account_module_1 = require("./modules/account.module");
 const data_builder_tasks_proxy_module_1 = require("./modules/data-builder-tasks-proxy.module");
 const user_entity_1 = require("./entities/user.entity");
 const menu_entity_1 = require("./entities/menu.entity");
+const data_builder_task_entity_1 = require("./entities/data-builder-task.entity");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -28,7 +29,7 @@ exports.AppModule = AppModule = __decorate([
                 username: process.env.DB_USER || 'root',
                 password: process.env.DB_PASS || 'root_password',
                 database: process.env.DB_NAME || 'ai_automation_db',
-                entities: [user_entity_1.User, user_entity_1.Tenant, menu_entity_1.Menu],
+                entities: [user_entity_1.User, user_entity_1.Tenant, menu_entity_1.Menu, data_builder_task_entity_1.DataBuilderTask, data_builder_task_entity_1.DataBuilderTaskBatch],
                 charset: 'utf8mb4',
                 extra: {
                     charset: 'utf8mb4_unicode_ci',

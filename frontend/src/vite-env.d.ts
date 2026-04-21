@@ -4,7 +4,7 @@ interface ImportMetaEnv {
   readonly VITE_MGMT_API_URL?: string
   readonly VITE_EXEC_ENGINE_URL?: string
   readonly VITE_DATA_BUILDER_URL?: string
-  /** 为 true 时 L3 任务 API 走 mgmt-api 代理（/api/v1/data-builder → exec-engine），路径为 /v1/data-builder/* */
+  /** 默认为 true；L3 任务 API 走 mgmt-api，显式设为 false 时回退直连 exec-engine。 */
   readonly VITE_DATA_BUILDER_VIA_MGMT?: string
 }
 

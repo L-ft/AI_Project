@@ -4,6 +4,7 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 # 域名反代时可传入：--build-arg VITE_MGMT_API_URL=/api --build-arg VITE_EXEC_ENGINE_URL=/engine
+# L3 默认走 mgmt-api；如需回退直连 exec-engine，可额外传入 --build-arg VITE_DATA_BUILDER_VIA_MGMT=false
 # 或复制 .env.production（见 .env.production.domain.example）
 ARG VITE_MGMT_API_URL
 ARG VITE_EXEC_ENGINE_URL

@@ -41,6 +41,8 @@ services:
       - JWT_SECRET=ai_platform_secret
       - REDIS_HOST=redis_final
       - EXEC_ENGINE_URL=http://exec_engine_final:8000
+      - DATA_BUILDER_TASK_MODE=db_primary
+      - DATA_BUILDER_EXEC_INTERNAL_TOKEN=ai_platform_db_primary_internal_v1
       # 活文档：镜像内无仓库 docs/，挂载宿主合同 YAML（见 main.ts tryLoadOpenApiSpec）
       - OPENAPI_DATA_BUILDER_PATH=/app/docs-contract/openapi_core.yaml
     volumes:
@@ -65,6 +67,7 @@ services:
       - DB_PASS=root_password
       - DB_NAME=ai_automation_db
       - MAX_INSERT_SELECT_ROWS=1000000
+      - DATA_BUILDER_EXEC_INTERNAL_TOKEN=ai_platform_db_primary_internal_v1
     ports:
       - "8010:8000"
     depends_on:
@@ -89,8 +92,8 @@ services:
         VITE_MGMT_API_URL: /api
         VITE_EXEC_ENGINE_URL: /engine
         VITE_DATA_BUILDER_URL: /data-builder
-        # "true"：L3/造数任务走 mgmt（强校验、Prompt 创建）；需重建前端镜像
-        VITE_DATA_BUILDER_VIA_MGMT: "false"
+        # 默认 "true"：L3/造数任务走 mgmt 持久化编排；如需排障可临时切回 "false"
+        VITE_DATA_BUILDER_VIA_MGMT: "true"
     container_name: ai_platform_fe_v1
     ports:
       - "3010:80"

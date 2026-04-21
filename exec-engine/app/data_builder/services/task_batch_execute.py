@@ -7,7 +7,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from app.data_builder.schemas.tasks import AssertionSummaryOut, ExecuteBatchResponse
+from app.data_builder.schemas.mysql import MySQLConnectionIn
+from app.data_builder.schemas.tasks import (
+    AssertionRunItemOut,
+    AssertionSummaryOut,
+    ExecuteBatchResponse,
+    InternalExecuteBatchResponse,
+)
 from app.data_builder.services.assertion_runner import run_assertions
 from app.data_builder.services.binding_row_gen import (
     batch_row_count,
@@ -24,6 +30,10 @@ _INSERT_TABLE_RE = re.compile(r"(?is)insert\s+into\s+`([^`]+)`")
 
 _per_task_exec_locks: dict[str, threading.Lock] = {}
 _per_task_locks_guard = threading.Lock()
+
+
+class BatchIndexOutOfRange(ValueError):
+    pass
 
 
 def _exec_lock(task_id: str) -> threading.Lock:
@@ -81,17 +91,21 @@ def _insert_row_map(
     )
 
 
-def _summary_from_record(rec: TaskRecord) -> AssertionSummaryOut:
+def _summary_from_runs(
+    manifest: dict[str, Any],
+    assertion_evaluated: bool,
+    assertion_runs: list[AssertionRunItemOut],
+) -> AssertionSummaryOut:
     passed = True
     failed: list[str] = []
-    if rec.assertion_evaluated:
-        for ar in rec.assertion_runs:
+    if assertion_evaluated:
+        for ar in assertion_runs:
             if ar.passed:
                 continue
             sev = next(
                 (
                     a.get("severity", "error")
-                    for a in rec.manifest.get("assertions", [])
+                    for a in manifest.get("assertions", [])
                     if a.get("id") == ar.assertion_id
                 ),
                 "error",
@@ -99,7 +113,135 @@ def _summary_from_record(rec: TaskRecord) -> AssertionSummaryOut:
             if sev == "error":
                 passed = False
                 failed.append(ar.assertion_id)
-    return AssertionSummaryOut(evaluated=rec.assertion_evaluated, passed=passed, failed_rules=failed)
+    return AssertionSummaryOut(evaluated=assertion_evaluated, passed=passed, failed_rules=failed)
+
+
+def _summary_from_record(rec: TaskRecord) -> AssertionSummaryOut:
+    return _summary_from_runs(rec.manifest, rec.assertion_evaluated, rec.assertion_runs)
+
+
+def _batch_count(manifest: dict[str, Any]) -> int:
+    return int(manifest["generation"]["batching"]["batch_count"])
+
+
+def execute_batch_payload(
+    task_id: str,
+    manifest: dict[str, Any],
+    mysql: MySQLConnectionIn,
+    batch_index: int,
+    dry_run: bool = False,
+) -> InternalExecuteBatchResponse:
+    batch_count = _batch_count(manifest)
+    if batch_index < 0 or batch_index >= batch_count:
+        raise BatchIndexOutOfRange("batch_index out of range")
+
+    db_name = mysql_meta.require_database_name(manifest["database_context"]["database"])
+    template = manifest["generation"]["sql_template"]
+    bindings = manifest["generation"]["bindings"]
+    target_table = _parse_insert_table(template)
+    marker = resolve_task_marker(manifest, task_id)
+    n_rows = batch_row_count(manifest, batch_index)
+    pk_col = _pk_column(manifest)
+    rng = random.Random(int(uuid.UUID(task_id).int % (2**48)) + batch_index * 10_001)
+    timeout = 120
+
+    if dry_run:
+        conn_d = mysql_meta.mysql_connect(
+            mysql,
+            connect_timeout=min(10, timeout),
+            read_timeout=timeout,
+            write_timeout=timeout,
+        )
+        try:
+            conn_d.autocommit(True)
+            with conn_d.cursor() as cur:
+                cur.execute(f"USE `{db_name}`")
+                values = build_placeholder_values(
+                    bindings,
+                    task_marker=marker,
+                    batch_index=batch_index,
+                    row_index=0,
+                    rng=rng,
+                )
+                sql = expand_named_sql(conn_d, template, values)
+                validate_write_sql(sql)
+            return InternalExecuteBatchResponse(
+                task_id=task_id,
+                status="PENDING",
+                batch_index=batch_index,
+                rows_affected=0,
+                assertions_evaluated=False,
+                assertion_summary=None,
+                assertion_runs=[],
+            )
+        finally:
+            conn_d.close()
+
+    rows_affected = 0
+    conn = mysql_meta.mysql_connect(
+        mysql,
+        connect_timeout=min(10, timeout),
+        read_timeout=timeout,
+        write_timeout=timeout,
+    )
+    try:
+        conn.autocommit(True)
+        with conn.cursor() as cur:
+            cur.execute(f"USE `{db_name}`")
+            for ri in range(n_rows):
+                values = build_placeholder_values(
+                    bindings,
+                    task_marker=marker,
+                    batch_index=batch_index,
+                    row_index=ri,
+                    rng=rng,
+                )
+                sql = expand_named_sql(conn, template, values)
+                stmt = validate_write_sql(sql)
+                if ri == 0:
+                    ensure_row_map_table(cur)
+                cur.execute(stmt)
+                rows_affected += int(cur.rowcount or 0)
+                lid = getattr(cur, "lastrowid", None)
+                if lid:
+                    _insert_row_map(
+                        cur,
+                        task_id=task_id,
+                        db_name=db_name,
+                        table=target_table,
+                        pk_col=pk_col,
+                        pk_val=int(lid) if isinstance(lid, int) else lid,
+                        batch_index=batch_index,
+                        row_index=ri,
+                    )
+
+        final = batch_index == batch_count - 1
+        if not final:
+            return InternalExecuteBatchResponse(
+                task_id=task_id,
+                status="RUNNING",
+                batch_index=batch_index,
+                rows_affected=rows_affected,
+                assertions_evaluated=False,
+                assertion_summary=None,
+                assertion_runs=[],
+            )
+
+        with conn.cursor() as cur:
+            cur.execute(f"USE `{db_name}`")
+            assertion_runs = run_assertions(cur, conn, manifest=manifest, task_id=task_id)
+        assertion_summary = _summary_from_runs(manifest, True, assertion_runs)
+        return InternalExecuteBatchResponse(
+            task_id=task_id,
+            status="COMPLETED_OK" if assertion_summary.passed else "FAILED_ASSERTION",
+            batch_index=batch_index,
+            rows_affected=rows_affected,
+            assertions_evaluated=True,
+            assertion_summary=assertion_summary,
+            assertion_runs=assertion_runs,
+        )
+    finally:
+        conn.close()
 
 
 def execute_batch(task_id: str, batch_index: int, dry_run: bool = False) -> ExecuteBatchResponse:
@@ -111,7 +253,7 @@ def execute_batch(task_id: str, batch_index: int, dry_run: bool = False) -> Exec
         if rec.status == "FAILED_EXECUTION":
             raise RuntimeError("task in FAILED_EXECUTION state")
         if batch_index < 0 or batch_index >= rec.batch_count:
-            raise ValueError("batch_index 越界")
+            raise BatchIndexOutOfRange("batch_index out of range")
 
         if batch_index in rec.completed_batch_indices:
             cur = get_task(task_id)

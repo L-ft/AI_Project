@@ -1,12 +1,31 @@
 import { DataBuilderTaskOrchestrationService } from '../data-builder/data-builder-task-orchestration.service';
+import { DataBuilderTaskShadowStoreService } from '../data-builder/data-builder-task-shadow-store.service';
 import { DataBuilderTasksProxyService } from './data-builder-tasks-proxy.service';
 export declare class DataBuilderTasksProxyController {
     private readonly proxy;
     private readonly orchestration;
-    constructor(proxy: DataBuilderTasksProxyService, orchestration: DataBuilderTaskOrchestrationService);
+    private readonly shadowStore;
+    private readonly logger;
+    constructor(proxy: DataBuilderTasksProxyService, orchestration: DataBuilderTaskOrchestrationService, shadowStore: DataBuilderTaskShadowStoreService);
     list(limit?: string): Promise<unknown>;
     create(body: unknown): Promise<unknown>;
     getOne(taskId: string): Promise<unknown>;
     executeBatch(taskId: string, body: unknown): Promise<unknown>;
     cleanup(taskId: string, body: unknown): Promise<unknown>;
+    private parseLimit;
+    private buildLimitParams;
+    private listLegacyTasks;
+    private getLegacyTask;
+    private executeLegacyBatch;
+    private cleanupLegacyTask;
+    private runLegacyMutation;
+    private mirrorLegacyFailure;
+    private mirrorLegacySuccess;
+    private readHttpErrorResponse;
+    private readHttpErrorStatus;
+    private readBatchIndex;
+    private fetchLegacyTaskListFromUpstream;
+    private fetchLegacyTaskDetailFromUpstream;
+    private refreshLegacyTaskListFromUpstream;
+    private refreshLegacyTaskDetailFromUpstream;
 }

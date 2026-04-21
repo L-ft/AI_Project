@@ -17,7 +17,9 @@ servers:
 
 tags:
   - name: data-builder-tasks
-    description: Task manifest lifecycle and sharded execution
+    description: |
+      Public task manifest lifecycle and sharded execution exposed by mgmt-api.
+      Exec-engine internal `/data-builder/internal/*` routes are intentionally out of this contract and reserved for mgmt-api orchestration only.
 
 paths:
   /data-builder/tasks:
@@ -25,6 +27,7 @@ paths:
       tags: [data-builder-tasks]
       summary: Create task（prompt 或 manifest + 强校验）
       description: |
+        Public mgmt-api lifecycle endpoint. Frontend and integrations should use this contract instead of calling exec-engine directly.
         mgmt-api：`prompt` 时先用占位草稿生成 manifest，再 AJV Schema + assertions/cleanup.plans 硬约束；
         未通过 **422**，不写入 DB、不下发 exec-engine。仅 `manifest` 时同样校验。
         **task_id** 在 exec-engine `create_task` 内 `uuid4` 生成并写入 manifest 快照。
@@ -135,6 +138,7 @@ paths:
       tags: [data-builder-tasks]
       summary: Get task status and progress (polling)
       description: |
+        Public mgmt-api lifecycle endpoint. The persisted task state in mgmt-api DB is the source of truth in `db_primary`.
         轮询任务详情。除顶层字段外 **必须包含 `runtime`**：
         `batch_progress`、`last_heartbeat_at`、`cleanup_status`、`assertion_summary: { total, passed }`。
         建议编排层（mgmt-api）写心跳；exec-engine 亦可回传，最终以合同字段为准。
@@ -197,6 +201,7 @@ paths:
       tags: [data-builder-tasks]
       summary: Execute one batch shard
       description: |
+        Public mgmt-api orchestration endpoint. In `db_primary`, mgmt-api owns state transitions and calls exec-engine internal routes behind this boundary.
         Idempotent per (task_id, batch_index) when possible. Transitions PENDING→RUNNING,
         RUNNING→RUNNING. After final batch, runs assertions (soft L3); on assertion mismatch
         sets FAILED_ASSERTION and retains data. SQL/connection errors → FAILED_EXECUTION.
@@ -228,6 +233,7 @@ paths:
       tags: [data-builder-tasks]
       summary: One-click cleanup for this task
       description: |
+        Public mgmt-api orchestration endpoint. Cleanup execution is delegated to exec-engine internal routes, but cleanup state is persisted by mgmt-api.
         Uses manifest.cleanup + row_map. Requires confirm=true. Must refuse if task is RUNNING
         unless policy allows cancel (document in implementation).
       operationId: dataBuilderCleanupTask
@@ -386,6 +392,7 @@ components:
         - manifest
         - batch_progress
         - assertion_summary
+        - assertion_runs
         - cleanup_status
         - runtime
       properties:
@@ -434,16 +441,17 @@ components:
       properties:
         state:
           type: string
-          enum: [not_applicable, eligible, completed, blocked]
+          enum: [not_applicable, eligible, running, completed, blocked]
           description: |
             not_applicable: task not in a state where cleanup applies (e.g. PENDING with no writes).
             eligible: cleanup may be invoked (confirm + guards).
+            running: cleanup has been confirmed and is currently executing.
             completed: cleanup already ran successfully for this task.
             blocked: cleanup temporarily forbidden; see blocked_reason.
         blocked_reason:
           type: string
           nullable: true
-          description: Machine-oriented code, e.g. row_map_flush_lag, task_running, cleanup_already_completed.
+          description: Machine-oriented code, e.g. row_map_flush_lag, task_running, partial_failure.
 
     ExecuteBatchRequest:
       type: object
@@ -458,13 +466,16 @@ components:
 
     ExecuteBatchResponse:
       type: object
-      required: [task_id, status, batch_index, rows_affected]
+      required: [task_id, status, batch_index, rows_affected, assertions_evaluated, assertion_summary]
       properties:
         task_id:
           type: string
           format: uuid
         status:
           $ref: '#/components/schemas/TaskStatus'
+          description: |
+            Mgmt-api normalized task status after this batch.
+            Non-final batches may still return RUNNING even if upstream execution finished successfully.
         batch_index:
           type: integer
         rows_affected:
@@ -475,6 +486,13 @@ components:
         assertion_summary:
           $ref: '#/components/schemas/AssertionSummary'
           nullable: true
+        assertion_runs:
+          type: array
+          description: |
+            Per-rule assertion details when available. Typically present for final-batch assertion evaluation,
+            and may be omitted for replay responses that never evaluated assertions.
+          items:
+            $ref: '#/components/schemas/AssertionRunItem'
 
     AssertionSummary:
       type: object

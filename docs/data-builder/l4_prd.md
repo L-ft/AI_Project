@@ -1,77 +1,114 @@
-# L4 一页纸 PRD（任务落库 + AI 填 Manifest）
+# L4 PRD：Data Builder 持久化任务与编排边界
 
-**版本**：0.1（与 `openapi_core.yaml` v0.2、`manifest_v1` 对齐）  
-**状态**：合同基线；实现以 mgmt-api 编排层为主，exec-engine 保持受控执行。
-
----
+**版本**：R1 合同冻结版  
+**状态**：文档与 DDL 基线；实现从 R2/PR-2 开始  
+**核心原则**：任务真相归 mgmt-api，执行动作归 exec-engine，运行时遥测不得写回 Manifest。
 
 ## 1. 产品目标
 
-在 **L3 闭环**（分片执行、断言、指纹/侧车、确认清理）之上，提供 **可审计、可恢复、可运营** 的企业级造数任务能力：**任务必须持久化**；**Manifest 必须由 AI（或经 AI 辅助的 ChatOps）在 mgmt-api 侧生成/修订并校验后再落库**，避免「只存在于浏览器或执行进程内存」的草稿任务。
+在 L3 分片执行、断言、row_map、cleanup 的基础上，提供可审计、可恢复、可运营的企业级造数任务能力。
 
----
+R1 的目标不是立刻切换运行链路，而是先冻结以下合同：
 
-## 2. 必须坚持（非协商项）
+- 任务必须可持久化。
+- 批次状态必须可持久化。
+- cleanup 状态必须闭环。
+- MySQL 连接快照必须有安全边界。
+- mgmt-api 与 exec-engine 的职责必须清晰。
+
+## 2. 必须坚持
 
 | 项 | 要求 |
 |----|------|
-| **任务落库** | 每个任务在创建成功后写入 **`data_builder_tasks`**（见 `task_table_ddl.sql`），`task_id` 全局唯一；状态、进度、心跳、`cleanup_status`、`last_error_json` 等与 OpenAPI `TaskDetailResponse` 对齐，**不得仅依赖 exec-engine 内存**。 |
-| **AI 填 Manifest** | 「自然语言 / 指令 → `manifest_v1`」在 **mgmt-api** 完成：调用模型、解析 JSON、`manifest_v1.schema.json` 校验、可选人机确认后再 `POST` 创建任务；exec-engine **不承担** LLM 编排与指令理解。 |
-| **合规** | `meta.compliance.production_row_sampling` **恒为 false**；不依赖生产库采样作为默认路径（与 `README.md` 边界一致）。 |
+| 任务落库 | 创建成功的任务必须有 `data_builder_tasks` 主记录。后续 `db_primary` 模式下，`task_id` 由 mgmt-api 生成 |
+| 批次落库 | 每个 batch 必须有 `data_builder_task_batches` 子记录，使用 `task_id + batch_index` 唯一识别 |
+| 状态闭环 | `GET task` 的状态、进度、错误和 cleanup 信息必须能从 DB 解释，不能依赖 exec-engine 内存对象 |
+| Manifest 边界 | `manifest_json` 是输入快照，不是运行时状态容器。心跳、进度、错误、cleanup 状态不得写回 Manifest |
+| 连接快照 | MySQL 密码不得进入 `mysql_conn_snapshot_json`；密文或 secret payload 只能进入 `mysql_conn_encrypted_json`，且公开 API 禁止返回 |
+| AI -> Manifest | 自然语言到 Manifest 的生成、解析、校验与人工确认归 mgmt-api；exec-engine 不承担 LLM 编排职责 |
+| 合规默认值 | `meta.compliance.production_row_sampling` 默认 false；不以生产采样作为默认路径 |
 
----
+## 3. 范围
 
-## 3. 范围（L4 做什么）
+R1/PR-1 只做合同冻结：
 
-- **编排与单一写入点**：`execute-batch`、心跳、`last_batch_started_at` / `last_heartbeat_at` 的更新规则与 `execution_and_poc.md` 一致；exec-engine 仅执行白名单内的批处理与断言调用（或等价适配器），**状态真相以 mgmt-api 持久化任务行为准**。
-- **侧车策略**：`row_map` 异步 flush、`row_map_flush_lag`、清理前是否阻塞等产品策略在编排层实现并写入任务行；与 `CleanupService` chunked delete 语义一致。
-- **错误与可观测**：错误体与 `error_codes.md` 一致；支持轮询、挂死提示、清理幂等与部分失败重试（见 `execution_and_poc.md` §6）。
-- **可选增强（规划）**：在不合规前提下逼近业务分布的「分布克隆」、更丰富的断言编排——仍放在 mgmt-api，不扩张 exec-engine 核心路径。
+- 更新 `data_builder_tasks` DDL。
+- 新增 `data_builder_task_batches` DDL。
+- 明确 `data_builder_row_map` 与 task/batch 的关系。
+- 明确 `proxy|shadow|db_primary` 三种迁移模式。
+- 明确 MySQL 连接快照字段和脱敏规则。
+- 明确 task/batch/cleanup 状态枚举。
 
----
+R2/PR-2 才进入 `shadow` 持久化实现。  
+R3/PR-3 才进入 `db_primary` 编排切换。  
+R4/PR-4 才调整前端对持久化任务的文案和状态行为。
 
-## 4. 非目标（L4 不做什么）
+## 4. 非目标
 
-- 不在 exec-engine 内嵌大模型或长链路 Agent。
-- 不把运行时遥测（心跳、`cleanup_status` 等）写回 **Manifest JSON 正文**（见 `openapi_core.yaml`：遥测在任务表）。
-- 不默认打开生产环境行级采样；若未来引入 masking-service，须单独安全评审与开关。
+- R1 不改后端业务代码。
+- R1 不改前端页面。
+- R1 不迁移 Scenario 执行链。
+- R1 不实现加密服务、密钥轮换或 secret manager。
+- R1 不把 LLM 或长链路 Agent 放入 exec-engine。
+- R1 不新增生产数据采样能力。
 
----
+## 5. 数据对象
 
-## 5. 与 L3 / exec-engine 的边界
+| 对象 | 表 | 职责 |
+|------|----|------|
+| Task | `data_builder_tasks` | 任务级生命周期、Manifest 快照、连接快照、迁移模式、cleanup 状态、进度缓存、任务级错误 |
+| Batch | `data_builder_task_batches` | 批次级状态、心跳、写入行数、重试次数、批次级错误 |
+| Row map | `data_builder_row_map` | 插入行追踪，cleanup 按 `task_id` 与 cleanup plan 执行删除 |
+
+主表中的 `completed_batches`、`rows_inserted_total` 是反规范化缓存。可审计明细以 batch 表和 row_map 为准。
+
+## 6. 状态机
+
+任务状态：
+
+```text
+PENDING -> RUNNING -> COMPLETED_OK
+PENDING -> RUNNING -> FAILED_ASSERTION
+PENDING -> RUNNING -> FAILED_EXECUTION
+```
+
+批次状态与任务状态共用枚举：
+
+```text
+PENDING|RUNNING|COMPLETED_OK|FAILED_ASSERTION|FAILED_EXECUTION
+```
+
+cleanup 状态：
+
+```text
+not_applicable -> eligible -> running -> completed
+eligible -> blocked
+running -> blocked
+```
+
+`FAILED_ASSERTION` 表示数据已经落库但断言失败，应保留现场，不能自动 rollback 或自动 cleanup。
+
+## 7. mgmt-api 与 exec-engine 边界
 
 | 层级 | 职责 |
 |------|------|
-| **L4（mgmt-api）** | 任务 CRUD 与持久化、AI → Manifest、校验、调用下游执行、更新任务状态与遥测、侧车异步与清理编排。 |
-| **L3（exec-engine）** | 受控执行：`validate_manifest`、按批 INSERT、断言执行、`row_map` 写入、cleanup SQL 等（保持「哑管道」或可替换适配器）。 |
+| mgmt-api | 任务 CRUD、任务持久化、AI -> Manifest、Manifest 校验、状态流转、批次编排、cleanup 编排、公开查询 API |
+| exec-engine | 受控执行器。执行内部 batch/cleanup 请求，返回 rows/assertion/error 结果，不拥有任务生命周期真相 |
 
-**接口契约**：对外仍以 `openapi_core.yaml` 四个核心路径为准；mgmt-api 为权威实现，exec-engine 为执行后端（URL 由 `EXEC_ENGINE_URL` 等配置）。
+`db_primary` 模式下，mgmt-api 调用 exec-engine 时必须使用短事务模型：
 
----
+1. 事务 A：claim task/batch，写入 `RUNNING`、`last_batch_started_at`。
+2. 事务外：调用 exec-engine 内部执行接口。
+3. 事务 B：根据执行结果写入终态、进度、心跳和错误。
 
-## 6. 关键数据对象
+mgmt-api 不得持有数据库行锁跨越 exec-engine HTTP 调用。
 
-- **`data_builder_tasks`**：任务主表与遥测（`task_table_ddl.sql`）。
-- **`data_builder_row_map`**：插入行与 `task_id` 映射，清理数据源（`table_ddl.sql`）。
-- **Manifest**：`manifest_v1.schema.json`；创建请求体中的 `manifest` + `mysql` 连接体与现网一致。
+## 8. 验收要点
 
----
-
-## 7. 建议里程碑（交付节奏）
-
-1. **M1**：mgmt-api 落库任务表 + 创建/查询/列表与 exec-engine 代理一致；前端可选只走 `/api/v1/data-builder/*`。  
-2. **M2**：AI 填 Manifest（结构化输出 + Schema 校验 + 审计日志）；失败可重试与人工编辑。  
-3. **M3**：编排层完整心跳与 `cleanup_status` 策略；侧车 lag 与清理阻塞规则产品化。  
-4. **M4**（可选）：分布克隆与高级断言仅在 mgmt-api 扩展。
-
----
-
-## 8. 验收要点（摘要）
-
-- 重启 exec-engine **不丢失**任务记录；已创建任务的 `task_id` 仍可查询（状态可能需与下游对齐）。  
-- 任意经 AI 产生的 Manifest **均通过** `manifest_v1` Schema 校验后方可持久化。  
-- 清理与断言语义与 `error_codes.md`、OpenAPI 描述一致，可演示完整「创建 → 分片执行 → 断言失败保留现场 → 确认清理」。
-
----
-
-*本文档为 `docs/data-builder` 内对 L4 的产品与架构承诺摘要；细节以 `openapi_core.yaml`、`execution_and_poc.md` 为准。*
+- exec-engine 重启后，已创建任务的元数据仍可查询。
+- `GET task` 可以从 DB 中解释任务状态和进度。
+- 每个 batch 有持久化状态，可定位失败批次。
+- cleanup 有 `eligible/running/completed/blocked` 闭环。
+- 公开任务详情 API 不返回 `mysql_conn_encrypted_json`。
+- Manifest 只作为输入快照，不承载运行时遥测。
+- R1 文档能直接指导 R2 shadow persistence 和 R3 orchestration cutover。

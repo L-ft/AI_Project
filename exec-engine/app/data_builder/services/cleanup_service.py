@@ -93,9 +93,13 @@ class CleanupService:
                 )
         return total
 
-    def run_cleanup(self, conn, rec: TaskRecord) -> tuple[dict[str, int], str]:
-        manifest = rec.manifest
-        task_id = rec.task_id
+    def run_cleanup(
+        self,
+        conn,
+        *,
+        task_id: str,
+        manifest: dict[str, Any],
+    ) -> tuple[dict[str, int], str]:
         db = manifest["database_context"]["database"].strip()
         assert_safe_ident(db, "库名")
         marker = resolve_task_marker(manifest, task_id)
@@ -137,4 +141,13 @@ class CleanupService:
 
 def run_cleanup(conn, rec: TaskRecord) -> tuple[dict[str, int], str]:
     """兼容旧 import：默认 chunk=500。"""
-    return CleanupService().run_cleanup(conn, rec)
+    return run_cleanup_payload(conn, task_id=rec.task_id, manifest=rec.manifest)
+
+
+def run_cleanup_payload(
+    conn,
+    *,
+    task_id: str,
+    manifest: dict[str, Any],
+) -> tuple[dict[str, int], str]:
+    return CleanupService().run_cleanup(conn, task_id=task_id, manifest=manifest)

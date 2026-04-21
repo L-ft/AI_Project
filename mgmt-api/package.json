@@ -4,7 +4,10 @@
   "scripts": {
     "start:dev": "nest start --watch",
     "build": "npx nest build",
-    "start:prod": "node dist/main"
+    "start:prod": "node dist/main",
+    "smoke:db-primary": "node dist/data-builder/data-builder-db-primary-smoke.js",
+    "smoke:shadow": "node dist/data-builder/data-builder-shadow-smoke.js",
+    "smoke:db-primary:http": "node dist/data-builder/data-builder-db-primary-http-smoke.js"
   },
   "dependencies": {
     "ajv": "^8.12.0",

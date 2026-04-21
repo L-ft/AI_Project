@@ -18,6 +18,11 @@ export default defineConfig({
     host: '0.0.0.0',
     // 开发时走同源代理，避免通过局域网 IP 访问页面时仍请求 localhost:8010 连不上执行引擎
     proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3011',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
       '/engine': {
         target: 'http://127.0.0.1:8010',
         changeOrigin: true,

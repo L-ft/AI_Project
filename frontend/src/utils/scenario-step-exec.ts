@@ -8,6 +8,10 @@ import {
   normalizeStepReqSettings,
   type StepReqSettings
 } from '@/utils/req-settings'
+import {
+  evaluateAssertionRule,
+  normalizeAssertionConfig
+} from '@/utils/http-assertion-contract'
 
 export type ScenarioSendLogEntry = {
   id: string
@@ -146,62 +150,6 @@ export type ScenarioAssertionResult = {
   message: string
 }
 
-const parseResponseDataObject = (data: unknown): unknown => {
-  if (typeof data !== 'string') return data
-  try {
-    return JSON.parse(data)
-  } catch {
-    return data
-  }
-}
-
-const getNestedValue = (data: unknown, expression: string) => {
-  if (!expression) return data
-  const path = expression.replace(/^\./, '').split('.').filter(Boolean)
-  return path.reduce<any>((acc, key) => (acc != null ? acc[key] : undefined), data as any)
-}
-
-const getAssertionTargetValue = (
-  target: string,
-  expression: string,
-  statusCode: number | null | undefined,
-  headers: Record<string, string>,
-  data: unknown
-) => {
-  if (target === 'status' || target === 'status_code') return statusCode
-  if (target === 'response_header' || target === 'header') {
-    const matched = Object.entries(headers).find(([key]) => key.toLowerCase() === String(expression || '').trim().toLowerCase())
-    return matched?.[1]
-  }
-  if (target === 'response_text' || target === 'text') {
-    return typeof data === 'string' ? data : stringifyResponseForLog(data).text
-  }
-  const parsed = parseResponseDataObject(data)
-  return getNestedValue(parsed, expression)
-}
-
-const compareAssertionValue = (actual: unknown, operator: string, expected: unknown) => {
-  const actualText = actual == null ? '' : String(actual)
-  const expectedText = expected == null ? '' : String(expected)
-  if (operator === 'exists') return actual !== undefined && actual !== null && actualText !== ''
-  if (operator === 'not_exists') return actual === undefined || actual === null || actualText === ''
-  if (operator === 'contains') return actualText.includes(expectedText)
-  if (operator === 'not_contains') return !actualText.includes(expectedText)
-  if (operator === 'regex') {
-    try {
-      return new RegExp(expectedText).test(actualText)
-    } catch {
-      return false
-    }
-  }
-  if (operator === 'gt' || operator === 'greater_than') return Number(actual) > Number(expected)
-  if (operator === 'gte' || operator === 'greater_than_or_equals') return Number(actual) >= Number(expected)
-  if (operator === 'lt' || operator === 'less_than') return Number(actual) < Number(expected)
-  if (operator === 'lte' || operator === 'less_than_or_equals') return Number(actual) <= Number(expected)
-  if (operator === 'neq' || operator === 'not_equals') return actualText !== expectedText
-  return actualText === expectedText
-}
-
 export const evaluatePostAssertions = (
   statusCode: number | null | undefined,
   headers: Record<string, string> | undefined,
@@ -211,15 +159,22 @@ export const evaluatePostAssertions = (
   const headerMap = headers || {}
   const ops = Array.isArray(postOps) ? postOps.filter((op) => op?.type === 'assertion' && op?.enabled !== false) : []
   const results = ops.map((op, index) => {
-    const target = String(op?.config?.target || 'response_json')
-    const expression = String(op?.config?.expression || '')
-    const operator = String(op?.config?.operator || 'eq')
-    const expected = op?.config?.value ?? ''
-    const actual = getAssertionTargetValue(target, expression, statusCode, headerMap, data)
-    const passed = compareAssertionValue(actual, operator, expected)
+    const cfg = normalizeAssertionConfig(op?.config || op || {})
+    const evaluation = evaluateAssertionRule({
+      target: cfg.target,
+      operator: cfg.operator,
+      expression: cfg.expression,
+      expected: cfg.value,
+      statusCode,
+      headers: headerMap,
+      data
+    })
+    const actual = evaluation.actual
+    const passed = evaluation.passed
+    const operator = evaluation.operator
     const name = String(op?.config?.name || op?.name || `断言 ${index + 1}`)
     const actualText = actual == null ? '空值' : String(actual)
-    const expectedText = expected == null ? '' : String(expected)
+    const expectedText = cfg.value == null ? '' : String(cfg.value)
     const message = passed
       ? `实际值 ${actualText} 校验通过`
       : `实际值 ${actualText}，期望 ${expectedText || operator}`

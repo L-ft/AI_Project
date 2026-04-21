@@ -13,6 +13,7 @@ from ..core.resource_codes import (
     normalize_external_ref,
 )
 from ..executor.playwright_runner import run_api_test
+from .generated_test_case_contract import normalize_generated_test_cases
 from ..models.api_mgmt import (
     Environment,
     Folder,
@@ -401,6 +402,7 @@ class TestCaseService:
         }
         try:
             cases = await generate_test_cases(interface_info, body.scenarios, body.extra_requirement)
+            cases = normalize_generated_test_cases(cases)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:

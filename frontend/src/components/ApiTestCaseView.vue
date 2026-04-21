@@ -834,6 +834,13 @@ import {
   QuestionCircleOutlined
 } from '@vicons/antd'
 import execRequest from '../api/exec-request'
+import {
+  ASSERTION_OPERATOR_OPTIONS,
+  ASSERTION_TARGET_OPTIONS,
+  evaluateAssertionRule,
+  normalizeAssertionConfig,
+  readAssertionExpression
+} from '../utils/http-assertion-contract'
 
 const props = defineProps<{
   data: any
@@ -862,29 +869,9 @@ const editPostOperations = ref<any[]>([])
 const editingEditOpIndex = ref<number | null>(null)
 const saving = ref(false)
 
-const assertTargets = [
-  { label: 'Response Text', value: 'response_text' },
-  { label: 'Response JSON', value: 'response_json' },
-  { label: 'Response XML', value: 'response_xml' },
-  { label: 'Response Header', value: 'response_header' },
-  { label: 'Response Cookie', value: 'response_cookie' },
-  { label: 'HTTP Code', value: 'status_code' },
-  { label: '环境变量', value: 'env_var' },
-  { label: '全局变量', value: 'global_var' }
-]
+const assertTargets = ASSERTION_TARGET_OPTIONS
 
-const assertOperators = [
-  { label: '等于', value: 'equals' },
-  { label: '不等于', value: 'not_equals' },
-  { label: '存在', value: 'exists' },
-  { label: '不存在', value: 'not_exists' },
-  { label: '小于', value: 'less_than' },
-  { label: '小于或等于', value: 'less_than_or_equals' },
-  { label: '大于', value: 'greater_than' },
-  { label: '大于或等于', value: 'greater_than_or_equals' },
-  { label: '正则匹配', value: 'regex' },
-  { label: '包含', value: 'contains' }
-]
+const assertOperators = ASSERTION_OPERATOR_OPTIONS
 
 const groupOptions = [
   { label: '正向', key: 'positive' },
@@ -935,12 +922,7 @@ const handlePostOperations = async (response: any, postOps: any[]) => {
     try {
       if (op.type === 'extract' && (op.config?.expression || op.expression)) {
         const { expression, name } = op.config || op
-        let val: any = responseData
-        const pathArr = (expression || '').replace('$.', '').split('.').filter(Boolean)
-        for (const p of pathArr) {
-          if (val && typeof val === 'object') val = val[p]
-          else { val = undefined; break; }
-        }
+        const val = readAssertionExpression(responseData, String(expression || ''))
         
         if (val !== undefined) {
           message.success('提取成功')
@@ -949,34 +931,27 @@ const handlePostOperations = async (response: any, postOps: any[]) => {
           }
         }
       } else if (op.type === 'assertion') {
-        const { target, operator, value: expected, expression } = op.config || op
-        let actualValue: any = null
-        
-        // 1. 获取实际值
-        if (target === 'status_code') {
-          actualValue = response.status_code
-        } else if (target === 'response_json') {
-          actualValue = responseData
-          const path = (expression || '').replace('$.', '').split('.').filter(Boolean)
-          for (const p of path) {
-            if (actualValue && typeof actualValue === 'object') actualValue = actualValue[p]
-            else { actualValue = undefined; break; }
-          }
-        } else if (target === 'response_text') {
-          actualValue = typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
-        }
-
-        // 2. 校验
-        let passed = false
-        if (operator === 'equals') passed = String(actualValue) === String(expected)
-        else if (operator === 'not_equals') passed = String(actualValue) !== String(expected)
-        else if (operator === 'contains') passed = String(actualValue).includes(String(expected))
-        else if (operator === 'exists') passed = actualValue !== undefined && actualValue !== null
+        const cfg = normalizeAssertionConfig(op.config || op)
+        const evaluation = evaluateAssertionRule({
+          target: cfg.target,
+          operator: cfg.operator,
+          expression: cfg.expression,
+          expected: cfg.value,
+          statusCode: response.status_code,
+          headers: response?.headers,
+          data: responseData
+        })
+        const actualValue = evaluation.actual
+        const passed = evaluation.passed
+        const expectedText =
+          cfg.value == null || cfg.value === '' ? evaluation.operator : String(cfg.value)
 
         if (passed) {
-          message.success(`断言成功: ${op.config?.name || '验证响应'}`)
+          message.success(`断言成功: ${cfg.name || op.config?.name || '验证响应'}`)
         } else {
-          message.error(`断言失败: ${op.config?.name || '验证响应'} (期望: ${expected}, 实际: ${actualValue === undefined ? '未找到' : actualValue})`)
+          message.error(
+            `断言失败: ${cfg.name || op.config?.name || '验证响应'} (期望: ${expectedText}, 实际: ${actualValue === undefined ? '未找到' : actualValue})`
+          )
         }
       }
     } catch (err) {

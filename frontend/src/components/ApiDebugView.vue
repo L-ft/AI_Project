@@ -1827,6 +1827,13 @@ import {
   QuestionCircleOutlined,
 } from '@vicons/antd'
 import execRequest from '../api/exec-request'
+import {
+  ASSERTION_OPERATOR_OPTIONS,
+  ASSERTION_TARGET_OPTIONS,
+  evaluateAssertionRule,
+  normalizeAssertionConfig,
+  readAssertionExpression,
+} from '../utils/http-assertion-contract'
 
 const props = defineProps<{
   data: any
@@ -2832,16 +2839,20 @@ const createPostOp = (type: string) => {
 
 const normalizePostOperation = (op: any) => {
   const defaults = createPostOp(op?.type || 'assertion')
+  const normalizedConfig = {
+    ...defaults.config,
+    ...(op?.config || {}),
+  }
+  if ((op?.type || defaults.type) === 'assertion') {
+    Object.assign(normalizedConfig, normalizeAssertionConfig(normalizedConfig))
+  }
   return {
     ...defaults,
     ...op,
     id: op?.id || createUid('post'),
     enabled: op?.enabled ?? true,
     name: op?.name || op?.config?.name || defaults.name,
-    config: {
-      ...defaults.config,
-      ...(op?.config || {}),
-    },
+    config: normalizedConfig,
   }
 }
 
@@ -2934,29 +2945,9 @@ const applyScriptSnippet = async (op: any, snippetCode: string) => {
 const postOperations = ref<any[]>([])
 const editingOpIndex = ref<number | null>(null)
 
-const assertTargets = [
-  { label: 'Response Text', value: 'response_text' },
-  { label: 'Response JSON', value: 'response_json' },
-  { label: 'Response XML', value: 'response_xml' },
-  { label: 'Response Header', value: 'response_header' },
-  { label: 'Response Cookie', value: 'response_cookie' },
-  { label: 'HTTP Code', value: 'status_code' },
-  { label: '环境变量', value: 'env_var' },
-  { label: '全局变量', value: 'global_var' }
-]
+const assertTargets = ASSERTION_TARGET_OPTIONS
 
-const assertOperators = [
-  { label: '等于', value: 'equals' },
-  { label: '不等于', value: 'not_equals' },
-  { label: '存在', value: 'exists' },
-  { label: '不存在', value: 'not_exists' },
-  { label: '小于', value: 'less_than' },
-  { label: '小于或等于', value: 'less_than_or_equals' },
-  { label: '大于', value: 'greater_than' },
-  { label: '大于或等于', value: 'greater_than_or_equals' },
-  { label: '正则匹配', value: 'regex' },
-  { label: '包含', value: 'contains' }
-]
+const assertOperators = ASSERTION_OPERATOR_OPTIONS
 
 const bodyType = ref('json')
 const bodyJsonContent = ref('')
@@ -3903,47 +3894,6 @@ const caseNameOptions = [
   { label: '未登录', value: '未登录' }
 ]
 
-const getByExpression = (source: any, expression: string) => {
-  if (!expression) return source
-  const normalized = String(expression)
-    .trim()
-    .replace(/^\$\./, '')
-    .replace(/^\$/, '')
-
-  if (!normalized) return source
-
-  const segments = normalized
-    .replace(/\[(\d+)\]/g, '.$1')
-    .split('.')
-    .filter(Boolean)
-
-  let current = source
-  for (const segment of segments) {
-    if (current === null || current === undefined) return undefined
-    current = current[segment]
-  }
-  return current
-}
-
-const evaluateAssertionResult = (actualValue: any, operator: string, expectedValue: any) => {
-  if (operator === 'equals') return String(actualValue) === String(expectedValue)
-  if (operator === 'not_equals') return String(actualValue) !== String(expectedValue)
-  if (operator === 'contains') return String(actualValue ?? '').includes(String(expectedValue ?? ''))
-  if (operator === 'exists') return actualValue !== undefined && actualValue !== null && actualValue !== ''
-  if (operator === 'not_exists') return actualValue === undefined || actualValue === null || actualValue === ''
-
-  const actualNumber = Number(actualValue)
-  const expectedNumber = Number(expectedValue)
-
-  if (operator === 'less_than') return actualNumber < expectedNumber
-  if (operator === 'less_than_or_equals') return actualNumber <= expectedNumber
-  if (operator === 'greater_than') return actualNumber > expectedNumber
-  if (operator === 'greater_than_or_equals') return actualNumber >= expectedNumber
-  if (operator === 'regex') return new RegExp(String(expectedValue || '')).test(String(actualValue ?? ''))
-
-  return false
-}
-
 const createPostOpRuntimeContext = (response: any, variables: Record<string, string>, tempVariables: Record<string, any>) => {
   const responseHeaders = response?.headers || {}
   return {
@@ -4036,7 +3986,7 @@ const handlePostOperationsV2 = async (response: any) => {
         } else if (op.config?.source === 'text') {
           value = String(responseData ?? '')
         } else {
-          value = getByExpression(responseData, expression)
+          value = readAssertionExpression(responseData, expression)
         }
 
         if (value === undefined) {
@@ -4058,27 +4008,25 @@ const handlePostOperationsV2 = async (response: any) => {
       }
 
       if (op.type === 'assertion') {
-        const target = op.config?.target
-        const expression = op.config?.expression || ''
-        const expected = op.config?.value
-        const operator = op.config?.operator || 'equals'
-        let actualValue: any = null
+        const cfg = normalizeAssertionConfig(op.config || op)
+        const evaluation = evaluateAssertionRule({
+          target: cfg.target,
+          operator: cfg.operator,
+          expression: cfg.expression,
+          expected: cfg.value,
+          statusCode: response.status_code,
+          headers: response?.headers,
+          data: responseData,
+          variables,
+        })
+        const actualValue = evaluation.actual
+        const passed = evaluation.passed
+        const expectedText =
+          cfg.value == null || cfg.value === '' ? evaluation.operator : String(cfg.value)
+        const actualText = actualValue == null ? 'undefined' : String(actualValue)
+        const target = cfg.target
+        const expected = expectedText
 
-        if (target === 'status_code') {
-          actualValue = response.status_code
-        } else if (target === 'response_json') {
-          actualValue = getByExpression(responseData, expression)
-        } else if (target === 'response_text' || target === 'response_xml') {
-          actualValue = typeof responseData === 'string' ? responseData : JSON.stringify(responseData)
-        } else if (target === 'response_header') {
-          actualValue = response?.headers?.[expression]
-        } else if (target === 'response_cookie') {
-          actualValue = response?.headers?.['set-cookie']?.[expression]
-        } else if (target === 'env_var' || target === 'global_var') {
-          actualValue = context.getVar(expression)
-        }
-
-        const passed = evaluateAssertionResult(actualValue, operator, expected)
         const result = {
           name: op.config?.name || op.name || ('断言 ' + String(target || '')),
           status: passed ? 'pass' : 'fail',

@@ -1,214 +1,194 @@
-# 分片执行、任务状态机与侧车 PoC（编排层）
+# Data Builder 执行模式、任务状态机与 PoC 约束
 
-## 1. 任务状态枚举（冻结）
+本文冻结 R1/PR-1 的执行语义。R1 只定义合同，不切换运行链路。
+
+## 1. Execution Modes
+
+| mode | create | read | execute-batch | cleanup | source of truth |
+|------|--------|------|---------------|---------|-----------------|
+| `proxy` | exec-engine | exec-engine | exec-engine | exec-engine | exec-engine memory |
+| `shadow` | exec-engine + mgmt-api mirror | mgmt-api first, fallback exec-engine | exec-engine | exec-engine | mgmt-api mirror |
+| `db_primary` | mgmt-api | mgmt-api | mgmt-api orchestrates internal exec-engine call | mgmt-api orchestrates internal exec-engine call | mgmt-api DB |
+
+R1 定义三种模式。R2/PR-2 进入 `shadow`，R3/PR-3 进入 `db_primary`，R4/PR-4 再切前端持久化任务心智。
+当前运行时默认模式应为 `db_primary`；`proxy` / `shadow` 仅保留为兼容或回滚模式。
+
+当前前端逐批调用 `execute-batch` 的说明，只代表 `proxy/shadow` 兼容阶段。`db_primary` 之后，前端仍可按批触发，但状态流转和持久化写入由 mgmt-api 完成。
+
+### P2 Route Boundary Clarification
+
+- In `db_primary`, external callers use mgmt-api lifecycle routes only.
+- `exec-engine /data-builder/internal/*` is reserved for mgmt-api orchestration and must stay stateless.
+- `exec-engine /data-builder/tasks*` remains as deprecated fallback for rollback or direct-mode compatibility.
+- Any `DB_LEGACY_LIFECYCLE_FALLBACK` warning in mgmt-api logs means a caller or environment is still using the deprecated lifecycle path.
+
+## 2. 任务状态机
 
 | 状态 | 含义 |
 |------|------|
-| `PENDING` | 已创建，未执行任何 batch |
-| `RUNNING` | 至少一个 batch 在执行或已执行但未终态 |
-| `COMPLETED_OK` | 全部 batch 成功且断言通过 |
-| `FAILED_ASSERTION` | 数据已落库，断言未通过；**保留现场** |
-| `FAILED_EXECUTION` | 语法/连接/权限等执行失败；可能部分 batch 已写入 |
+| `PENDING` | 任务已创建，尚未执行任何 batch |
+| `RUNNING` | 至少一个 batch 正在执行，或任务处于执行编排中 |
+| `COMPLETED_OK` | 全部 batch 成功，断言通过 |
+| `FAILED_ASSERTION` | 数据已落库，但断言不通过。必须保留现场 |
+| `FAILED_EXECUTION` | SQL、连接、权限、执行器不可用等执行失败，可能已有部分 batch 写入 |
 
-断言失败 **不** 自动回滚或自动删除数据；用户通过 `POST .../cleanup` 在排查后清理。
+状态流转：
 
-## 2. 分片执行与前端轮询
-
-### 2.1 流程
-
-1. `POST /data-builder/tasks` → 返回 `task_id`，`PENDING`。
-2. 前端循环 `batch_index = 0 .. batch_count-1`：
-   - `POST /data-builder/tasks/{taskId}/execute-batch` body `{ "batch_index": n }`
-   - 若响应 `status` 为 `FAILED_EXECUTION`，停止循环并展示 `last_error`。
-3. 每步之间（或仅最终步后）前端可 `GET /data-builder/tasks/{taskId}` 刷新进度条。
-4. 当最后一批完成且断言在服务端跑完：
-   - 全部通过 → `COMPLETED_OK`
-   - 任一失败 → `FAILED_ASSERTION`（响应体中带 `assertion_summary`）
-
-### 2.2 超时
-
-- 单个 `execute-batch` 请求应有独立超时（略大于单批 SQL 预算）；**不要**用一次请求覆盖全量行。
-- 前端对 `GET` 使用轮询间隔 1s～3s（可退避），展示 `batch_progress` 与 `row_map_flush_lag`。
-
-### 2.3 幂等
-
-- 建议对 `(task_id, batch_index)` 做「已完成则短路」：重复 POST 返回 200 + 已执行标记，避免前端重试导致双倍插入（具体以编排层实现为准）。
-
-## 3. 侧车 + 备注：PoC 闭环（不重构 exec-engine 核心）
-
-**原则**：INSERT 的实际执行可在现有 exec-engine 或 mgmt-api 直连 MySQL 的「薄适配器」中完成；**侧车写入与备注注入**优先放在 **mgmt-api 编排层** 的同一事务或紧随其后的逻辑中，避免深入修改 exec-engine 内部。
-
-### 3.1 备注注入（方案 A 变体）
-
-- 若 `fingerprint.strategy` 含 `remark_only` 或 `remark_and_row_map`：
-  - 在生成绑定数据时，将 `marker` 解析为具体字符串（如 `DB_TASK_{uuid}`），写入 `remark_column`。
-  - 若业务 remark 已有内容，使用 `merge_mode: append`（manifest 的 binding `params`）避免覆盖。
-
-### 3.2 侧车异步（无备注列时）
-
-- INSERT 成功后，编排层将 `(task_id, db, table, pk_columns, pk_values, batch_index, row_index)` 推入 **内存队列**。
-- 后台 worker（或每 N 毫秒 flush）批量 `INSERT INTO data_builder_row_map ...`。
-- `GET task` 返回 `row_map_flush_lag`（队列长度），清理前若 `lag > 0` 可提示用户稍后或阻塞 cleanup（产品策略二选一）。
-
-### 3.3 主键提取（PoC 级拦截器思路）
-
-**Python 示例（仅说明意图；实现可放在 mgmt-api 的 TypeScript 等价管线中）**：
-
-```python
-# PoC: after cursor.execute(insert_sql, params)
-last_id = cursor.lastrowid  # 单 AUTO_INCREMENT PK
-# 复合主键：使用驱动返回的 OK_PACKET 或再 SELECT 限定 task_marker / 时间窗（PoC 可只支持单列 PK）
+```text
+PENDING -> RUNNING -> COMPLETED_OK
+PENDING -> RUNNING -> FAILED_ASSERTION
+PENDING -> RUNNING -> FAILED_EXECUTION
 ```
 
-**装饰器形态（概念）**：
+断言失败不得自动 rollback 或自动 cleanup。用户确认后通过 cleanup 链路清理。
 
-```python
-def with_row_map(task_id: str, batch_index: int, table: str, pk_columns: list[str]):
-    def decorator(fn):
-        def wrapper(*args, **kwargs):
-            result = fn(*args, **kwargs)
-            schedule_async_row_map(task_id, table, pk_columns, extract_pk(result), batch_index)
-            return result
-        return wrapper
-    return decorator
+## 3. 批次状态
+
+批次状态保存在 `data_builder_task_batches`，使用 `task_id + batch_index` 唯一定位。
+
+批次状态枚举与任务状态一致：
+
+```text
+PENDING|RUNNING|COMPLETED_OK|FAILED_ASSERTION|FAILED_EXECUTION
 ```
 
-生产实现建议：**编排层显式函数** `record_row_map(...)` 优于魔法装饰器，便于审计与单测。
+聚合规则：
 
-### 3.4 清理顺序
+- `batch_count = count(*) from data_builder_task_batches where task_id = ?`
+- `completed_batches = count(*) where status in ('COMPLETED_OK', 'FAILED_ASSERTION', 'FAILED_EXECUTION')`
+- `rows_inserted_total = sum(rows_inserted)`
+- `current_batch_index` 优先取正在 `RUNNING` 的 batch；无 RUNNING 时取最近更新的 batch
+- task 级 `last_error_json` 记录任务最终错误；batch 级错误记录在 `data_builder_task_batches.last_error_json`
 
-- `hybrid`：`cleanup.plans` 按 `order` 升序执行 DELETE；同时可用 `data_builder_row_map` 生成 `WHERE (pk_col,...) IN (...)` 分批删除，避免遗漏无 remark 行。
+`completed_batches` 是终态批次数，不是成功批次数。这样失败任务仍能准确展示执行进度。
 
-## 4. 与 OpenAPI 的对应关系
+## 4. mgmt-api 编排规则
 
-详见 `openapi_core.yaml` 中四个路径；状态与错误体字段与 `error_codes.md` 一致。
+`db_primary` 模式下，mgmt-api 是唯一任务状态写入点。
 
-## 5. 分片执行超时与看板「灰条」逻辑（伪代码）
+执行单个 batch 时，mgmt-api 必须使用两段短事务：
 
-**常量**
+```text
+transaction A:
+  load task and batch
+  assert transition is allowed
+  batch.status = RUNNING
+  batch.attempt_count += 1
+  batch.started_at = now
+  task.status = RUNNING
+  task.current_batch_index = batch_index
+  task.last_batch_started_at = now
+  persist
 
-- `BATCH_HTTP_TIMEOUT_SEC`：对单次 `POST .../execute-batch` 的客户端超时（建议 ≥ 略大于 exec-engine 单批预算，如 60）。
-- `STALL_THRESHOLD_SEC`：轮询侧判定「本批挂死」阈值（需求：30s），与 HTTP 超时配合使用。
-- `POLL_INTERVAL_SEC`：前端轮询 `GET task` 间隔（1～3s，可退避）。
+outside transaction:
+  call exec-engine internal execute-batch endpoint
 
-**编排层：`execute-batch` 入口（单一写入点）**
-
-```
-function onExecuteBatchRequest(task_id, batch_index):
-    task = loadTask(task_id)
-    assertStateAllowsBatch(task, batch_index)
-
-    now = utc_now()
-    task.last_batch_started_at = now
-    persist(task)
-
-    try:
-        // 客户端应对同一请求设置 BATCH_HTTP_TIMEOUT_SEC
-        result = execEngine.runBatch(task_id, batch_index)  // 同步：INSERT + 侧车入队等
-    except TimeoutOrUnavailable:
-        task.last_error = mapToErrorEnvelope(DB_EXEC_TIMEOUT, ...)
-        task.status = FAILED_EXECUTION  // 或保持 RUNNING 由产品定；须文档化
-        persist(task)
-        return errorResponse
-
-    task.last_heartbeat_at = utc_now()   // 每批 SQL 成功回调后更新（仅此路径写入）
-    task.completed_batches = ...
-    task.current_batch_index = batch_index
-    persist(task)
-
-    if isFinalBatch(task, batch_index):
-        runAssertions(task)
-    return okResponse
+transaction B:
+  persist rows_inserted / heartbeat / finished_at
+  persist batch terminal status
+  recompute task progress cache
+  if final batch, run or persist assertion result
+  persist task terminal status or keep RUNNING
 ```
 
-**前端：单次分片请求**
+mgmt-api 不得持有数据库行锁跨越 exec-engine HTTP 调用。
 
-```
-function executeBatchHttp(task_id, batch_index):
-    try:
-        return await post(`/tasks/${task_id}/execute-batch`, { batch_index },
-            timeout: BATCH_HTTP_TIMEOUT_SEC)
-    catch (isTimeout):
-        showBanner("执行引擎响应超时，请检查后端进程或数据库锁")
-        // 进度条置灰；可提示用户查看 last_batch_started_at / 运维日志
-```
+## 5. 兼容阶段前端流程
 
-**前端：轮询看板（双信号）**
+`proxy/shadow` 阶段，前端仍可能按下面流程执行：
 
-```
-function onPollTick(taskDetail):
-    if taskDetail.status not in (RUNNING, PENDING):
-        clearStallBanner()
-        return
-
-    now = nowUtc()
-    started = taskDetail.last_batch_started_at
-    heartbeat = taskDetail.last_heartbeat_at
-
-    // 信号 A：本批已发起但长时间未成功回调（编排层已写 started_at，heartbeat 未推进）
-    if started != null and taskDetail.status == RUNNING:
-        if now - started > STALL_THRESHOLD_SEC:
-            if heartbeat == null or heartbeat < started:
-                showStallBanner("执行可能挂死：已超过阈值未收到本批成功心跳")
-                return
-
-    // 信号 B：多批间隙「空闲等待」——仅当未发 in-flight 请求时，started_at 未刷新属正常；
-    // 产品可选：若 RUNNING 且无 in-flight 且 completed_batches < batch_count，展示「等待下一批」而非挂死。
-    clearStallBanner()
+```text
+POST /data-builder/tasks -> task_id
+for batch_index in 0..batch_count-1:
+  POST /data-builder/tasks/{task_id}/execute-batch
+  GET /data-builder/tasks/{task_id}
+POST /data-builder/tasks/{task_id}/cleanup
 ```
 
-**rowset 断言执行（服务端）**
+这是迁移期兼容行为，不代表最终 ownership。最终 task truth 以 mgmt-api DB 为准。
 
-```
-function normalizeRowsetAssertionSql(sql, manifestRule):
-    assert manifestRule.assertion_type == "rowset"
-    assert all(pk in parsedSelectColumns(sql) for pk in manifestRule.primary_key_columns)
-    sql2 = ensureLimitAtMost(sql, 20)   // 无 LIMIT 则追加；有则改为 LEAST(n,20)
-    return sql2
+## 6. 心跳与卡住判断
 
-function runRowsetEmpty(rule, ctx):
-    rows = db.query(normalizeRowsetAssertionSql(rule.sql, rule), ctx.bindings)
-    if len(rows) == 0:
-        return AssertionRunItem(passed=true, sample_rows=null)
-    return AssertionRunItem(passed=false, sample_rows=rows, truncated=(hadMoreThan20))
-```
+核心字段：
 
-## 6. CleanupService（专项，与 cleanup.plans 顺序一致）
+- `data_builder_tasks.last_batch_started_at`
+- `data_builder_tasks.last_heartbeat_at`
+- `data_builder_task_batches.started_at`
+- `data_builder_task_batches.last_heartbeat_at`
+- `data_builder_task_batches.finished_at`
 
-**职责**：从 `data_builder_row_map` 按 `task_id` 拉取 PK，按 `manifest.cleanup.plans` 的 `order` 升序执行 **chunked_delete**；与 `predicate` 计划组合时，同一 `order` 组内先 row_map 再 predicate（与 `hybrid` 语义一致，具体以实现为准）。
+建议阈值：
 
-**幂等与审计**
-
-```
-function cleanup(task_id, confirm, actor):
-    if not confirm: raise DB_CLEAN_CONFIRM_REQUIRED
-    task = loadTask(task_id)
-    if task.cleanup_status.state == completed:
-        return CleanupResponse(idempotent_replay=true, deleted_by_table={})
-
-    if task.status == RUNNING:
-        task.cleanup_status = { state: blocked, blocked_reason: task_running }
-        persist(task)
-        raise DB_CLEAN_FORBIDDEN_WHILE_RUNNING
-
-    if task.row_map_flush_lag > 0:
-        task.cleanup_status = { state: blocked, blocked_reason: row_map_flush_lag }
-        persist(task)
-        // 或仍允许仅 predicate 路径；产品策略二选一，须与 OpenAPI 对齐
-
-    deleted = {}
-    for plan in sorted(task.manifest.cleanup.plans, key=order):
-        if plan.source == row_map or hybridUsesRowMap(plan):
-            for chunk in chunked(selectPkRows(task_id, plan.table), CHUNK_SIZE):
-                deleted[plan.table] += execDeleteByPkChunk(plan.table, chunk)
-        else:
-            deleted[plan.table] += execDeleteByPredicate(plan)
-
-    task.cleanup_status = { state: completed, blocked_reason: null }
-    task.cleanup_completed_at = now()
-    task.cleanup_completed_by = actor
-    persist(task)
-    return CleanupResponse(deleted_by_table=deleted, ...)
+```text
+BATCH_HTTP_TIMEOUT_SEC >= 单批 SQL 预算
+STALL_THRESHOLD_SEC = 30
+POLL_INTERVAL_SEC = 1..3
 ```
 
-部分失败时：记录 `DB_CLEAN_PARTIAL`，写入 `last_error_json` 子集，**不**将 `cleanup_status` 标为 `completed`，以支持重试。
+判断逻辑：
+
+```text
+if task.status == RUNNING
+and last_batch_started_at is not null
+and now - last_batch_started_at > STALL_THRESHOLD_SEC
+and (last_heartbeat_at is null or last_heartbeat_at < last_batch_started_at):
+  show stall warning
+```
+
+卡住提示只用于观测，不应自动把任务改成失败。是否转为 `FAILED_EXECUTION` 由 mgmt-api 的执行超时策略决定。
+
+## 7. row_map 与 cleanup
+
+`data_builder_row_map` 是 cleanup 的行级依据。cleanup 必须以 `task_id` 为入口，不能只依赖业务 remark 盲删。
+
+cleanup 状态：
+
+```text
+not_applicable|eligible|running|completed|blocked
+```
+
+cleanup 基本规则：
+
+- `confirm=false` 必须拒绝执行。
+- task 为 `RUNNING` 时 cleanup 必须 blocked，原因 `task_running`。
+- `row_map_flush_lag > 0` 时 cleanup 默认 blocked，原因 `row_map_flush_lag`。
+- cleanup 开始时写 `cleanup_status=running` 和 `cleanup_started_at`。
+- cleanup 成功后写 `cleanup_status=completed`、`cleanup_completed_at`、`cleanup_completed_by`。
+- cleanup 局部失败时写 `last_error_json`，不得误标为 completed。
+
+执行顺序：
+
+1. 按 `manifest.cleanup.plans.order` 升序执行。
+2. 对 row_map 计划，按 `task_id + table + pk` 分块删除。
+3. 对 hybrid 计划，优先 row_map 精确删除，再按产品策略决定是否执行 predicate fallback。
+
+## 8. ErrorEnvelope
+
+task 级错误写入 `data_builder_tasks.last_error_json`。  
+batch 级错误写入 `data_builder_task_batches.last_error_json`。
+
+建议结构：
+
+```json
+{
+  "code": "DB_EXEC_TIMEOUT",
+  "message": "execute-batch timed out",
+  "details": {
+    "task_id": "...",
+    "batch_index": 0
+  }
+}
+```
+
+错误码应与 `error_codes.md` 保持一致。
+
+## 9. R1 到 R4 迁移路径
+
+```text
+R1/PR-1: docs + DDL contract only
+R2/PR-2: mgmt-api shadow persistence
+R3/PR-3: mgmt-api db_primary orchestration
+R4/PR-4: frontend persistent-task UX cutover
+```
+
+R1 验收只看合同是否清晰，不要求代码实现。

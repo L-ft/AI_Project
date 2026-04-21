@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "rootDir": ".",
+    "outDir": "./node_modules/.cache/assertion-selfcheck",
+    "lib": ["ES2020", "DOM"],
+    "declaration": false,
+    "sourceMap": false,
+    "composite": false
+  },
+  "include": ["scripts/assertion-contract-selfcheck.ts", "src/utils/http-assertion-contract.ts"]
+}

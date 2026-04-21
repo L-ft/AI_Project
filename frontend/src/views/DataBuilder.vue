@@ -447,12 +447,13 @@
             <n-card title="Manifest 任务看板（分片 + 断言 + 清理）" size="small" class="panel-card">
               <n-space vertical :size="12" style="width: 100%">
                 <n-alert type="info" title="说明">
-                  本页 L3 接口默认经 <code>/data-builder</code> 直连 exec-engine；若构建时设置
-                  <code>VITE_DATA_BUILDER_VIA_MGMT=true</code>，则走 <code>/api/v1/data-builder/*</code>（mgmt-api 转发至
-                  <code>EXEC_ENGINE_URL</code>）。创建任务后按批执行 INSERT，末批自动跑断言。Manifest 须符合
+                  本页 L3 接口默认走 <code>/api/v1/data-builder/*</code> 进入 mgmt-api 持久化编排链路；仅当构建时显式设置
+                  <code>VITE_DATA_BUILDER_VIA_MGMT=false</code>，才回退为经 <code>/data-builder</code> 直连 exec-engine。
+                  创建任务后按批执行 INSERT，末批自动跑断言。Manifest 须符合
                   <code>docs/data-builder/manifest_v1.schema.json</code>；目标库需可写且建议先执行侧车 DDL（<code>table_ddl.sql</code>）。
-                  <strong>任务列表仅在当前 exec-engine 进程内存中</strong>：容器重启、热重载后旧 <code>task_id</code> 会报「任务不存在」，请重新创建或刷新列表后点选仍存在的任务。
-                  <span v-if="l3ViaMgmt">当前为 <strong>mgmt 代理模式</strong>。</span>
+                  <strong>{{ l3TaskRetentionHint }}</strong>
+                  <span v-if="l3ViaMgmt">当前为 <strong>mgmt 持久化编排模式</strong>（默认）。</span>
+                  <span v-else>当前为 <strong>exec-engine 直连回退模式</strong>。</span>
                   <br />
                   <n-text depth="3" style="font-size: 13px">
                     合同与请求/响应示例见
@@ -492,7 +493,8 @@
                 />
                 <n-text v-if="l3TaskId" depth="2">task_id：{{ l3TaskId }}</n-text>
                 <n-alert v-if="l3StallDetected" type="warning" title="执行可能挂死">
-                  已超过约 30s 未收到本批成功心跳（last_heartbeat_at 未晚于 last_batch_started_at）。请检查 exec-engine、数据库锁或慢查询。
+                  已超过约 30s 未收到本批成功心跳（last_heartbeat_at 未晚于 last_batch_started_at）。请检查
+                  {{ l3ViaMgmt ? 'mgmt-api / exec-engine' : 'exec-engine' }}、数据库锁或慢查询。
                 </n-alert>
                 <template v-if="l3Detail">
                   <n-space align="center" wrap>
@@ -927,6 +929,24 @@ const l3ViaMgmt = computed(
   () => useDataBuilderTasksViaMgmt()
 )
 
+const l3TaskRetentionHint = computed(() =>
+  l3ViaMgmt.value
+    ? '任务列表默认由管理端持久化保存；即使 exec-engine 重启，已落库任务通常仍可在刷新后重新选取。'
+    : '任务列表仅保存在当前 exec-engine 进程内存中；容器重启、热重载后旧 task_id 会失效，请刷新列表或重新创建任务。'
+)
+
+const l3MissingSelectionMessage = computed(() =>
+  l3ViaMgmt.value
+    ? '当前任务在管理端已不存在，已清除选中。请刷新列表确认任务是否已删除或被重建。'
+    : '当前任务在服务端已不存在，已清除选中（常见于 exec-engine 重启）。请重新创建或从列表选择。'
+)
+
+const l3PollingStoppedMessage = computed(() =>
+  l3ViaMgmt.value
+    ? '任务已失效或已被管理端删除，已停止轮询。请刷新列表或重新创建任务。'
+    : '任务已失效（例如 exec-engine 已重启），已停止轮询。请刷新列表或重新创建任务。'
+)
+
 /**
  * Swagger 挂在 mgmt 的 /api/docs。生产环境前端 Nginx 将 /api/ 转发到 mgmt 根路径，
  * 故浏览器需访问 /api/api/docs 才能落到 mgmt 的 /api/docs。
@@ -1135,7 +1155,7 @@ async function onL3RefreshList() {
     const tid = l3TaskId.value
     if (tid && !l3TaskList.value.some((t) => t.task_id === tid)) {
       l3DropStaleSelection()
-      message.warning('当前任务在服务端已不存在，已清除选中（常见于 exec-engine 重启）。请重新创建或从列表选择。')
+      message.warning(l3MissingSelectionMessage.value)
     }
   } finally {
     l3LoadingList.value = false
@@ -1184,7 +1204,7 @@ function startL3Poll() {
     } catch (e) {
       if (isL3TaskNotFound(e)) {
         l3DropStaleSelection()
-        message.warning('任务已失效（例如 exec-engine 已重启），已停止轮询。请刷新列表或重新创建任务。')
+        message.warning(l3PollingStoppedMessage.value)
       }
     }
   }, 2000)
